@@ -1,6 +1,3 @@
-bash
-
-cat > /home/claude/oku_system_v4.html << 'HTMLEOF'
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -21,17 +18,15 @@ cat > /home/claude/oku_system_v4.html << 'HTMLEOF'
   --green:#4ade80;--green-bg:rgba(74,222,128,0.08);
   --purple:#a78bfa;--purple-bg:rgba(167,139,250,0.08);
 
-  /* デザイン4原則に基づく余白・サイズ変数 */
-  --space-xs:4px;   /* 極小：アイコン内の詰め */
-  --space-sm:8px;   /* 小：バッジ・インライン要素間 */
-  --space-md:16px;  /* 中：フォーム項目間・カード内要素間 */
-  --space-lg:24px;  /* 大：カード間・セクション間 */
-  --space-xl:36px;  /* 特大：ページ上部余白 */
+  --space-xs:4px;
+  --space-sm:8px;
+  --space-md:16px;
+  --space-lg:24px;
+  --space-xl:36px;
 
   --r:8px;--rl:14px;
   --font:'Noto Sans JP',sans-serif;--mono:'DM Mono',monospace;
 
-  /* カード・コンポーネント共通 */
   --card-pad:24px;
   --card-gap:16px;
   --section-gap:28px;
@@ -45,13 +40,11 @@ input:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 
 textarea{resize:vertical;min-height:72px}
 select option{background:var(--bg3)}
 
-/* LAYOUT */
 #app{display:flex;min-height:100vh}
 #sidebar{width:220px;min-width:220px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;z-index:10}
 .sidebar-logo{padding:22px 20px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
 .logo-mark{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--accent)}
 .logo-version{font-size:9px;color:var(--text3);background:var(--bg3);padding:2px 7px;border-radius:4px;letter-spacing:0.5px;margin-top:1px}
-/* 近接の原則：同じグループのナビは密に、グループ間はセクション区切り */
 .nav-section{padding:12px 0;border-bottom:1px solid var(--border)}
 .nav-section:last-of-type{border-bottom:none}
 .nav-label{font-size:9px;font-weight:700;color:var(--text3);letter-spacing:1.4px;text-transform:uppercase;padding:0 16px 6px}
@@ -63,31 +56,24 @@ select option{background:var(--bg3)}
 .sidebar-footer{margin-top:auto;padding:16px;border-top:1px solid var(--border);font-size:10px;color:var(--text3)}
 #main{flex:1;overflow-y:auto}
 
-/* PAGE WRAP — ページ左右余白・最大幅を統一（整列の原則） */
 .page-wrap{padding:var(--space-xl) 32px;max-width:1100px}
 .page{display:none}.page.active{display:block}
 
-/* CARDS — 全カードの内側余白・角丸・ボーダーを統一（反復の原則） */
 .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:var(--card-pad)}
 .card+.card{margin-top:var(--card-gap)}
-/* カードタイトル: ラベル的な小さいテキストでコンテキストを与える */
 .card-title{font-size:9px;font-weight:700;color:var(--text3);letter-spacing:1.2px;text-transform:uppercase;margin-bottom:var(--space-md)}
-/* セクション間の余白は大きく取り、グループ内は密に（近接） */
 .card-section{margin-top:var(--space-lg)}
 
-/* グリッド — gap を統一して整列感を出す */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--card-gap)}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--card-gap)}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 
-/* METRICS — KPIカードはより広い余白でスキャンしやすく */
 .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:var(--section-gap)}
 .metric{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:20px 20px 18px}
 .metric-l{font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:.3px}
 .metric-v{font-size:22px;font-weight:700;font-family:var(--mono);line-height:1.2}
 .metric-s{font-size:10px;color:var(--text3);margin-top:4px}
 
-/* BUTTONS — サイズ・パディングを整合（反復） */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--r);font-size:12px;font-weight:500;cursor:pointer;transition:all .12s;white-space:nowrap}
 .btn-primary{background:var(--accent);color:#fff;border:1px solid var(--accent)}
 .btn-primary:hover{background:var(--accent2)}
@@ -100,7 +86,6 @@ select option{background:var(--bg3)}
 .btn-sm{padding:4px 10px;font-size:11px}
 .btn-lg{padding:11px 22px;font-size:13px}
 
-/* BADGES */
 .badge{display:inline-block;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.2px}
 .b-blue{background:rgba(91,127,255,.14);color:var(--accent)}
 .b-teal{background:var(--teal-bg);color:var(--teal)}
@@ -110,7 +95,6 @@ select option{background:var(--bg3)}
 .b-purple{background:var(--purple-bg);color:var(--purple)}
 .b-gray{background:var(--bg4);color:var(--text3)}
 
-/* TABLE — 行の余白を適度に確保し読みやすく */
 .tbl-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.8px;text-transform:uppercase;padding:10px 14px;border-bottom:1px solid var(--border)}
@@ -118,26 +102,22 @@ td{padding:11px 14px;font-size:12px;border-bottom:1px solid var(--border);vertic
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--bg3)}
 
-/* FORM — ラベル・インプット間の近接を統一 */
 .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-md)}
 .ffull{grid-column:1/-1}
 .fg label{display:block;font-size:10px;color:var(--text3);margin-bottom:5px;font-weight:500;letter-spacing:.3px}
 .fhint{font-size:9px;color:var(--text3);margin-top:3px}
 
-/* SECTION HEADERS — ページ上部タイトルエリア */
 .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-md)}
 .st{font-size:14px;font-weight:700}
 .ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:var(--space-lg);gap:var(--space-md)}
 .pt{font-size:20px;font-weight:700;letter-spacing:-.3px}
 .ps{font-size:11px;color:var(--text3);margin-top:4px}
 
-/* TABS */
 .tabs{display:flex;gap:4px;margin-bottom:var(--space-lg)}
 .tab{padding:7px 16px;border-radius:7px;font-size:11px;font-weight:500;color:var(--text3);cursor:pointer;transition:all .12s;border:1px solid transparent}
 .tab:hover{color:var(--text2);background:var(--bg3)}
 .tab.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(91,127,255,.22)}
 
-/* MODAL */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
 .modal-overlay.open{display:flex}
 .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:28px;width:600px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.6)}
@@ -147,36 +127,30 @@ tr:hover td{background:var(--bg3)}
 .modal-x:hover{background:var(--bg3);color:var(--text)}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;margin-top:22px}
 
-/* ALERTS — 内側余白を広めに取り視認性アップ */
 .alert{padding:12px 16px;border-radius:var(--r);font-size:11px;display:flex;align-items:flex-start;gap:8px;margin-bottom:var(--space-md);line-height:1.7}
 .alert-amber{background:var(--amber-bg);color:var(--amber);border:1px solid rgba(245,166,35,.2)}
 .alert-coral{background:var(--coral-bg);color:var(--coral);border:1px solid rgba(255,107,122,.2)}
 .alert-teal{background:var(--teal-bg);color:var(--teal);border:1px solid rgba(38,212,184,.2)}
 .alert-blue{background:var(--accent-glow);color:var(--accent);border:1px solid rgba(91,127,255,.2)}
 
-/* TOAST */
 #toast-c{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px}
 .toast{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:10px 16px;font-size:12px;color:var(--text);box-shadow:0 4px 20px rgba(0,0,0,.4);animation:toastIn .18s ease;display:flex;align-items:center;gap:8px}
 .toast.ok{border-left:3px solid var(--green)}.toast.err{border-left:3px solid var(--coral)}
 @keyframes toastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
 
-/* PROGRESS */
 .pbar{height:4px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-top:6px}
 .pfill{height:100%;border-radius:3px;transition:width .4s ease}
 
-/* WIZARD */
 .wsteps{display:flex;gap:0;margin-bottom:var(--space-lg);border-bottom:1px solid var(--border)}
 .wstep{flex:1;padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--text3);border-bottom:2px solid transparent;cursor:pointer;transition:all .12s}
 .wstep.active{color:var(--accent);border-bottom-color:var(--accent)}
 .wstep.done{color:var(--green);border-bottom-color:var(--green)}
 .wpanel{display:none}.wpanel.active{display:block}
 
-/* CONTRACT PREVIEW */
 .cpreview{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:20px;font-size:11px;line-height:2;white-space:pre-wrap;font-family:var(--mono);max-height:440px;overflow-y:auto;color:var(--text2)}
 .clause-row{display:flex;align-items:baseline;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
 .clause-num{font-family:var(--mono);font-size:10px;color:var(--accent);min-width:72px;font-weight:700}
 
-/* CHECKLIST */
 .ck-list{list-style:none}
 .ck-item{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:12px;color:var(--text2);border-bottom:1px solid var(--border)}
 .ck-item:last-child{border:none}
@@ -184,19 +158,16 @@ tr:hover td{background:var(--bg3)}
 .ck-item label{cursor:pointer;flex:1}
 .ck-item.done label{text-decoration:line-through;color:var(--text3)}
 
-/* FOLLOWUP CARDS — 左ボーダーで優先度を視覚的に区別（コントラストの原則） */
 .fu-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:10px}
 .fu-urgent{border-left:3px solid var(--coral)}
 .fu-normal{border-left:3px solid var(--amber)}
 .fu-done-c{border-left:3px solid var(--green);opacity:.7}
 
-/* SEMINAR CARD */
 .sem-card{border:1px solid var(--border);border-radius:var(--rl);overflow:hidden;margin-bottom:var(--card-gap)}
 .sem-head{padding:18px 22px;background:var(--bg3);display:flex;align-items:center;gap:12px}
 .sem-body{padding:18px 22px}
 .sem-date{font-family:var(--mono);font-size:10px;color:var(--text3);background:var(--bg4);padding:3px 8px;border-radius:4px}
 
-/* CALENDAR */
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
 .cal-hd{text-align:center;font-size:9px;font-weight:700;color:var(--text3);padding:6px 0;letter-spacing:.5px}
 .cal-day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:5px;border-radius:6px;font-size:11px;color:var(--text2);cursor:pointer;border:1px solid transparent;transition:all .12s;position:relative}
@@ -205,11 +176,9 @@ tr:hover td{background:var(--bg3)}
 .cal-day.has-ev::after{content:'';width:4px;height:4px;border-radius:50%;background:var(--accent);position:absolute;bottom:3px}
 .cal-day.other{color:var(--text3)}
 
-/* GOOGLE DOCS BUTTON */
 .gdoc-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;background:rgba(66,133,244,.1);border:1px solid rgba(66,133,244,.25);border-radius:var(--r);color:#4285F4;font-size:12px;font-weight:500;cursor:pointer;transition:all .12s}
 .gdoc-btn:hover{background:rgba(66,133,244,.17)}
 
-/* QUICK ACTION — 2カラムグリッドでアイコン・ラベルを整列 */
 .qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .qa{padding:16px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);cursor:pointer;transition:all .12s}
 .qa:hover{border-color:var(--border2);background:var(--bg4);transform:translateY(-1px)}
@@ -217,24 +186,20 @@ tr:hover td{background:var(--bg3)}
 .qa-l{font-size:12px;font-weight:600}
 .qa-s{font-size:10px;color:var(--text3);margin-top:2px}
 
-/* DOC TYPE SELECTOR */
 .doc-types{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:var(--space-lg)}
 .dt-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:14px;cursor:pointer;transition:all .12s;text-align:center}
 .dt-card:hover,.dt-card.sel{border-color:var(--accent);background:var(--accent-glow)}
 .dt-i{font-size:22px;margin-bottom:6px}
 .dt-n{font-size:10px;font-weight:500}
 
-/* EVENT ITEMS */
 .ev-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);margin-bottom:6px}
 .ev-time{font-family:var(--mono);font-size:10px;color:var(--text3);min-width:56px}
 .ev-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 
-/* WORK TYPE CHIPS */
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .chip{padding:4px 12px;border-radius:20px;font-size:10px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text3);transition:all .12s;user-select:none}
 .chip.on{background:var(--accent-glow);color:var(--accent);border-color:rgba(91,127,255,.3)}
 
-/* FILTER CHIPS */
 .filter-bar{display:flex;gap:6px;margin-bottom:var(--space-md);flex-wrap:wrap}
 .fb{padding:5px 12px;border-radius:20px;font-size:10px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--text3);transition:all .12s}
 .fb.active{background:var(--accent-glow);color:var(--accent);border-color:rgba(91,127,255,.3)}
@@ -536,11 +501,10 @@ tr:hover td{background:var(--bg3)}
 </div>
 </div>
 
-</div><!-- /main -->
-</div><!-- /app -->
+</div>
+</div>
 
 <!-- ===== MODALS ===== -->
-<!-- Client Modal -->
 <div class="modal-overlay" id="client-modal">
   <div class="modal">
     <div class="modal-h"><div class="modal-t" id="c-modal-t">クライアント追加</div><div class="modal-x" onclick="closeMod('client-modal')">×</div></div>
@@ -572,7 +536,6 @@ tr:hover td{background:var(--bg3)}
   </div>
 </div>
 
-<!-- Followup Modal -->
 <div class="modal-overlay" id="fu-modal">
   <div class="modal">
     <div class="modal-h"><div class="modal-t">リード追加（フォローアップ）</div><div class="modal-x" onclick="closeMod('fu-modal')">×</div></div>
@@ -602,7 +565,6 @@ tr:hover td{background:var(--bg3)}
   </div>
 </div>
 
-<!-- Seminar Modal -->
 <div class="modal-overlay" id="sem-modal">
   <div class="modal">
     <div class="modal-h"><div class="modal-t">イベント追加</div><div class="modal-x" onclick="closeMod('sem-modal')">×</div></div>
@@ -622,7 +584,6 @@ tr:hover td{background:var(--bg3)}
   </div>
 </div>
 
-<!-- Schedule Modal -->
 <div class="modal-overlay" id="ev-modal">
   <div class="modal">
     <div class="modal-h"><div class="modal-t">予定を追加</div><div class="modal-x" onclick="closeMod('ev-modal')">×</div></div>
@@ -642,7 +603,6 @@ tr:hover td{background:var(--bg3)}
   </div>
 </div>
 
-<!-- Doc Preview Modal -->
 <div class="modal-overlay" id="preview-modal">
   <div class="modal" style="width:640px">
     <div class="modal-h"><div class="modal-t" id="prev-title">書類プレビュー</div><div class="modal-x" onclick="closeMod('preview-modal')">×</div></div>
@@ -657,7 +617,6 @@ tr:hover td{background:var(--bg3)}
 <div id="toast-c"></div>
 
 <script>
-// ===== STATE =====
 const S = {
   clients: [],
   seminars: [],
@@ -716,7 +675,6 @@ function loadState() {
   if (!S.followups) S.followups = [];
 }
 
-// ===== NAVIGATION =====
 function goPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -735,7 +693,6 @@ document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', () => goPage(el.dataset.page));
 });
 
-// ===== UTILS =====
 function fmtN(n) { return Math.round(n).toLocaleString('ja-JP'); }
 function openMod(id) { document.getElementById(id).classList.add('open'); }
 function closeMod(id) { document.getElementById(id).classList.remove('open'); }
@@ -759,7 +716,6 @@ function evColor(t) {
   return m[t] || '#4e5568';
 }
 
-// ===== DASHBOARD =====
 function refreshDash() {
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
   document.getElementById('m-deals').textContent = S.clients.filter(c => ['商談中','契約済','納品中'].includes(c.status)).length;
@@ -795,7 +751,6 @@ function refreshDash() {
     : upcoming.map(e => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)"><div style="width:7px;height:7px;border-radius:50%;background:${evColor(e.type)};flex-shrink:0"></div><div style="flex:1"><div style="font-size:11px;font-weight:500">${e.title}</div><div style="font-size:10px;color:var(--text3)">${e.date} ${e.time||''}</div></div><span class="badge b-gray" style="font-size:9px">${e.type}</span></div>`).join('');
 }
 
-// ===== DOCUMENTS =====
 let curDocType = '見積書';
 let lineItems = [];
 function selDocType(type) {
@@ -854,7 +809,6 @@ function genDocLink() {
   toast('Google Docsを開きました — テキストを貼り付けてください', 'success');
 }
 
-// ===== CONTRACT WIZARD =====
 let wizStep = 1;
 let cwWorkTypes = [];
 function goWiz(step) {
@@ -919,7 +873,6 @@ function copyCT() {
     .catch(() => toast('コピーに失敗しました', 'error'));
 }
 
-// ===== SEMINAR =====
 function openSemModal() {
   ['s-name','s-venue','s-target','s-note'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('s-cap').value = '';
@@ -1008,7 +961,6 @@ function deleteSem(id) {
   toast('削除しました', 'success');
 }
 
-// ===== CLIENTS =====
 let curCFilter = 'all';
 let editingCId = null;
 function openClientModal(cid = null) {
@@ -1086,7 +1038,6 @@ function refreshClients() {
 }
 function deleteC(id) { S.clients = S.clients.filter(c => c.id !== id); saveState(); refreshClients(); refreshDash(); }
 
-// ===== FOLLOWUP =====
 let curFuTab = 'active';
 function openFuModal() {
   ['fu-co','fu-person','fu-contact','fu-note'].forEach(id => document.getElementById(id).value = '');
@@ -1156,7 +1107,6 @@ function refreshFu() {
   `).join('');
 }
 
-// ===== SCHEDULE =====
 let calYear = 2026, calMonth = 5;
 function openEvModal() {
   ['ev-title','ev-note'].forEach(id => document.getElementById(id).value = '');
@@ -1210,7 +1160,6 @@ function refreshCal() {
 }
 function deleteEv(id) { S.events = S.events.filter(e => e.id !== id); saveState(); refreshCal(); refreshDash(); }
 
-// ===== INIT =====
 loadState();
 refreshDash();
 refreshSeminar();
@@ -1219,7 +1168,3 @@ refreshCal();
 </body>
 </html>
 HTMLEOF
-echo "done: $(wc -l < /home/claude/oku_system_v4.html) lines"
-出力
-
-done: 1217 lines

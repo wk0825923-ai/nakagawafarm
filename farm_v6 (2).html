@@ -1,0 +1,2416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>中川農園 管理システム — A-1〜A-4</title>
+
+  <!-- ===== A-1: CDN読み込み ===== -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link  rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- ===== C-2: PDF出力用CDN ===== -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- ===== C-3: Excel出力用CDN ===== -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <style>
+    /* ============================================================
+       PREMIUM LIGHT v2 — 農場管理システム
+       ─────────────────────────────────────
+       背景         #F2F5F2  緑みの優しいオフホワイト（農地・自然感）
+       サイドバー   #FFFFFF  純白で清潔感・カードと同トーン
+       カード        #FFFFFF  + 立体感あるシャドウ
+       ─────────────────────────────────────
+       Accent palette (宝石色系 × 高彩度):
+         Forest     #0A6B52  フォレストグリーン（プライマリ）
+         Sapphire   #1D4ED8  サファイアブルー
+         Amber      #B45309  バーントアンバー
+         Coral      #C2410C  コーラルレッド
+         Amethyst   #6D28D9  アメジスト
+         Gold line  #B8976A  ゴールド（ライン装飾）
+       ─────────────────────────────────────
+       テキスト     #111827  深チャコール
+       サブ         #64748B
+       ボーダー     #E2E8E2
+    ============================================================ */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    *{box-sizing:border-box}
+    html,body{margin:0;width:100%;height:100%}
+    body{font-family:'Inter',system-ui,sans-serif;background:#FAFBFA;color:#111827}
+    #app{width:100%;height:100vh;display:flex;overflow:hidden}
+
+    /* ─── サイドバー（ホワイト・左ゴールドライン） ─── */
+    .sidebar{
+      width:224px;
+      background:#F0F4F1;
+      border-right:1px solid #DDE8DE;
+      display:flex;flex-direction:column;
+      padding:0;flex-shrink:0;
+      box-shadow:1px 0 0 #DDE8DE, 4px 0 24px rgba(10,107,82,.05);
+      overflow-y:auto
+    }
+    .sb-logo{
+      padding:22px 20px 16px;
+      border-bottom:1px solid #DDE8DE;
+      margin-bottom:8px;
+      position:relative
+    }
+    .sb-logo::before{
+      content:'';
+      position:absolute;left:0;top:0;bottom:0;
+      width:3px;background:linear-gradient(180deg,#B8976A 0%,#0A6B52 100%);
+      border-radius:0 2px 2px 0
+    }
+    .sb-logo .farm-name{
+      font-size:14px;font-weight:700;color:#111827;
+      letter-spacing:.01em;padding-left:4px
+    }
+    .sb-logo .farm-sub{
+      font-size:10px;color:#94A3B8;margin-top:3px;
+      letter-spacing:.04em;font-weight:500;padding-left:4px;
+      text-transform:uppercase
+    }
+    .nav-wrap{padding:4px 10px}
+    .nav-section{
+      font-size:9px;font-weight:700;color:#94A3B8;
+      letter-spacing:.1em;text-transform:uppercase;
+      padding:12px 10px 4px
+    }
+    .nav-item{
+      display:flex;align-items:center;gap:10px;
+      padding:9px 10px;border-radius:8px;cursor:pointer;
+      font-size:13px;color:#64748B;margin-bottom:1px;
+      transition:all .12s;border:none;background:none;
+      width:100%;text-align:left;font-weight:500;
+      position:relative
+    }
+    .nav-item:hover{background:#F0F8F4;color:#0A6B52}
+    .nav-item.active{
+      background:#FFFFFF;
+      color:#0A6B52;font-weight:700;
+      box-shadow:0 1px 4px rgba(10,107,82,.12), inset 0 0 0 1px rgba(10,107,82,.1)
+    }
+    .nav-item.active::before{
+      content:'';position:absolute;left:0;top:50%;
+      transform:translateY(-50%);
+      width:3px;height:18px;
+      background:#0A6B52;border-radius:0 3px 3px 0
+    }
+    .nav-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+
+    /* ─── メインエリア ─── */
+    .main{flex:1;overflow:auto;background:#FAFBFA;min-width:0;width:0}
+    .main.map-fullscreen{overflow:hidden;display:flex;flex-direction:column}
+    .page{padding:28px 32px;box-sizing:border-box}
+    .page-title{
+      font-size:22px;font-weight:700;color:#111827;
+      margin-bottom:4px;letter-spacing:-.02em
+    }
+    .page-sub{font-size:13px;color:#64748B;margin-bottom:24px}
+
+    /* ─── カード ─── */
+    .card{
+      background:#FFFFFF;
+      border-radius:14px;padding:20px;
+      box-shadow:0 1px 3px rgba(10,107,82,.06),0 8px 24px rgba(17,24,39,.07)
+    }
+    .card-sm{
+      background:#FFFFFF;
+      border-radius:10px;padding:16px;
+      box-shadow:0 1px 3px rgba(10,107,82,.05),0 4px 16px rgba(17,24,39,.06)
+    }
+
+    /* ─── 統計カード（カラフル上ボーダー） ─── */
+    .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+    .stat-card{
+      background:#FFFFFF;
+      border-radius:12px;padding:16px 18px;
+      box-shadow:0 1px 3px rgba(10,107,82,.06),0 4px 18px rgba(17,24,39,.07)
+    }
+
+    .stat-n{font-size:28px;font-weight:700;line-height:1;letter-spacing:-.03em;margin-top:4px}
+    .stat-l{font-size:10px;color:#94A3B8;margin-top:8px;font-weight:600;text-transform:uppercase;letter-spacing:.07em}
+    .stat-card.green .stat-n{color:#0A6B52}
+    .stat-card.amber .stat-n{color:#B45309}
+    .stat-card.red   .stat-n{color:#C2410C}
+    .stat-card.blue  .stat-n{color:#1D4ED8}
+
+    /* ─── プログレス ─── */
+    .prog-wrap{margin-bottom:24px}
+    .prog-label{font-size:12px;color:#64748B;margin-bottom:6px;display:flex;justify-content:space-between;font-weight:500}
+    .prog-bg{background:#D8E8D8;border-radius:6px;height:8px;overflow:hidden}
+    .prog-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#0A6B52,#34D399);transition:width .6s}
+
+    /* ─── アラート ─── */
+    .alert-card{
+      background:#FFFBEB;border:1px solid #FDE68A;
+      border-radius:8px;
+      padding:11px 14px;margin-bottom:8px;
+      display:flex;align-items:center;gap:10px;
+      font-size:13px;color:#78350F
+    }
+
+    /* ─── バッジ（宝石色） ─── */
+    .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;letter-spacing:.02em}
+    .badge-green{background:#ECFDF5;color:#065F46;border:1px solid #6EE7B7}
+    .badge-amber{background:#FFFBEB;color:#78350F;border:1px solid #FDE68A}
+    .badge-red  {background:#FFF7ED;color:#9A3412;border:1px solid #FDBA74}
+    .badge-blue {background:#EFF6FF;color:#1E3A8A;border:1px solid #93C5FD}
+    .badge-gray {background:#F8FAFC;color:#475569;border:1px solid #CBD5E1}
+
+    /* ─── テーブル ─── */
+    .table{width:100%;border-collapse:collapse;font-size:13px}
+    .table th{
+      text-align:left;font-size:10px;font-weight:700;
+      color:#64748B;text-transform:uppercase;letter-spacing:.08em;
+      padding:9px 14px;border-bottom:2px solid #E2E8E2;
+      background:#F8FAF8
+    }
+    .table td{padding:12px 14px;border-bottom:1px solid #EDF2ED;color:#374151;vertical-align:middle}
+    .table tr:last-child td{border-bottom:none}
+    .table tr:hover td{background:#F0FDF4}
+
+    /* ─── フォーム ─── */
+    .form-group{margin-bottom:16px}
+    .form-label{font-size:11px;color:#374151;margin-bottom:6px;display:block;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+    .form-input{
+      width:100%;background:#FFFFFF;border:1.5px solid #D8E4D8;
+      border-radius:8px;padding:10px 12px;font-size:13px;
+      color:#111827;outline:none;transition:all .15s
+    }
+    .form-input:focus{border-color:#0A6B52;box-shadow:0 0 0 3px rgba(10,107,82,.1)}
+    .form-input::placeholder{color:#B8C9B8}
+    .form-select{
+      width:100%;background:#FFFFFF;border:1.5px solid #D8E4D8;
+      border-radius:8px;padding:10px 12px;font-size:13px;
+      color:#111827;outline:none;transition:all .15s
+    }
+    .form-select:focus{border-color:#0A6B52;box-shadow:0 0 0 3px rgba(10,107,82,.1)}
+    select option{background:#fff;color:#111827}
+
+    /* ─── ボタン ─── */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;letter-spacing:.01em}
+    .btn-primary{
+      background:linear-gradient(135deg,#0A6B52 0%,#0D9972 100%);
+      color:#FFFFFF;
+      box-shadow:0 2px 8px rgba(10,107,82,.3),inset 0 1px 0 rgba(255,255,255,.1)
+    }
+    .btn-primary:hover{
+      background:linear-gradient(135deg,#085A45 0%,#0B8062 100%);
+      box-shadow:0 4px 14px rgba(10,107,82,.4);transform:translateY(-1px)
+    }
+    .btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+    .btn-ghost{
+      background:#FFFFFF;color:#374151;
+      border:1.5px solid #D8E4D8;
+      box-shadow:0 1px 2px rgba(10,107,82,.06)
+    }
+    .btn-ghost:hover{background:#F6FAF6;color:#111827;border-color:#94A3B8}
+
+    /* ─── ステップUI ─── */
+    .step-indicator{display:flex;gap:8px;margin-bottom:24px}
+    .step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+    .step-dot.done  {background:#0A6B52;color:#FFFFFF;box-shadow:0 2px 6px rgba(10,107,82,.35)}
+    .step-dot.active{background:#FFFFFF;color:#0A6B52;border:2px solid #0A6B52;box-shadow:0 0 0 3px rgba(10,107,82,.12)}
+    .step-dot.pending{background:#F1F5F1;color:#B8C9B8;border:1.5px solid #D8E4D8}
+    .step-line{flex:1;height:1px;background:#D8E4D8;margin-top:14px}
+
+    /* ─── GAP ─── */
+    .gap-check-cat{background:#FFFFFF;border:1px solid #D8E4D8;border-radius:10px;margin-bottom:8px;overflow:hidden;box-shadow:0 1px 4px rgba(10,107,82,.05)}
+    .gap-cat-hdr{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;color:#111827}
+    .gap-cat-hdr:hover{background:#F0FDF4}
+    .gap-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #EDF2ED;font-size:13px;color:#64748B;cursor:pointer}
+    .gap-item:hover{background:#F0FDF4}
+    .gap-item.done{color:#065F46;font-weight:500}
+
+    /* ─── カレンダー ─── */
+    .cal-day{background:#FFFFFF;border:1px solid #D8E4D8;border-radius:8px;padding:6px;min-height:60px;font-size:11px;box-shadow:0 1px 3px rgba(10,107,82,.04)}
+    .cal-day-num{font-weight:700;color:#64748B;margin-bottom:4px}
+    .cal-event{border-radius:4px;padding:2px 5px;margin-bottom:2px;font-size:10px;font-weight:600}
+    .cal-event.own {background:#ECFDF5;color:#065F46;border:1px solid #6EE7B7}
+    .cal-event.rent{background:#FFFBEB;color:#78350F;border:1px solid #FDE68A}
+
+    /* ─── その他 ─── */
+    .section-title{
+      font-size:10px;font-weight:700;color:#94A3B8;
+      margin-bottom:12px;text-transform:uppercase;letter-spacing:.1em
+    }
+    .field-card{
+      background:#FFFFFF;border:1px solid #D8E4D8;
+      border-radius:12px;padding:16px;cursor:pointer;
+      transition:all .15s;
+      box-shadow:0 1px 4px rgba(10,107,82,.06)
+    }
+    .field-card:hover{
+      border-color:#0A6B52;
+      box-shadow:0 4px 20px rgba(10,107,82,.14);
+      transform:translateY(-1px)
+    }
+    .field-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+    .staff-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+    #field-map{height:380px;border-radius:12px;overflow:hidden;border:1px solid #D8E4D8;box-shadow:0 2px 8px rgba(10,107,82,.08)}
+    .sup-note{background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;padding:10px 12px;font-size:12px;color:#065F46;font-weight:500}
+
+    /* ─── PDF出力用（画面外） ─── */
+    #pdf-preview{
+      position:fixed;left:-9999px;top:0;
+      background:#fff;color:#000;
+      font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;
+      font-size:11px;padding:20px;width:794px
+    }
+    #pdf-preview h2{font-size:16px;font-weight:700;margin-bottom:4px;color:#000}
+    #pdf-preview .pdf-meta{font-size:10px;color:#555;margin-bottom:12px}
+    #pdf-preview table{width:100%;border-collapse:collapse;font-size:10px}
+    #pdf-preview th{background:#0A6B52;color:#fff;padding:6px 8px;text-align:left;font-weight:600;border:1px solid #aaa}
+    #pdf-preview td{padding:5px 8px;border:1px solid #ccc;vertical-align:middle}
+    #pdf-preview tr:nth-child(even) td{background:#f5faf8}
+    #pdf-preview .pdf-footer{margin-top:14px;font-size:9px;color:#888;text-align:right}
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<!-- C-2: GAP様式 農薬散布記録簿 PDFプレビュー（画面外に隠す） -->
+<div id="pdf-preview"></div>
+<div id="crop-plan-pdf-preview" style="display:none;position:fixed;left:-9999px;top:0"></div>
+<script>
+// =====================================================
+// C-2: 農薬散布記録簿 PDF出力
+// records → GAP様式HTMLテーブル → html2canvas → jsPDF
+// 日本語対応: html2canvasがbodyフォントをそのままキャプチャするため
+//             pdf-previewのfont-familyに日本語フォントを指定して対処
+// =====================================================
+async function exportSprayPDF(records, fields, pesticides) {
+  const sprayRecords = records.filter(r => r.work_type === '農薬散布')
+  const el = document.getElementById('pdf-preview')
+  const today = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })
+
+  // GAP様式テーブルHTML を生成
+  el.innerHTML = `
+    <h2>農薬散布記録簿</h2>
+    <div class="pdf-meta">
+      農園名: 中川農園　／　出力日: ${today}　／　対象件数: ${sprayRecords.length}件
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>No.</th>
+          <th>作業日</th>
+          <th>圃場名</th>
+          <th>作物名</th>
+          <th>農薬名</th>
+          <th>登録番号</th>
+          <th>希釈倍率</th>
+          <th>散布量(L)</th>
+          <th>天気</th>
+          <th>作業者</th>
+          <th>収穫前日数</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sprayRecords.length === 0
+          ? '<tr><td colspan="11" style="text-align:center;color:#888;padding:16px">農薬散布記録がありません</td></tr>'
+          : sprayRecords.map((r, i) => {
+              const field = fields.find(f => f.id === r.field_id)
+              const pest  = pesticides.find(p => p.id === r.pesticide_id)
+              return `<tr>
+                <td>${i + 1}</td>
+                <td>${r.date}</td>
+                <td>${field ? field.name : '—'}</td>
+                <td>${field ? field.crop : '—'}</td>
+                <td>${pest  ? pest.name  : '—'}</td>
+                <td>${pest  ? pest.reg_no : '—'}</td>
+                <td>${r.dilution ? r.dilution + '倍' : '—'}</td>
+                <td>${r.amount || '—'}</td>
+                <td>${r.weather || '—'}</td>
+                <td>${r.worker || '—'}</td>
+                <td>${pest ? pest.preharvest_days + '日' : '—'}</td>
+              </tr>`
+            }).join('')
+        }
+      </tbody>
+    </table>
+    <div class="pdf-footer">
+      ※ 本記録はJGAP / GlobalGAP 農薬管理基準に基づき作成　中川農園
+    </div>
+  `
+
+  // html2canvas でキャプチャ → jsPDF で出力
+  const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false })
+  const { jsPDF } = window.jspdf
+  const pdf   = new jsPDF('p', 'mm', 'a4')
+  const imgW  = 190
+  const imgH  = canvas.height * imgW / canvas.width
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgW, imgH)
+  pdf.save('農薬散布記録簿_中川農園.pdf')
+
+  // プレビューをリセット
+  el.innerHTML = ''
+}
+
+// =====================================================
+// C-3: 施肥記録 Excel出力（SheetJS）
+// fertilizer_records モックデータを xlsx として出力
+// =====================================================
+function exportFertilizerExcel(records, fields) {
+  const fertRecords = records.filter(r => r.work_type === '施肥')
+  const data = fertRecords.map(r => {
+    const field = fields.find(f => f.id === r.field_id)
+    return {
+      '日付':       r.date,
+      '圃場名':     field ? field.name : '—',
+      '作物名':     field ? field.crop : '—',
+      '肥料名':     r.fertilizer_name || '（記録なし）',
+      '施肥量(kg)': r.amount || 0,
+      '作業者':     r.worker || '—',
+      '天気':       r.weather || '—',
+      '備考':       r.note || '',
+    }
+  })
+
+  // データが0件でもヘッダー付きで出力
+  const ws = XLSX.utils.json_to_sheet(
+    data.length > 0 ? data : [{ '日付':'', '圃場名':'', '作物名':'', '肥料名':'', '施肥量(kg)':'', '作業者':'', '天気':'', '備考':'' }]
+  )
+  ws['!cols'] = [{ wch:12 },{ wch:15 },{ wch:15 },{ wch:20 },{ wch:12 },{ wch:15 },{ wch:8 },{ wch:20 }]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, '施肥記録')
+  XLSX.writeFile(wb, '施肥記録簿_中川農園.xlsx')
+}
+
+// =====================================================
+// A-2: モックデータ定義
+// Supabase移行時はここだけ置き換える
+// =====================================================
+const INITIAL_FIELDS = [
+  { id:1, name:'第1圃場', area_are:30, crop:'レタス',      lat:35.3842, lng:139.9248, status:'栽培中', color:'#0D9972' },
+  { id:2, name:'第2圃場', area_are:45, crop:'米',          lat:35.3855, lng:139.9260, status:'休閑',   color:'#D97706' },
+  { id:3, name:'第3圃場', area_are:22, crop:'とうもろこし', lat:35.3830, lng:139.9235, status:'栽培中', color:'#2563EB' },
+  { id:4, name:'第4圃場', area_are:18, crop:'ターサイ',    lat:35.3862, lng:139.9272, status:'収穫期', color:'#7C3AED' },
+]
+const INITIAL_PESTICIDES = [
+  { id:1, name:'スミチオン乳剤',   reg_no:'農林123号', dilution:1000, max_times:3, preharvest_days:7  },
+  { id:2, name:'トレボン乳剤',     reg_no:'農林456号', dilution:2000, max_times:2, preharvest_days:14 },
+  { id:3, name:'オルトラン水和剤', reg_no:'農林789号', dilution:1500, max_times:4, preharvest_days:3  },
+]
+const INITIAL_STAFF = [
+  { id:1, name:'田中 太郎',    nationality:'JP', role:'manager', visa_expires_at:null,         avatar:'田中' },
+  { id:2, name:'Nguyen Van A', nationality:'VN', role:'trainee', visa_expires_at:'2026-07-10', avatar:'Ng'   },
+  { id:3, name:'鈴木 花子',    nationality:'JP', role:'worker',  visa_expires_at:null,         avatar:'鈴木' },
+  { id:4, name:'Chen Wei',     nationality:'CN', role:'trainee', visa_expires_at:'2026-08-22', avatar:'Ch'   },
+]
+const INITIAL_RECORDS = [
+  { id:1, date:'2026-06-01', field_id:1, work_type:'農薬散布', pesticide_id:1, dilution:1000, amount:50, weather:'晴', worker:'田中 太郎' },
+  { id:2, date:'2026-06-03', field_id:3, work_type:'施肥',     pesticide_id:null, amount:30, weather:'曇', worker:'鈴木 花子' },
+  { id:3, date:'2026-06-05', field_id:1, work_type:'農薬散布', pesticide_id:2, dilution:2000, amount:40, weather:'晴', worker:'田中 太郎' },
+  { id:4, date:'2026-06-07', field_id:2, work_type:'除草',     pesticide_id:null, amount:0,  weather:'雨', worker:'Nguyen Van A' },
+]
+const INITIAL_GAP_CHECKS = [
+  { id:1,  category:'農薬管理', item:'農薬保管庫の施錠確認',         is_cleared:true  },
+  { id:2,  category:'農薬管理', item:'農薬散布記録の保管（5年間）',   is_cleared:true  },
+  { id:3,  category:'農薬管理', item:'農薬ラベルの確認と遵守',        is_cleared:false },
+  { id:4,  category:'農薬管理', item:'PPE（防護具）の使用記録',       is_cleared:false },
+  { id:5,  category:'労働安全', item:'作業前安全教育の実施',          is_cleared:true  },
+  { id:6,  category:'労働安全', item:'緊急時連絡先の掲示',            is_cleared:true  },
+  { id:7,  category:'労働安全', item:'熱中症対策の実施記録',          is_cleared:false },
+  { id:8,  category:'衛生管理', item:'手洗い設備の設置確認',          is_cleared:true  },
+  { id:9,  category:'衛生管理', item:'トイレ設備の衛生点検',          is_cleared:true  },
+  { id:10, category:'衛生管理', item:'作業着の洗濯・管理記録',        is_cleared:false },
+  { id:11, category:'記録管理', item:'生産工程記録の作成・保管',      is_cleared:true  },
+  { id:12, category:'記録管理', item:'出荷記録のトレーサビリティ確保', is_cleared:false },
+]
+const INITIAL_RENTALS = [
+  { id:1, equipment:'トラクター',   date:'2026-06-10', type:'own',  note:'第2圃場耕起' },
+  { id:2, equipment:'スプレーヤー', date:'2026-06-11', type:'rent', note:'山田農園'     },
+  { id:3, equipment:'トラクター',   date:'2026-06-15', type:'own',  note:'第1圃場'      },
+  { id:4, equipment:'田植え機',     date:'2026-06-12', type:'rent', note:'佐藤農園'     },
+]
+
+// =====================================================
+// A-4: 共通サイドバーコンポーネント
+// ナビアイテムをクリックで画面切り替え
+// アクティブ状態ハイライト / アイコンはテキスト絵文字
+// =====================================================
+const NAV_SECTIONS = [
+  { items: [
+    { id:'dashboard',   label:'ダッシュボード', icon:'🏠' },
+  ]},
+  { label:'記録', items: [
+    { id:'records',     label:'日次作業入力',   icon:'📝' },
+    { id:'record_list', label:'記録一覧',       icon:'📋' },
+    { id:'export',      label:'帳票出力',       icon:'📤' },
+  ]},
+  { label:'圃場', items: [
+    { id:'field_map',   label:'圃場マップ',     icon:'🗺️' },
+    { id:'fields',      label:'圃場一覧・管理', icon:'🌾' },
+    { id:'crop_plan',   label:'作付計画',       icon:'📅' },
+  ]},
+  { label:'GAP認証', items: [
+    { id:'gap',         label:'チェックリスト', icon:'✅' },
+    { id:'gap_package', label:'申請パッケージ', icon:'📦' },
+  ]},
+  { label:'人・機器', items: [
+    { id:'staff',       label:'スタッフ名簿',   icon:'👥' },
+    { id:'visa',        label:'ビザ・在留管理', icon:'🛂' },
+    { id:'equipment',   label:'機器予約',       icon:'🚜' },
+  ]},
+  { label:'システム', items: [
+    { id:'settings',    label:'設定',           icon:'⚙️' },
+  ]},
+]
+
+function Sidebar({ current, onChange }) {
+  return React.createElement('nav', { className:'sidebar' },
+    React.createElement('div', { className:'sb-logo' },
+      React.createElement('div', { className:'farm-name' }, '🌱 中川農園'),
+      React.createElement('div', { className:'farm-sub'  }, '管理システム v1.0')
+    ),
+    React.createElement('div', { className:'nav-wrap' },
+      ...NAV_SECTIONS.flatMap(sec => [
+        sec.label && React.createElement('div', { key:'sec-'+sec.label, className:'nav-section' }, sec.label),
+        ...sec.items.map(n =>
+          React.createElement('button', {
+            key: n.id,
+            className: 'nav-item' + (current === n.id ? ' active' : ''),
+            onClick: () => onChange(n.id),
+          },
+            React.createElement('span', { className:'nav-icon' }, n.icon),
+            n.label
+          )
+        )
+      ]).filter(Boolean)
+    )
+  )
+}
+
+// =====================================================
+// B-1: ダッシュボード画面（完全実装）
+// GAP進捗バー / アラートカード / 圃場サマリーカード / 最近の記録ログ
+// =====================================================
+
+/* --- サブコンポーネント --- */
+
+// GAP進捗バー
+function GapProgressBar({ pct }) {
+  const color = pct >= 80 ? '#0A6B52' : pct >= 50 ? '#B45309' : '#DC2626'
+  const bg    = pct >= 80 ? '#ECFDF5' : pct >= 50 ? '#FFFBEB' : '#FFF1F2'
+  const border= pct >= 80 ? '#A7F3D0' : pct >= 50 ? '#FDE68A' : '#FECACA'
+  return React.createElement('div', {
+    style:{ background:bg, border:'1px solid '+border, borderRadius:'12px', padding:'16px 20px', marginBottom:'20px', display:'flex', alignItems:'center', gap:'20px' }
+  },
+    React.createElement('div', { style:{ flex:1 } },
+      React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', fontSize:'13px', marginBottom:'8px' } },
+        React.createElement('span', { style:{ color:'#374151', fontWeight:500 } }, '📋 GAP認証 進捗'),
+        React.createElement('span', { style:{ color, fontWeight:600 } }, pct + '%')
+      ),
+      React.createElement('div', { style:{ background:'#F4F6F9', borderRadius:'6px', height:'10px', overflow:'hidden' } },
+        React.createElement('div', {
+          style:{ height:'100%', borderRadius:'6px', background:color, width:pct+'%', transition:'width .8s ease' }
+        })
+      ),
+      React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginTop:'6px' } },
+        pct >= 80 ? '✓ 申請準備ができています' : pct >= 50 ? '引き続き項目をクリアしましょう' : '未完了の項目が多くあります'
+      )
+    ),
+    React.createElement('div', { style:{ textAlign:'center', flexShrink:0 } },
+      React.createElement('div', { style:{ fontSize:'32px', fontWeight:700, color, lineHeight:1 } }, pct + '%'),
+      React.createElement('div', { style:{ fontSize:'10px', color:'#6B7280', marginTop:'4px' } }, '達成率')
+    )
+  )
+}
+
+// アラートカード（ビザ期限警告）
+function AlertCard({ msg, days }) {
+  const isUrgent = days <= 30
+  return React.createElement('div', {
+    style:{
+      background: isUrgent ? '#FFF1F2' : '#FFFBEB',
+      border: '1px solid ' + (isUrgent ? '#FECACA' : '#FDE68A'),
+      
+      borderRadius:'8px', padding:'12px 16px', marginBottom:'8px',
+      display:'flex', alignItems:'center', gap:'12px'
+    }
+  },
+    React.createElement('span', { style:{ fontSize:'18px' } }, isUrgent ? '🚨' : '⚠️'),
+    React.createElement('div', { style:{ flex:1 } },
+      React.createElement('div', { style:{ fontSize:'13px', color: isUrgent ? '#ff7070' : '#f9bc60', fontWeight:500 } }, msg),
+      React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginTop:'2px' } }, isUrgent ? '至急対応が必要です' : '早めの手続きを推奨します')
+    ),
+    React.createElement('span', {
+      className:'badge ' + (isUrgent ? 'badge-red' : 'badge-amber')
+    }, '残' + days + '日')
+  )
+}
+
+// 圃場サマリーカード
+function FieldCard({ field, records }) {
+  const fieldRecords = records.filter(r => r.field_id === field.id)
+  const lastRecord   = fieldRecords.length > 0 ? fieldRecords[fieldRecords.length - 1] : null
+  const statusClass  = field.status === '栽培中' ? 'badge-green' : field.status === '休閑' ? 'badge-gray' : field.status === '収穫期' ? 'badge-amber' : 'badge-blue'
+  return React.createElement('div', {
+    style:{ background:'#FFFFFF', borderRadius:'10px', padding:'16px', position:'relative', overflow:'hidden', boxShadow:'0 2px 8px rgba(17,24,39,.08),0 4px 16px rgba(17,24,39,.05)' }
+  },
+    React.createElement('div', { style:{ position:'absolute', top:0, right:0, width:60, height:60, borderRadius:'0 0 0 60px', background:field.color+'12' } }),
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'12px' } },
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'14px', fontWeight:600, color:'#1A1F2E' } }, field.name),
+        React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } }, field.crop)
+      ),
+      React.createElement('span', { className:'badge '+statusClass }, field.status)
+    ),
+    React.createElement('div', { style:{ display:'flex', gap:'16px', marginBottom:'12px' } },
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'18px', fontWeight:600, color:field.color } }, field.area_are + 'a'),
+        React.createElement('div', { style:{ fontSize:'10px', color:'#6B7280' } }, '面積')
+      ),
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'18px', fontWeight:600, color:'#6B7280' } }, fieldRecords.length),
+        React.createElement('div', { style:{ fontSize:'10px', color:'#6B7280' } }, '記録数')
+      )
+    ),
+    React.createElement('div', { style:{ borderTop:'1px solid #F1F5F9', paddingTop:'10px', fontSize:'11px', color:'#6B7280' } },
+      lastRecord
+        ? '最終作業: ' + lastRecord.date + ' — ' + lastRecord.work_type
+        : '記録なし'
+    )
+  )
+}
+
+// 記録ログ行
+function RecordLogRow({ record, fields }) {
+  const field = fields.find(f => f.id === record.field_id)
+  const workIconMap = { '農薬散布':'🧴', '施肥':'🌿', '除草':'✂️', '収穫':'🌾', '播種':'🌱', '灌水':'💧', 'その他':'📝' }
+  const icon  = workIconMap[record.work_type] || '📝'
+  return React.createElement('div', {
+    style:{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 0', borderBottom:'1px solid #F1F5F9' }
+  },
+    React.createElement('div', {
+      style:{ width:32, height:32, borderRadius:'8px', background:'#E5E9F0', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'15px', flexShrink:0 }
+    }, icon),
+    React.createElement('div', { style:{ flex:1, minWidth:0 } },
+      React.createElement('div', { style:{ fontSize:'13px', color:'#374151', fontWeight:500 } }, record.work_type + (field ? ' — ' + field.name : '')),
+      React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginTop:'2px' } }, record.date + (record.worker ? ' · ' + record.worker : ''))
+    ),
+    field && React.createElement('div', { style:{ width:8, height:8, borderRadius:'50%', background:field.color, flexShrink:0 } })
+  )
+}
+
+// ダッシュボード本体
+function Dashboard({ fields, records, staff, gap }) {
+  // --- 集計 ---
+  const gapPct     = gap.length > 0 ? Math.round(gap.filter(c => c.is_cleared).length / gap.length * 100) : 0
+  // ビザ期限アラート（60日以内）
+  const visaAlerts = staff
+    .filter(s => s.visa_expires_at)
+    .map(s => ({ ...s, daysLeft: Math.ceil((new Date(s.visa_expires_at) - new Date()) / 86400000) }))
+    .filter(s => s.daysLeft <= 60)
+    .sort((a, b) => a.daysLeft - b.daysLeft)
+  const totalArea  = fields.reduce((a, f) => a + f.area_are, 0)
+  const activeF    = fields.filter(f => f.status === '栽培中').length
+  const recent     = [...records].reverse().slice(0, 5)
+  const today      = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' })
+
+  return React.createElement('div', { className:'page' },
+
+    // --- ページヘッダー ---
+    React.createElement('div', { style:{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:'20px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'page-title' }, 'ダッシュボード'),
+        React.createElement('div', { className:'page-sub', style:{ marginBottom:0 } }, today)
+      ),
+      React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', background:'#F8FAFF', border:'1px solid #E5E9F0', borderRadius:'6px', padding:'6px 10px' } },
+        '🌱 中川農園 管理システム'
+      )
+    ),
+
+    // --- 統計カード 4枚 ---
+    React.createElement('div', { className:'stat-grid' },
+      React.createElement('div', { className:'stat-card green' },
+        React.createElement('div', { className:'stat-n' }, activeF),
+        React.createElement('div', { className:'stat-l' }, '稼働中圃場')
+      ),
+      React.createElement('div', { className:'stat-card blue' },
+        React.createElement('div', { className:'stat-n' }, totalArea + 'a'),
+        React.createElement('div', { className:'stat-l' }, '総管理面積')
+      ),
+      React.createElement('div', { className:'stat-card amber' },
+        React.createElement('div', { className:'stat-n' }, records.length),
+        React.createElement('div', { className:'stat-l' }, '作業記録件数')
+      ),
+      React.createElement('div', { className:'stat-card red' },
+        React.createElement('div', { className:'stat-n' }, visaAlerts.length),
+        React.createElement('div', { className:'stat-l' }, 'ビザ期限アラート')
+      )
+    ),
+
+    // --- GAP進捗バー ---
+    React.createElement(GapProgressBar, { pct: gapPct }),
+
+    // --- アラートカード（ビザ期限） ---
+    ...visaAlerts.map(s =>
+      React.createElement(AlertCard, {
+        key: s.id,
+        msg: s.name + ' のビザ期限が近づいています',
+        days: s.daysLeft
+      })
+    ),
+
+    // --- 2カラム: 左=GAP+アラート+記録 / 右=圃場カード ---
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1.6fr', gap:'24px', alignItems:'start' } },
+
+      // 左カラム
+      React.createElement('div', null,
+        visaAlerts.length > 0 && React.createElement('div', { style:{ marginBottom:'20px' } },
+          React.createElement('div', { className:'section-title' }, '⚠️ ビザ期限アラート'),
+          ...visaAlerts.map(s => React.createElement(AlertCard, { key:s.id, msg:s.name+' のビザ期限が近づいています', days:s.daysLeft }))
+        ),
+        React.createElement('div', { className:'section-title' }, '最近の作業記録'),
+        React.createElement('div', { className:'card', style:{ padding:'0 16px' } },
+          recent.length === 0
+            ? React.createElement('div', { style:{ padding:'20px 0', color:'#6B7280', fontSize:'13px', textAlign:'center' } }, '記録がありません')
+            : recent.map(r => React.createElement(RecordLogRow, { key:r.id, record:r, fields }))
+        )
+      ),
+
+      // 右カラム: 圃場サマリー
+      React.createElement('div', null,
+        React.createElement('div', { className:'section-title' }, '圃場サマリー'),
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:'12px' } },
+          ...fields.map(f => React.createElement(FieldCard, { key:f.id, field:f, records }))
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// B-3: 農薬散布スライダーUI + バリデーション（独立コンポーネント）
+// 農薬選択 → スライダーで希釈倍率・散布量入力
+// 同圃場・同農薬の年間使用回数をrecordsから集計して上限チェック
+// 超過時は赤バナー + 保存ブロック
+// =====================================================
+function PesticideInput({ pesticides, records, fieldId, pesticideId, onUpdate }) {
+  const [selectedId, setSelectedId] = React.useState(pesticideId ? Number(pesticideId) : null)
+  const [dilution,   setDilution]   = React.useState(1000)
+  const [volume,     setVolume]     = React.useState(100)
+
+  const selected   = pesticides.find(p => p.id === selectedId)
+  const usedTimes  = records.filter(r =>
+    r.field_id === Number(fieldId) && r.pesticide_id === selectedId
+  ).length
+  const isOver     = selected && usedTimes >= selected.max_times
+  const remaining  = selected ? selected.max_times - usedTimes : null
+
+  // 親コンポーネントへ値を通知
+  React.useEffect(() => {
+    onUpdate({ pesticide_id: selectedId, dilution, volume, isOver })
+  }, [selectedId, dilution, volume])
+
+  return React.createElement('div', null,
+
+    // --- 農薬選択カード一覧 ---
+    React.createElement('div', { className:'form-group' },
+      React.createElement('label', { className:'form-label' }, '農薬を選択'),
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'6px' } },
+        ...pesticides.map(p => {
+          const used = records.filter(r => r.field_id === Number(fieldId) && r.pesticide_id === p.id).length
+          const over = used >= p.max_times
+          const sel  = selectedId === p.id
+          return React.createElement('button', {
+            key: p.id,
+            onClick: () => { if (!over) { setSelectedId(p.id); setDilution(p.dilution) } },
+            style:{
+              display:'flex', alignItems:'center', justifyContent:'space-between',
+              padding:'12px 14px', borderRadius:'8px', cursor: over ? 'not-allowed' : 'pointer',
+              border:'1px solid', textAlign:'left', opacity: over ? .55 : 1,
+              borderColor: sel ? '#0A6B52' : over ? '#FECACA' : '#DDE2EC',
+              background:  sel ? '#ECFDF5' : over ? '#FFF1F2' : '#F8FAFC',
+            }
+          },
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'13px', fontWeight:500, color: sel ? '#0A6B52' : '#374151' } }, p.name),
+              React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginTop:'2px' } },
+                '登録番号 '+p.reg_no+' ／ 収穫前 '+p.preharvest_days+'日 ／ 標準希釈 '+p.dilution+'倍'
+              )
+            ),
+            React.createElement('div', { style:{ textAlign:'right', flexShrink:0 } },
+              React.createElement('span', {
+                className:'badge '+(over ? 'badge-red' : used > 0 ? 'badge-amber' : 'badge-green')
+              }, used+'/'+p.max_times+'回'),
+              over && React.createElement('div', { style:{ fontSize:'10px', color:'#DC2626', marginTop:'3px' } }, '使用不可')
+            )
+          )
+        })
+      )
+    ),
+
+    // --- 超過バナー ---
+    isOver && React.createElement('div', {
+      style:{
+        background:'#FEF2F2', border:'1px solid #F87171',
+        borderRadius:'8px', padding:'12px 16px', marginBottom:'14px',
+        display:'flex', alignItems:'flex-start', gap:'10px'
+      }
+    },
+      React.createElement('span', { style:{ fontSize:'18px', flexShrink:0 } }, '🚫'),
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:'#DC2626', marginBottom:'3px' } },
+          '年間使用回数の上限（'+selected.max_times+'回）を超えています'
+        ),
+        React.createElement('div', { style:{ fontSize:'12px', color:'#991B1B' } },
+          'この農薬はこの圃場では使用できません。別の農薬を選択してください。'
+        )
+      )
+    ),
+
+    // --- スライダー（農薬選択済み＋上限未超過の場合のみ） ---
+    selected && !isOver && React.createElement('div', {
+      style:{ background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'10px', padding:'16px', marginBottom:'14px' }
+    },
+      // 残回数サマリー
+      React.createElement('div', {
+        style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }
+      },
+        React.createElement('div', { style:{ fontSize:'13px', color:'#0D9972', fontWeight:500 } }, '✓ '+selected.name),
+        React.createElement('span', { className:'badge badge-green' }, '残'+remaining+'回使用可')
+      ),
+
+      // 希釈倍率スライダー
+      React.createElement('div', { className:'form-group', style:{ marginBottom:'14px' } },
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'6px' }
+        },
+          React.createElement('label', { className:'form-label', style:{ marginBottom:0 } }, '希釈倍率'),
+          React.createElement('span', {
+            style:{
+              fontSize:'18px', fontWeight:700, color:'#0D9972',
+              background:'#0D9972', padding:'2px 12px', borderRadius:'6px'
+            }
+          }, dilution+'倍')
+        ),
+        React.createElement('input', {
+          type:'range', min:100, max:2000, step:50, value:dilution,
+          onChange: e => setDilution(Number(e.target.value)),
+          style:{ width:'100%', accentColor:'#0A6B52', cursor:'pointer' }
+        }),
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', fontSize:'10px', color:'#6B7280', marginTop:'3px' }
+        },
+          React.createElement('span', null, '100倍（濃い）'),
+          React.createElement('span', { style:{ color: dilution === selected.dilution ? '#0A6B52' : '#94A3B8' } },
+            dilution === selected.dilution ? '✓ 標準倍率' : '標準: '+selected.dilution+'倍'
+          ),
+          React.createElement('span', null, '2000倍（薄い）')
+        )
+      ),
+
+      // 散布量スライダー
+      React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'6px' }
+        },
+          React.createElement('label', { className:'form-label', style:{ marginBottom:0 } }, '散布量'),
+          React.createElement('span', {
+            style:{
+              fontSize:'18px', fontWeight:700, color:'#2563EB',
+              background:'#EFF6FF', padding:'2px 12px', borderRadius:'6px'
+            }
+          }, volume+'L')
+        ),
+        React.createElement('input', {
+          type:'range', min:10, max:500, step:10, value:volume,
+          onChange: e => setVolume(Number(e.target.value)),
+          style:{ width:'100%', accentColor:'#61b8f5', cursor:'pointer' }
+        }),
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', fontSize:'10px', color:'#6B7280', marginTop:'3px' }
+        },
+          React.createElement('span', null, '10L'), React.createElement('span', null, '500L')
+        )
+      )
+    ),
+
+    // --- 選択なし時のプレースホルダー ---
+    !selected && React.createElement('div', {
+      style:{ background:'#F8FAFF', border:'1.5px dashed #C8D0DC', borderRadius:'8px', padding:'16px', textAlign:'center', color:'#6B7280', fontSize:'13px' }
+    }, '↑ 上から農薬を選択してください')
+  )
+}
+
+// =====================================================
+// B-2: 日々の記録フォーム（完全実装）
+// ステップ型フォーム 4ステップ / 左フォーム + 右記録一覧 2カラム
+// =====================================================
+function DailyRecord({ fields, pesticides, records, onSave, hideList, hideForm }) {
+  const [step, setStep]       = React.useState(1)
+  const [dilution, setDilution] = React.useState(1000)
+  const [form, setForm]       = React.useState({
+    date: new Date().toISOString().slice(0,10),
+    field_id: '', work_type: '', pesticide_id: '',
+    amount: '', weather: '晴', worker: ''
+  })
+  const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // 農薬バリデーション
+  const selP   = pesticides.find(p => p.id === Number(form.pesticide_id))
+  const usedT  = selP ? records.filter(r => r.field_id === Number(form.field_id) && r.pesticide_id === selP.id).length : 0
+  const isOver = selP && usedT >= selP.max_times
+
+  // 保存処理
+  const handleSave = () => {
+    if (!form.field_id || !form.work_type) return
+    onSave({
+      ...form, id: Date.now(), dilution,
+      field_id: Number(form.field_id),
+      pesticide_id: form.pesticide_id ? Number(form.pesticide_id) : null
+    })
+    setStep(1)
+    setForm({ date: new Date().toISOString().slice(0,10), field_id:'', work_type:'', pesticide_id:'', amount:'', weather:'晴', worker:'' })
+    setDilution(1000)
+  }
+
+  const STEPS    = ['日付・圃場', '作業内容', '農薬/施肥', '確認・保存']
+  const WEATHERS = [{ v:'晴', icon:'☀️' }, { v:'曇', icon:'🌤' }, { v:'雨', icon:'🌧' }, { v:'強風', icon:'💨' }]
+  const WORK_TYPES = [
+    { v:'農薬散布', icon:'🧴', color:'#DC2626' },
+    { v:'施肥',     icon:'🌿', color:'#0D9972' },
+    { v:'除草',     icon:'✂️', color:'#D97706' },
+    { v:'収穫',     icon:'🌾', color:'#7C3AED' },
+    { v:'播種',     icon:'🌱', color:'#2563EB' },
+    { v:'灌水',     icon:'💧', color:'#2563EB' },
+    { v:'その他',   icon:'📝', color:'#6B7280' },
+  ]
+
+  const selField = fields.find(f => f.id === Number(form.field_id))
+
+  // ステップインジケーター
+  const StepBar = () => React.createElement('div', {
+    style:{ display:'flex', alignItems:'center', marginBottom:'24px' }
+  },
+    ...STEPS.map((s, i) => [
+      React.createElement('div', { key:'dot'+i, style:{ display:'flex', flexDirection:'column', alignItems:'center', gap:'4px' } },
+        React.createElement('div', {
+          style:{
+            width:30, height:30, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:'12px', fontWeight:600, flexShrink:0,
+            background: i+1 < step ? '#0A6B52' : i+1 === step ? '#FFFFFF' : '#F1F5F9',
+            color:       i+1 < step ? '#FFFFFF' : i+1 === step ? '#0A6B52' : '#CBD5E1',
+            border:      i+1 <= step ? '2px solid #0A6B52' : '1px solid #DDE2EC',
+          }
+        }, i+1 < step ? '✓' : i+1),
+        React.createElement('div', { style:{ fontSize:'10px', color: i+1===step?'#0A6B52':'#94A3B8', whiteSpace:'nowrap' } }, s)
+      ),
+      i < STEPS.length-1 && React.createElement('div', { key:'line'+i, style:{ flex:1, height:'1px', background: i+1 < step ? '#0A6B52' : '#E2E8F0', margin:'0 6px', marginBottom:'18px' } })
+    ]).flat().filter(Boolean)
+  )
+
+  // ステップ1: 日付・圃場・天気・作業者
+  const Step1 = () => React.createElement('div', null,
+    React.createElement('div', { className:'section-title' }, '📅 日付・圃場・作業者'),
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px' } },
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '作業日'),
+        React.createElement('input', { type:'date', className:'form-input', value:form.date, onChange:e=>up('date',e.target.value) })
+      ),
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '作業者'),
+        React.createElement('input', { type:'text', className:'form-input', value:form.worker, onChange:e=>up('worker',e.target.value), placeholder:'例: 田中 太郎' })
+      )
+    ),
+    React.createElement('div', { className:'form-group' },
+      React.createElement('label', { className:'form-label' }, '圃場を選択'),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' } },
+        ...fields.map(f =>
+          React.createElement('button', {
+            key: f.id,
+            onClick: () => up('field_id', String(f.id)),
+            style:{
+              display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px',
+              borderRadius:'8px', cursor:'pointer', border:'1px solid',
+              borderColor: form.field_id === String(f.id) ? f.color : '#DDE2EC',
+              background:  form.field_id === String(f.id) ? f.color+'15' : '#F8FAFC',
+              textAlign:'left'
+            }
+          },
+            React.createElement('div', { style:{ width:10, height:10, borderRadius:'50%', background:f.color, flexShrink:0 } }),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'13px', color:'#374151', fontWeight:500 } }, f.name),
+              React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280' } }, f.crop + ' / ' + f.area_are + 'a')
+            )
+          )
+        )
+      )
+    ),
+    React.createElement('div', { className:'form-group' },
+      React.createElement('label', { className:'form-label' }, '天気'),
+      React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+        ...WEATHERS.map(w =>
+          React.createElement('button', {
+            key: w.v,
+            onClick: () => up('weather', w.v),
+            style:{
+              padding:'8px 16px', borderRadius:'8px', cursor:'pointer', fontSize:'13px', border:'1px solid',
+              borderColor: form.weather === w.v ? '#0A6B52' : '#DDE2EC',
+              background:  form.weather === w.v ? '#ECFDF5' : '#F8FAFC',
+              color:       form.weather === w.v ? '#0A6B52' : '#64748B',
+            }
+          }, w.icon + ' ' + w.v)
+        )
+      )
+    ),
+    React.createElement('div', { style:{ display:'flex', justifyContent:'flex-end' } },
+      React.createElement('button', { className:'btn btn-primary', disabled:!form.field_id, onClick:()=>setStep(2) }, '次へ →')
+    )
+  )
+
+  // ステップ2: 作業内容（大ボタン選択）
+  const Step2 = () => React.createElement('div', null,
+    React.createElement('div', { className:'section-title' }, '🔧 作業内容を選択'),
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'10px', marginBottom:'20px' } },
+      ...WORK_TYPES.map(w =>
+        React.createElement('button', {
+          key: w.v,
+          onClick: () => up('work_type', w.v),
+          style:{
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            gap:'8px', padding:'18px 12px', borderRadius:'10px', cursor:'pointer', border:'1px solid',
+            borderColor: form.work_type === w.v ? w.color : '#DDE2EC',
+            background:  form.work_type === w.v ? w.color+'18' : '#F8FAFC',
+          }
+        },
+          React.createElement('span', { style:{ fontSize:'24px' } }, w.icon),
+          React.createElement('span', { style:{ fontSize:'12px', fontWeight:500, color: form.work_type===w.v ? w.color : '#64748B' } }, w.v)
+        )
+      )
+    ),
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
+      React.createElement('button', { className:'btn btn-ghost', onClick:()=>setStep(1) }, '← 戻る'),
+      React.createElement('button', { className:'btn btn-primary', disabled:!form.work_type, onClick:()=>setStep(3) }, '次へ →')
+    )
+  )
+
+  // ステップ3: 農薬/施肥 詳細入力 ← B-3 PesticideInput を統合
+  const Step3 = () => React.createElement('div', null,
+    React.createElement('div', { className:'section-title' }, form.work_type === '農薬散布' ? '🧴 農薬情報' : '📊 作業量を入力'),
+    form.work_type === '農薬散布' && React.createElement(PesticideInput, {
+      pesticides, records,
+      fieldId:     form.field_id,
+      pesticideId: form.pesticide_id,
+      onUpdate: ({ pesticide_id, dilution: d, volume: v, isOver: ov }) => {
+        if (pesticide_id) up('pesticide_id', String(pesticide_id))
+        setDilution(d)
+        up('amount', v)
+        // isOver を親で参照できるよう selP/isOver は既存ロジックがカバー
+      }
+    }),
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px' } },
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '使用量 / 作業量'),
+        React.createElement('input', { type:'number', className:'form-input', value:form.amount, onChange:e=>up('amount',e.target.value), placeholder:'例: 50' })
+      ),
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '単位'),
+        React.createElement('select', { className:'form-select' },
+          React.createElement('option', null, 'L'),
+          React.createElement('option', null, 'kg'),
+          React.createElement('option', null, 'm²'),
+        )
+      )
+    ),
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
+      React.createElement('button', { className:'btn btn-ghost', onClick:()=>setStep(2) }, '← 戻る'),
+      React.createElement('button', { className:'btn btn-primary', disabled:form.work_type==='農薬散布'&&isOver, onClick:()=>setStep(4) }, '確認 →')
+    )
+  )
+
+  // ステップ4: 確認プレビュー → 保存
+  const Step4 = () => {
+    const rows = [
+      ['📅 作業日', form.date],
+      ['👤 作業者', form.worker || '—'],
+      ['🌾 圃場',   selField ? selField.name + '（' + selField.crop + '）' : '—'],
+      ['🔧 作業内容', form.work_type],
+      ['🌤 天気',   form.weather],
+      ...(form.work_type === '農薬散布' && selP ? [
+        ['🧴 農薬',   selP.name],
+        ['💧 希釈倍率', dilution + '倍'],
+      ] : []),
+      ['📊 使用量', form.amount ? form.amount + ' L/kg' : '—'],
+    ]
+    return React.createElement('div', null,
+      React.createElement('div', { className:'section-title' }, '✅ 内容を確認して保存'),
+      React.createElement('div', {
+        style:{ background:'#F8FAFF', borderRadius:'10px', overflow:'hidden', marginBottom:'16px', boxShadow:'0 2px 8px rgba(17,24,39,.07)' }
+      },
+        ...rows.map(([k, v], i) =>
+          React.createElement('div', {
+            key: k,
+            style:{ display:'flex', padding:'11px 16px', borderBottom: i < rows.length-1 ? '1px solid #F1F5F9' : 'none', fontSize:'13px' }
+          },
+            React.createElement('span', { style:{ color:'#6B7280', width:'120px', flexShrink:0 } }, k),
+            React.createElement('span', { style:{ color:'#1A1F2E', fontWeight:500 } }, v)
+          )
+        )
+      ),
+      selField && React.createElement('div', {
+        style:{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 14px', background:selField.color+'12', border:'1px solid '+selField.color+'40', borderRadius:'8px', marginBottom:'16px', fontSize:'12px', color:'#374151' }
+      },
+        React.createElement('div', { style:{ width:8, height:8, borderRadius:'50%', background:selField.color } }),
+        '保存すると ' + selField.name + ' の記録に追加されます'
+      ),
+      React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
+        React.createElement('button', { className:'btn btn-ghost', onClick:()=>setStep(3) }, '← 戻る'),
+        React.createElement('button', {
+          className:'btn btn-primary',
+          disabled: isOver,
+          onClick: handleSave,
+          style:{ padding:'10px 28px', fontSize:'14px' }
+        }, '✓ 保存する')
+      )
+    )
+  }
+
+  // 記録一覧テーブル（右カラム）
+  const RecordTable = () => {
+    const workIconMap = { '農薬散布':'🧴','施肥':'🌿','除草':'✂️','収穫':'🌾','播種':'🌱','灌水':'💧','その他':'📝' }
+    return React.createElement('div', null,
+      React.createElement('div', { className:'section-title' }, '記録一覧（' + records.length + '件）'),
+      React.createElement('div', { className:'card', style:{ padding:0 } },
+        records.length === 0
+          ? React.createElement('div', { style:{ padding:'24px', color:'#6B7280', fontSize:'13px', textAlign:'center' } }, '記録がまだありません')
+          : React.createElement('table', { className:'table' },
+              React.createElement('thead', null,
+                React.createElement('tr', null,
+                  ...['', '日付', '圃場', '作業', '天気', '作業者'].map(h => React.createElement('th', { key:h }, h))
+                )
+              ),
+              React.createElement('tbody', null,
+                ...[...records].reverse().map(r => {
+                  const f = fields.find(x => x.id === r.field_id)
+                  return React.createElement('tr', { key:r.id },
+                    React.createElement('td', { style:{ paddingRight:0, fontSize:'15px' } }, workIconMap[r.work_type] || '📝'),
+                    React.createElement('td', null, r.date),
+                    React.createElement('td', null,
+                      f && React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'6px' } },
+                        React.createElement('div', { style:{ width:6, height:6, borderRadius:'50%', background:f.color } }),
+                        f.name
+                      )
+                    ),
+                    React.createElement('td', null, r.work_type),
+                    React.createElement('td', { style:{ color:'#6B7280' } }, r.weather),
+                    React.createElement('td', { style:{ color:'#6B7280' } }, r.worker || '—')
+                  )
+                })
+              )
+            )
+      )
+    )
+  }
+
+  const stepContent = [null, Step1, Step2, Step3, Step4][step]
+
+  if (hideForm) return React.createElement('div', { className:'page' },
+    React.createElement('div', { className:'page-title' }, '記録一覧'),
+    React.createElement('div', { className:'page-sub', style:{marginBottom:'20px'} }, '全作業記録 '+records.length+'件'),
+    React.createElement(RecordTable)
+  )
+
+  return React.createElement('div', { className:'page' },
+    React.createElement('div', { className:'page-title' }, hideList ? '日次作業入力' : '日々の記録'),
+    React.createElement('div', { className:'page-sub' }, '作業内容を記録してGAP書類を自動生成します'),
+
+    // 2カラム: 左=フォーム / 右=記録一覧
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns: hideList ? '1fr' : 'minmax(360px,420px) 1fr', gap:'24px', alignItems:'start' } },
+
+      // 左: フォームカード
+      React.createElement('div', { className:'card' },
+        React.createElement(StepBar),
+        stepContent && React.createElement(stepContent)
+      ),
+
+      // 右: 記録一覧（hideListのとき非表示）
+      !hideList && React.createElement(RecordTable)
+    )
+  )
+}
+
+function FieldList({ fields, onAdd, onDelete, mapOnly, listOnly }) {
+  const [showAdd,setShowAdd] = React.useState(false)
+  const [form,setForm]       = React.useState({name:'',area_are:'',crop:'',status:'栽培中'})
+  const mapRef         = React.useRef(null)
+  const mapInstanceRef = React.useRef(null)
+  const crops=['レタス','米','とうもろこし','ターサイ','トマト','大豆','玉ねぎ']
+  const colors=['#0D9972','#D97706','#2563EB','#7C3AED','#DC2626']
+  const handleAdd = () => {
+    if (!form.name||!form.crop) return
+    onAdd({...form,id:Date.now(),area_are:Number(form.area_are)||0,lat:35.384+Math.random()*.01,lng:139.924+Math.random()*.01,color:colors[fields.length%colors.length]})
+    setForm({name:'',area_are:'',crop:'',status:'栽培中'}); setShowAdd(false)
+  }
+  // 作物カラーマップ（B-4仕様）
+  const cropColorMap = { レタス:'#0D9972', 米:'#D97706', とうもろこし:'#EA580C', ターサイ:'#0891B2', トマト:'#DC2626', 大豆:'#7C3AED', 玉ねぎ:'#65A30D' }
+
+  React.useEffect(()=>{
+    if (!mapRef.current||mapInstanceRef.current) return
+    const map = L.map(mapRef.current).setView([35.384,139.925],14)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map)
+    mapInstanceRef.current = map
+
+    // B-4: マップクリックで新規圃場登録
+    map.on('click', e => {
+      const name = window.prompt('📍 新規圃場名を入力してください')
+      if (!name || !name.trim()) return
+      const crop = window.prompt('作物名を入力してください（例: レタス）') || 'その他'
+      const area = Number(window.prompt('面積（a）を入力してください（例: 30）')) || 0
+      onAdd({
+        id:        Date.now(),
+        name:      name.trim(),
+        crop:      crop.trim(),
+        area_are:  area,
+        status:    '栽培中',
+        lat:       e.latlng.lat,
+        lng:       e.latlng.lng,
+        color:     cropColorMap[crop.trim()] || colors[Math.floor(Math.random()*colors.length)],
+      })
+    })
+
+    return ()=>{ map.remove(); mapInstanceRef.current=null }
+  },[])
+  React.useEffect(()=>{
+    const map=mapInstanceRef.current; if (!map) return
+    map.eachLayer(l=>{if (l instanceof L.CircleMarker) map.removeLayer(l)})
+    fields.forEach(f=>L.circleMarker([f.lat,f.lng],{color:f.color,fillColor:f.color,fillOpacity:.7,radius:10,weight:2}).bindPopup('<b>'+f.name+'</b><br>'+f.crop+' / '+f.area_are+'a — '+f.status).addTo(map))
+  },[fields])
+  const listEl = React.createElement('div',null,
+    ...fields.map(f=>React.createElement('div',{key:f.id,className:'field-card',style:{marginBottom:'8px',display:'flex',alignItems:'center',gap:'12px'}},
+      React.createElement('div',{className:'field-dot',style:{background:f.color,width:12,height:12}}),
+      React.createElement('div',{style:{flex:1}},
+        React.createElement('div',{style:{fontSize:'14px',fontWeight:500,color:'#374151'}},f.name),
+        React.createElement('div',{style:{fontSize:'12px',color:'#6B7280',marginTop:'2px'}},f.crop+' · '+f.area_are+'a')
+      ),
+      React.createElement('span',{className:'badge '+(f.status==='栽培中'?'badge-green':f.status==='休閑'?'badge-gray':f.status==='収穫期'?'badge-amber':'badge-blue')},f.status),
+      React.createElement('button',{className:'btn',style:{padding:'4px 8px',fontSize:'12px',color:'#6B7280',background:'transparent',border:'1px solid #E5E9F0',borderRadius:'6px'},onClick:()=>onDelete(f.id)},'削除')
+    ))
+  )
+
+  const mapEl = React.createElement('div',null,
+    React.createElement('div',{ref:mapRef,id:'field-map'}),
+    React.createElement('div',{style:{fontSize:'11px',color:'#6B7280',marginTop:'6px',textAlign:'center'}},'📍 地図上をクリックして新規圃場を登録できます')
+  )
+
+  const addFormEl = showAdd && React.createElement('div',{className:'card',style:{marginBottom:'16px'}},
+    React.createElement('div',{className:'section-title'},'新規圃場登録'),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}},
+      React.createElement('div',{className:'form-group'},React.createElement('label',{className:'form-label'},'圃場名'),React.createElement('input',{type:'text',className:'form-input',value:form.name,onChange:e=>setForm(f=>({...f,name:e.target.value})),placeholder:'例: 第5圃場'})),
+      React.createElement('div',{className:'form-group'},React.createElement('label',{className:'form-label'},'面積 (a)'),React.createElement('input',{type:'number',className:'form-input',value:form.area_are,onChange:e=>setForm(f=>({...f,area_are:e.target.value})),placeholder:'例: 25'})),
+      React.createElement('div',{className:'form-group'},React.createElement('label',{className:'form-label'},'作物'),React.createElement('select',{className:'form-select',value:form.crop,onChange:e=>setForm(f=>({...f,crop:e.target.value}))},React.createElement('option',{value:''},'-- 選択 --'),...crops.map(c=>React.createElement('option',{key:c,value:c},c)))),
+      React.createElement('div',{className:'form-group'},React.createElement('label',{className:'form-label'},'ステータス'),React.createElement('select',{className:'form-select',value:form.status,onChange:e=>setForm(f=>({...f,status:e.target.value}))},...['栽培中','休閑','収穫期','準備中'].map(s=>React.createElement('option',{key:s,value:s},s))))
+    ),
+    React.createElement('div',{style:{display:'flex',gap:'8px'}},React.createElement('button',{className:'btn btn-primary',disabled:!form.name||!form.crop,onClick:handleAdd},'登録'),React.createElement('button',{className:'btn btn-ghost',onClick:()=>setShowAdd(false)},'キャンセル'))
+  )
+
+  if (mapOnly) return React.createElement('div',{style:{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}},
+    React.createElement('div',{style:{padding:'16px 24px 12px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0,borderBottom:'1px solid #DDE8DE',background:'#FAFBFA'}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'page-title',style:{marginBottom:0}},'圃場マップ'),
+        React.createElement('div',{style:{fontSize:'12px',color:'#64748B',marginTop:'2px'}},fields.length+'圃場登録済 — 地図上をクリックして新規登録')
+      ),
+      React.createElement('span',{style:{fontSize:'11px',color:'#94A3B8',background:'#F0F4F1',borderRadius:'6px',padding:'5px 10px'}},'📍 クリックで圃場追加')
+    ),
+    React.createElement('div',{ref:mapRef,style:{flex:1,minHeight:0}})
+  )
+
+  if (listOnly) return React.createElement('div',{className:'page'},
+    React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'6px'}},
+      React.createElement('div',{className:'page-title'},'圃場一覧・管理'),
+      React.createElement('button',{className:'btn btn-primary',onClick:()=>setShowAdd(!showAdd)},'+ 圃場を追加')
+    ),
+    React.createElement('div',{className:'page-sub'},fields.length+'圃場登録済 / 総面積: '+fields.reduce((a,f)=>a+f.area_are,0)+'a'),
+    addFormEl,
+    listEl
+  )
+
+  return React.createElement('div',{className:'page'},
+    React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'6px'}},React.createElement('div',{className:'page-title'},'圃場管理'),React.createElement('button',{className:'btn btn-primary',onClick:()=>setShowAdd(!showAdd)},'+ 圃場を追加')),
+    React.createElement('div',{className:'page-sub'},fields.length+'圃場登録済 / 総面積: '+fields.reduce((a,f)=>a+f.area_are,0)+'a'),
+    addFormEl,
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px'}},
+      listEl, mapEl
+    )
+  )
+}
+
+function GapSupport({ gap, onToggle, records, fields, pesticides, checklistOnly, exportOnly }) {
+  const [open,setOpen]       = React.useState({})
+  const [exporting,setExp]   = React.useState(false)
+  const [exportingXls,setExpXls] = React.useState(false)
+  const cats  = [...new Set(gap.map(c=>c.category))]
+  const total = gap.length; const done=gap.filter(c=>c.is_cleared).length; const pct=Math.round(done/total*100)
+  const sprayCount = records.filter(r=>r.work_type==='農薬散布').length
+
+  const handleExportPDF = async () => {
+    setExp(true)
+    try { await exportSprayPDF(records, fields, pesticides) }
+    catch(e){ alert('PDF出力に失敗しました: '+e.message) }
+    finally { setExp(false) }
+  }
+
+  const handleExportExcel = () => {
+    try { exportFertilizerExcel(records, fields) }
+    catch(e){ alert('Excel出力に失敗しました: '+e.message) }
+  }
+
+  // 共通: 帳票出力ボタン群
+  const exportBtns = React.createElement('div',{style:{display:'flex',gap:'8px',flexShrink:0,marginTop:'4px'}},
+    React.createElement('button',{
+      className:'btn btn-primary', onClick:handleExportPDF, disabled:exporting,
+      style:{ background: exporting ? '#085A45' : '#0A6B52' }
+    }, exporting ? '⏳ 生成中...' : '📄 農薬散布PDF ('+sprayCount+'件)'),
+    React.createElement('button',{
+      className:'btn btn-ghost', onClick:handleExportExcel,
+      style:{ borderColor:'#0D9972', color:'#0D9972' }
+    }, '📊 施肥記録 Excel')
+  )
+
+  // 共通: 全体進捗バー
+  const progressEl = React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'16px',marginBottom:'24px'}},
+    React.createElement('div',{style:{flex:1}},
+      React.createElement('div',{className:'prog-label'},React.createElement('span',null,'全体進捗 ('+done+'/'+total+'項目)'),React.createElement('span',{style:{color:'#0D9972',fontWeight:500}},pct+'%')),
+      React.createElement('div',{className:'prog-bg',style:{height:'10px'}},React.createElement('div',{className:'prog-fill',style:{width:pct+'%'}}))
+    ),
+    React.createElement('div',{style:{background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:'8px',padding:'10px 20px',textAlign:'center'}},
+      React.createElement('div',{style:{fontSize:'24px',fontWeight:600,color:'#0D9972'}},pct+'%'),
+      React.createElement('div',{style:{fontSize:'11px',color:'#6B7280',marginTop:'2px'}},'達成')
+    )
+  )
+
+  // 共通: チェックリスト＋カテゴリ別進捗
+  const checklistEl = React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 280px',gap:'24px',alignItems:'start'}},
+    React.createElement('div',null,
+      ...cats.map(cat=>{
+        const items=gap.filter(c=>c.category===cat); const catDone=items.filter(c=>c.is_cleared).length; const isOpen=open[cat]
+        return React.createElement('div',{key:cat,className:'gap-check-cat'},
+          React.createElement('div',{className:'gap-cat-hdr',onClick:()=>setOpen(o=>({...o,[cat]:!o[cat]}))},
+            React.createElement('span',null,cat),
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'10px'}},
+              React.createElement('span',{className:'badge '+(catDone===items.length?'badge-green':'badge-amber')},catDone+'/'+items.length+'完了'),
+              React.createElement('span',{style:{color:'#6B7280',fontSize:'14px'}},isOpen?'▲':'▼')
+            )
+          ),
+          isOpen&&items.map(c=>React.createElement('div',{key:c.id,className:'gap-item '+(c.is_cleared?'done':''),onClick:()=>onToggle(c.id)},
+            React.createElement('div',{style:{width:18,height:18,borderRadius:'4px',border:'1px solid',borderColor:c.is_cleared?'#0A6B52':'#CBD5E1',background:c.is_cleared?'#0A6B52':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:12,color:'#0D9972'}},c.is_cleared?'✓':''),
+            React.createElement('span',null,c.item)
+          ))
+        )
+      })
+    ),
+    React.createElement('div',null,
+      React.createElement('div',{className:'section-title'},'カテゴリ別達成率'),
+      ...cats.map(cat=>{
+        const items=gap.filter(c=>c.category===cat)
+        const catDone=items.filter(c=>c.is_cleared).length
+        const catPct=Math.round(catDone/items.length*100)
+        return React.createElement('div',{key:cat,className:'card-sm',style:{marginBottom:'8px'}},
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'}},
+            React.createElement('span',{style:{fontSize:'12px',color:'#374151',fontWeight:500}},cat),
+            React.createElement('span',{style:{fontSize:'12px',color:catDone===items.length?'#0A6B52':'#B45309',fontWeight:600}},catPct+'%')
+          ),
+          React.createElement('div',{style:{background:'#E5E9F0',borderRadius:'4px',height:'5px',overflow:'hidden'}},
+            React.createElement('div',{style:{height:'100%',borderRadius:'4px',background:catDone===items.length?'#0A6B52':'#D97706',width:catPct+'%',transition:'width .4s'}})
+          ),
+          React.createElement('div',{style:{fontSize:'10px',color:'#6B7280',marginTop:'4px'}},catDone+'/'+items.length+' 完了')
+        )
+      })
+    )
+  )
+
+  // 帳票出力専用ページ
+  if (exportOnly) return React.createElement('div',{className:'page'},
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'page-title'},'帳票出力 / 申請パッケージ'),
+        React.createElement('div',{className:'page-sub'},'GAP審査提出用の書類を出力します')
+      )
+    ),
+    progressEl,
+    React.createElement('div',{className:'card'},
+      React.createElement('div',{className:'section-title'},'📤 書類ダウンロード'),
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'12px',padding:'8px 0'}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0',borderBottom:'1px solid #F1F5F9'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:'14px',fontWeight:500,color:'#374151'}},'農薬散布記録簿 (PDF)'),
+            React.createElement('div',{style:{fontSize:'12px',color:'#6B7280',marginTop:'2px'}},'散布記録 '+sprayCount+'件 — JGAP様式')
+          ),
+          React.createElement('button',{className:'btn btn-primary',onClick:handleExportPDF,disabled:exporting,style:{background:exporting?'#085A45':'#0A6B52'}},exporting?'⏳ 生成中...':'📄 PDF出力')
+        ),
+        React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:'14px',fontWeight:500,color:'#374151'}},'施肥記録簿 (Excel)'),
+            React.createElement('div',{style:{fontSize:'12px',color:'#6B7280',marginTop:'2px'}},'施肥記録 — GAP様式 xlsx')
+          ),
+          React.createElement('button',{className:'btn btn-ghost',onClick:handleExportExcel,style:{borderColor:'#0D9972',color:'#0D9972'}},'📊 Excel出力')
+        )
+      )
+    )
+  )
+
+  // チェックリスト専用ページ
+  if (checklistOnly) return React.createElement('div',{className:'page'},
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'page-title'},'GAPチェックリスト'),
+        React.createElement('div',{className:'page-sub'},'JGAP / GlobalGAP 対応チェックリスト')
+      )
+    ),
+    progressEl,
+    checklistEl
+  )
+
+  // 通常表示（フルページ）
+  return React.createElement('div',{className:'page'},
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'page-title'},'GAP申請サポート'),
+        React.createElement('div',{className:'page-sub'},'JGAP / GlobalGAP 対応チェックリスト')
+      ),
+      exportBtns
+    ),
+    progressEl,
+    checklistEl
+  )
+}
+
+// =====================================================
+// C-4: 機器シェア予約カレンダー（完全実装）
+// ・月次カレンダー表示（自社=緑 / 外部貸出=琥珀で色分け）
+// ・カレンダーセルをクリック → 日付プリセット済みで予約フォームを開く
+// ・ダブルブッキング防止ロジック（同機器×同日付をブロック）
+// ・機器別フィルタータブ
+// =====================================================
+const EQUIP_LIST = ['トラクター','スプレーヤー','田植え機','コンバイン','管理機']
+
+function Equipment({ rentals, onAdd }) {
+  const [mo,       setMo]      = React.useState(6)
+  const [filterEq, setFilterEq]= React.useState('すべて')
+  const [showForm, setShowForm] = React.useState(false)
+  const [form,     setForm]    = React.useState({ equipment:'トラクター', date:'', type:'own', note:'' })
+
+  const year     = 2026
+  const days     = new Date(year, mo, 0).getDate()
+  const firstDow = new Date(year, mo - 1, 1).getDay()
+
+  // ダブルブッキングチェック（C-4仕様）
+  const hasConflict = (eq, dt) => rentals.some(r => r.equipment === eq && r.date === dt)
+  const isConflict  = form.date && hasConflict(form.equipment, form.date)
+
+  const handleAdd = () => {
+    if (!form.date || isConflict) return
+    onAdd({ ...form, id: Date.now() })
+    setForm({ equipment:'トラクター', date:'', type:'own', note:'' })
+    setShowForm(false)
+  }
+
+  // カレンダーセルクリック → 日付をプリセットしてフォームを開く（C-4コア機能）
+  const handleDayClick = (dateStr) => {
+    setForm(f => ({ ...f, date: dateStr }))
+    setShowForm(true)
+  }
+
+  // 表示フィルター適用
+  const visibleRentals = filterEq === 'すべて' ? rentals : rentals.filter(r => r.equipment === filterEq)
+
+  return React.createElement('div', { className:'page' },
+
+    // ヘッダー
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'6px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'page-title' }, '機器シェア予約'),
+        React.createElement('div', { className:'page-sub' }, '農機具の自家使用・外部貸出を管理 — カレンダーをクリックして予約')
+      ),
+      React.createElement('button', {
+        className: 'btn btn-primary',
+        style:{ marginTop:'4px' },
+        onClick: () => { setForm(f=>({...f,date:''})); setShowForm(s=>!s) }
+      }, showForm ? '✕ 閉じる' : '+ 予約')
+    ),
+
+    // 機器フィルタータブ
+    React.createElement('div', { style:{ display:'flex', gap:'6px', marginBottom:'16px', flexWrap:'wrap' } },
+      ...['すべて', ...EQUIP_LIST].map(eq =>
+        React.createElement('button', {
+          key: eq,
+          onClick: () => setFilterEq(eq),
+          style:{
+            padding:'5px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:500,
+            cursor:'pointer', border:'1px solid',
+            borderColor: filterEq===eq ? '#0A6B52' : '#DDE2EC',
+            background:  filterEq===eq ? '#ECFDF5' : '#FFFFFF',
+            color:       filterEq===eq ? '#0A6B52' : '#64748B',
+          }
+        }, eq)
+      )
+    ),
+
+    // メイングリッド: 左=カレンダー / 右=フォーム+一覧
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 280px', gap:'24px', alignItems:'start' } },
+
+      // ===== 左: カレンダー =====
+      React.createElement('div', null,
+
+        // 月ナビ
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'14px' } },
+          React.createElement('button', { className:'btn btn-ghost', style:{padding:'6px 10px'}, onClick:()=>setMo(m=>Math.max(1,m-1)) }, '←'),
+          React.createElement('div', { style:{ fontSize:'15px', fontWeight:500, color:'#374151', minWidth:'80px', textAlign:'center' } }, year+'年'+mo+'月'),
+          React.createElement('button', { className:'btn btn-ghost', style:{padding:'6px 10px'}, onClick:()=>setMo(m=>Math.min(12,m+1)) }, '→'),
+          React.createElement('div', { style:{ display:'flex', gap:'8px', marginLeft:'auto' } },
+            React.createElement('span', { style:{ background:'#0D9972', color:'#0D9972', fontSize:'11px', padding:'3px 10px', borderRadius:'4px' } }, '🟢 自社'),
+            React.createElement('span', { style:{ background:'#FFFBEB', color:'#D97706', fontSize:'11px', padding:'3px 10px', borderRadius:'4px' } }, '🟡 外部貸出'),
+            React.createElement('span', { style:{ background:'#FEF2F2', color:'#DC2626', fontSize:'11px', padding:'3px 10px', borderRadius:'4px' } }, '🔴 競合')
+          )
+        ),
+
+        // 曜日ヘッダー
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'3px', marginBottom:'4px' } },
+          ...['日','月','火','水','木','金','土'].map((d,i) =>
+            React.createElement('div', {
+              key:d,
+              style:{ fontSize:'11px', textAlign:'center', padding:'4px', fontWeight:600,
+                      color: i===0?'#DC2626': i===6?'#2563EB':'#64748B' }
+            }, d)
+          )
+        ),
+
+        // カレンダーグリッド（C-4: セルクリックで予約追加）
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'3px' } },
+          ...[...Array(firstDow)].map((_,i) => React.createElement('div',{key:'e'+i,style:{minHeight:58}})),
+          ...[...Array(days)].map((_,i) => {
+            const d       = i + 1
+            const dateStr = year+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0')
+            const dayR    = visibleRentals.filter(r => r.date === dateStr)
+            const isToday = dateStr === '2026-06-10'
+            const dow     = (firstDow + i) % 7
+            const hasDbl  = EQUIP_LIST.some(eq => rentals.filter(r=>r.date===dateStr&&r.equipment===eq).length > 1)
+
+            return React.createElement('div', {
+              key: d,
+              className: 'cal-day',
+              title: '📅 '+dateStr+' をクリックして予約',
+              onClick: () => handleDayClick(dateStr),
+              style:{
+                borderColor: isToday ? '#0A6B52' : hasDbl ? '#F87171' : '#DDE2EC',
+                cursor: 'pointer',
+                minHeight: 58,
+                transition: 'background .1s',
+              },
+              onMouseEnter: e => e.currentTarget.style.background='#F0FDF4',
+              onMouseLeave: e => e.currentTarget.style.background='',
+            },
+              React.createElement('div', {
+                className: 'cal-day-num',
+                style:{
+                  color: isToday?'#0A6B52': dow===0?'#DC2626': dow===6?'#2563EB':'#64748B',
+                  fontWeight: isToday?700:600,
+                }
+              }, isToday ? '●'+d : d),
+              ...dayR.map(r =>
+                React.createElement('div', {
+                  key: r.id,
+                  className: 'cal-event '+r.type,
+                  title: r.equipment+' — '+r.note,
+                  onClick: e => e.stopPropagation(),
+                  style:{ fontSize:'9px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }
+                }, r.equipment.slice(0,4))
+              )
+            )
+          })
+        ),
+
+        // 月サマリー
+        React.createElement('div', {
+          style:{ display:'flex', gap:'12px', marginTop:'12px', fontSize:'12px', color:'#6B7280' }
+        },
+          React.createElement('span', null, '自社: '+visibleRentals.filter(r=>r.type==='own').length+'件'),
+          React.createElement('span', null, '外部貸出: '+visibleRentals.filter(r=>r.type==='rent').length+'件'),
+          React.createElement('span', null, '合計: '+visibleRentals.length+'件')
+        )
+      ),
+
+      // ===== 右: フォーム + 予約一覧 =====
+      React.createElement('div', null,
+
+        // 予約フォーム（showForm=true のとき表示）
+        showForm && React.createElement('div', { className:'card', style:{ marginBottom:'16px' } },
+          React.createElement('div', { className:'section-title' }, '🗓 新規予約'),
+
+          // 機器選択
+          React.createElement('div', { className:'form-group' },
+            React.createElement('label', { className:'form-label' }, '機器'),
+            React.createElement('select', {
+              className:'form-select', value:form.equipment,
+              onChange: e => setForm(f=>({...f,equipment:e.target.value}))
+            }, ...EQUIP_LIST.map(e => React.createElement('option',{key:e,value:e},e)))
+          ),
+
+          // 日付（カレンダークリックでプリセット済み）
+          React.createElement('div', { className:'form-group' },
+            React.createElement('label', { className:'form-label' }, '日付'),
+            React.createElement('input', {
+              type:'date', className:'form-input', value:form.date,
+              onChange: e => setForm(f=>({...f,date:e.target.value}))
+            })
+          ),
+
+          // 種別
+          React.createElement('div', { className:'form-group' },
+            React.createElement('label', { className:'form-label' }, '種別'),
+            React.createElement('select', {
+              className:'form-select', value:form.type,
+              onChange: e => setForm(f=>({...f,type:e.target.value}))
+            },
+              React.createElement('option',{value:'own'},'🟢 自社使用'),
+              React.createElement('option',{value:'rent'},'🟡 外部貸出')
+            )
+          ),
+
+          // 備考
+          React.createElement('div', { className:'form-group' },
+            React.createElement('label', { className:'form-label' }, '備考'),
+            React.createElement('input', {
+              type:'text', className:'form-input', value:form.note,
+              onChange: e => setForm(f=>({...f,note:e.target.value})),
+              placeholder:'例: 山田農園'
+            })
+          ),
+
+          // ダブルブッキング警告（C-4仕様）
+          isConflict && React.createElement('div', {
+            style:{
+              background:'#FEF2F2', border:'1px solid #F87171',
+              borderRadius:'8px', padding:'10px 14px', marginBottom:'12px',
+              fontSize:'13px', color:'#DC2626', display:'flex', gap:'8px', alignItems:'flex-start'
+            }
+          },
+            React.createElement('span',null,'🚫'),
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontWeight:600,marginBottom:'2px'}},'ダブルブッキング'),
+              React.createElement('div',{style:{fontSize:'11px',color:'#991B1B'}},form.equipment+'はこの日付にすでに予約が入っています')
+            )
+          ),
+
+          React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+            React.createElement('button', {
+              className:'btn btn-primary', style:{flex:1},
+              disabled: !form.date || isConflict,
+              onClick: handleAdd
+            }, '登録する'),
+            React.createElement('button', {
+              className:'btn btn-ghost',
+              onClick: () => setShowForm(false)
+            }, 'キャンセル')
+          )
+        ),
+
+        // 予約一覧テーブル
+        React.createElement('div', { className:'section-title' }, '予約一覧（'+visibleRentals.length+'件）'),
+        visibleRentals.length === 0
+          ? React.createElement('div', {
+              style:{ background:'#F8FAFF', border:'1.5px dashed #C8D0DC', borderRadius:'8px',
+                      padding:'20px', textAlign:'center', color:'#6B7280', fontSize:'13px' }
+            }, '予約がありません')
+          : React.createElement('div', { className:'card', style:{ padding:0 } },
+              React.createElement('table', { className:'table' },
+                React.createElement('thead', null,
+                  React.createElement('tr', null, ...['機器','日付','種別','備考'].map(h=>React.createElement('th',{key:h},h)))
+                ),
+                React.createElement('tbody', null,
+                  ...[...visibleRentals].sort((a,b)=>a.date>b.date?1:-1).map(r =>
+                    React.createElement('tr', { key:r.id },
+                      React.createElement('td', null, r.equipment),
+                      React.createElement('td', null, r.date),
+                      React.createElement('td', null,
+                        React.createElement('span', { className:'badge '+(r.type==='own'?'badge-green':'badge-amber') },
+                          r.type==='own' ? '自社' : '外部'
+                        )
+                      ),
+                      React.createElement('td', { style:{ color:'#6B7280' } }, r.note||'—')
+                    )
+                  )
+                )
+              )
+            )
+      )
+    )
+  )
+}
+
+// =====================================================
+// C-5: スタッフ名簿 + ビザ期限アラート（完全実装）
+// ・ビザ期限30日以内 → 赤バッジ（C-5仕様通り）
+// ・30〜60日 → 黄バッジで事前警告
+// ・期限切れ → 専用エラー表示
+// ・ページ上部にアラートバナー（要対応者をまとめて表示）
+// ・役割別統計サマリー
+// ・ビザ期限昇順ソート（要対応者が上位に来る）
+// =====================================================
+function StaffList({ staff, onAdd, onDelete, visaOnly }) {
+  const [form, setForm] = React.useState({ name:'', nationality:'JP', role:'worker', visa_expires_at:'' })
+
+  const roleLabel = { manager:'管理者', worker:'一般作業員', trainee:'技能実習生' }
+  const natLabel  = { JP:'🇯🇵 日本', VN:'🇻🇳 ベトナム', CN:'🇨🇳 中国', PH:'🇵🇭 フィリピン', ID:'🇮🇩 インドネシア' }
+  const avatarPalette = ['#0A6B52','#1D4ED8','#B45309','#6D28D9','#C2410C','#0369A1','#047857']
+
+  const getDaysLeft = (dateStr) => dateStr
+    ? Math.ceil((new Date(dateStr) - new Date()) / 86400000)
+    : null
+
+  // ビザステータス判定（C-5仕様: 30日以内=赤）
+  const getVisaStatus = (s) => {
+    if (!s.visa_expires_at) return { type:'ok',    label:'在留問題なし',       badgeClass:'badge-green' }
+    const d = getDaysLeft(s.visa_expires_at)
+    if (d < 0)    return { type:'expired', label:'期限切れ',           badgeClass:'badge-red',   days:d }
+    if (d <= 30)  return { type:'urgent',  label:'ビザ残'+d+'日',       badgeClass:'badge-red',   days:d }
+    if (d <= 60)  return { type:'warn',    label:'ビザ残'+d+'日',       badgeClass:'badge-amber', days:d }
+    return             { type:'safe',   label:s.visa_expires_at,    badgeClass:'badge-gray' }
+  }
+
+  const handleAdd = () => {
+    if (!form.name) return
+    onAdd({ ...form, id:Date.now(), avatar:form.name.slice(0,2), visa_expires_at:form.visa_expires_at||null })
+    setForm({ name:'', nationality:'JP', role:'worker', visa_expires_at:'' })
+  }
+
+  // ビザ要対応者（期限切れ or 30日以内）をアラートバナーに表示
+  const alertStaff = staff.filter(s => {
+    const st = getVisaStatus(s)
+    return st.type === 'urgent' || st.type === 'expired'
+  })
+
+  // ソート: 期限切れ → 残日数少ない順 → 在留問題なし
+  const sortedStaff = [...staff].sort((a, b) => {
+    const da = getDaysLeft(a.visa_expires_at) ?? 99999
+    const db = getDaysLeft(b.visa_expires_at) ?? 99999
+    return da - db
+  })
+
+  // 役割別カウント
+  const roleCounts = Object.keys(roleLabel).reduce((acc, r) => {
+    acc[r] = staff.filter(s => s.role === r).length
+    return acc
+  }, {})
+
+  // ビザ・在留管理専用ページ
+  if (visaOnly) return React.createElement('div', { className:'page' },
+    React.createElement('div', { className:'page-title' }, 'ビザ・在留管理'),
+    React.createElement('div', { className:'page-sub', style:{marginBottom:'20px'} },
+      '在留資格・ビザ期限の管理 — 外国籍スタッフ '+sortedStaff.filter(s=>s.visa_expires_at).length+'名'
+    ),
+    alertStaff.length > 0 && React.createElement('div', {
+      style:{ background:'#FEF2F2', border:'1px solid #F87171', borderRadius:'10px', padding:'14px 18px', marginBottom:'20px', display:'flex', alignItems:'flex-start', gap:'12px' }
+    },
+      React.createElement('span', { style:{ fontSize:'20px', flexShrink:0 } }, '🚨'),
+      React.createElement('div', { style:{ flex:1 } },
+        React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:'#DC2626', marginBottom:'8px' } }, 'ビザ期限アラート — '+alertStaff.length+'名が要対応'),
+        React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'8px' } },
+          ...alertStaff.map(s => {
+            const st = getVisaStatus(s)
+            return React.createElement('div', { key:s.id, style:{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:'8px', padding:'6px 12px', fontSize:'12px' } },
+              React.createElement('span', { style:{ color:'#DC2626', fontWeight:500 } }, s.name),
+              React.createElement('span', { style:{ color:'#991B1B', marginLeft:'6px' } }, st.type==='expired'?'⚠️ 期限切れ':'残'+st.days+'日')
+            )
+          })
+        )
+      )
+    ),
+    React.createElement('div', { className:'card', style:{ padding:0 } },
+      React.createElement('table', { className:'table' },
+        React.createElement('thead', null,
+          React.createElement('tr', null,
+            ...['氏名','国籍','役割','ビザ期限','状態'].map(h => React.createElement('th',{key:h},h))
+          )
+        ),
+        React.createElement('tbody', null,
+          ...sortedStaff.map(s => {
+            const st = getVisaStatus(s)
+            return React.createElement('tr', { key:s.id },
+              React.createElement('td', { style:{ fontWeight:500, color:'#374151' } }, s.name),
+              React.createElement('td', null, natLabel[s.nationality] || s.nationality),
+              React.createElement('td', null, roleLabel[s.role]),
+              React.createElement('td', { style:{ color:'#374151' } }, s.visa_expires_at || '—'),
+              React.createElement('td', null, React.createElement('span', { className:'badge '+st.badgeClass }, st.label))
+            )
+          })
+        )
+      )
+    )
+  )
+
+  return React.createElement('div', { className:'page' },
+
+    // ヘッダー
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'6px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'page-title' }, 'スタッフ管理'),
+        React.createElement('div', { className:'page-sub' }, staff.length+'名登録 — 技能実習生 '+staff.filter(s=>s.role==='trainee').length+'名')
+      )
+    ),
+
+    // ビザアラートバナー（C-5コア: 期限30日以内を上部でまとめて警告）
+    alertStaff.length > 0 && React.createElement('div', {
+      style:{
+        background:'#FEF2F2', border:'1px solid #F87171', borderRadius:'10px', padding:'14px 18px', marginBottom:'20px',
+        display:'flex', alignItems:'flex-start', gap:'12px'
+      }
+    },
+      React.createElement('span', { style:{ fontSize:'20px', flexShrink:0, marginTop:'1px' } }, '🚨'),
+      React.createElement('div', { style:{ flex:1 } },
+        React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:'#DC2626', marginBottom:'8px' } },
+          'ビザ期限アラート — '+alertStaff.length+'名が要対応です'
+        ),
+        React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'8px' } },
+          ...alertStaff.map(s => {
+            const st = getVisaStatus(s)
+            return React.createElement('div', {
+              key: s.id,
+              style:{
+                background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:'8px',
+                padding:'6px 12px', fontSize:'12px'
+              }
+            },
+              React.createElement('span', { style:{ color:'#DC2626', fontWeight:500 } }, s.name),
+              React.createElement('span', { style:{ color:'#991B1B', marginLeft:'6px' } },
+                st.type === 'expired' ? '⚠️ 期限切れ' : '残'+st.days+'日'
+              )
+            )
+          })
+        )
+      )
+    ),
+
+    // メイングリッド: 左=統計+一覧 / 右=登録フォーム
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 280px', gap:'24px', alignItems:'start' } },
+
+      // ===== 左: 役割統計 + スタッフカード一覧 =====
+      React.createElement('div', null,
+
+        // 役割別サマリーカード
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px', marginBottom:'18px' } },
+          ...Object.entries(roleLabel).map(([r, l]) =>
+            React.createElement('div', { key:r, className:'card-sm', style:{ textAlign:'center', padding:'12px' } },
+              React.createElement('div', { style:{ fontSize:'22px', fontWeight:600, color:'#374151', lineHeight:1 } }, roleCounts[r]),
+              React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginTop:'4px' } }, l)
+            )
+          )
+        ),
+
+        // スタッフカード一覧（ビザ期限昇順ソート）
+        React.createElement('div', { className:'section-title' }, 'スタッフ一覧（ビザ期限順）'),
+        ...sortedStaff.map((s, i) => {
+          const st = getVisaStatus(s)
+          const isUrgent = st.type === 'urgent' || st.type === 'expired'
+          return React.createElement('div', {
+            key: s.id,
+            className: 'card-sm',
+            style:{
+              marginBottom:'8px', display:'flex', alignItems:'center', gap:'14px',
+              borderColor: isUrgent ? '#F87171' : st.type==='warn' ? '#FDE68A' : '#DDE2EC',
+              transition: 'border-color .2s',
+            }
+          },
+            // アバター
+            React.createElement('div', {
+              className: 'staff-avatar',
+              style:{ background: avatarPalette[i % avatarPalette.length], color:'#FFFFFF', flexShrink:0 }
+            }, s.avatar || s.name.slice(0,2)),
+
+            // 氏名・国籍・役割
+            React.createElement('div', { style:{ flex:1, minWidth:0 } },
+              React.createElement('div', { style:{ fontSize:'14px', fontWeight:500, color:'#374151', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' } }, s.name),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } },
+                (natLabel[s.nationality] || s.nationality) + ' · ' + roleLabel[s.role]
+              )
+            ),
+
+            // ビザステータスバッジ（C-5仕様: 30日以内=赤）
+            React.createElement('span', { className:'badge '+st.badgeClass }, st.label),
+
+            // 削除ボタン
+            React.createElement('button', {
+              style:{
+                padding:'5px 10px', fontSize:'12px', color:'#6B7280',
+                background:'transparent', border:'1px solid #E5E9F0',
+                borderRadius:'6px', cursor:'pointer', flexShrink:0
+              },
+              onClick: () => onDelete(s.id)
+            }, '削除')
+          )
+        })
+      ),
+
+      // ===== 右: 登録フォーム（常設） =====
+      React.createElement('div', { className:'card' },
+        React.createElement('div', { className:'section-title' }, '👤 スタッフ登録'),
+
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '氏名'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.name,
+            onChange: e => setForm(f=>({...f,name:e.target.value})),
+            placeholder:'山田 一郎'
+          })
+        ),
+
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '国籍'),
+          React.createElement('select', {
+            className:'form-select', value:form.nationality,
+            onChange: e => setForm(f=>({...f,nationality:e.target.value}))
+          }, ...Object.entries(natLabel).map(([v,l]) => React.createElement('option',{key:v,value:v},l)))
+        ),
+
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '役割'),
+          React.createElement('select', {
+            className:'form-select', value:form.role,
+            onChange: e => setForm(f=>({...f,role:e.target.value}))
+          }, ...Object.entries(roleLabel).map(([v,l]) => React.createElement('option',{key:v,value:v},l)))
+        ),
+
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, 'ビザ期限（外国籍のみ）'),
+          React.createElement('input', {
+            type:'date', className:'form-input', value:form.visa_expires_at,
+            onChange: e => setForm(f=>({...f,visa_expires_at:e.target.value}))
+          })
+        ),
+
+        // 国籍JPの場合はビザ不要のヒント
+        form.nationality === 'JP' && React.createElement('div', {
+          style:{ fontSize:'11px', color:'#0D9972', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'6px', padding:'7px 10px', marginBottom:'12px' }
+        }, '💡 日本国籍はビザ期限不要です'),
+
+        React.createElement('button', {
+          className:'btn btn-primary',
+          disabled: !form.name,
+          onClick: handleAdd,
+          style:{ width:'100%' }
+        }, '登録する')
+      )
+    )
+  )
+}
+
+function Settings() {
+  return React.createElement('div',{className:'page'},
+    React.createElement('div',{className:'page-title'},'設定'),
+    React.createElement('div',{className:'page-sub'},'農園情報とシステム設定'),
+
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'24px',alignItems:'start'}},
+
+      // 左: 農園情報
+      React.createElement('div',{className:'card'},
+        React.createElement('div',{className:'section-title'},'🌾 農園情報'),
+        ...[['農園名','中川農園'],['代表者','中川 誠'],['所在地','神奈川県相模原市'],['連絡先','042-xxx-xxxx'],['メール','nakagawa@farm.example.jp']].map(([k,v])=>
+          React.createElement('div',{key:k,className:'form-group'},
+            React.createElement('label',{className:'form-label'},k),
+            React.createElement('input',{type:'text',className:'form-input',defaultValue:v})
+          )
+        ),
+        React.createElement('button',{className:'btn btn-primary',style:{width:'100%'}},'保存する')
+      ),
+
+      // 右: Supabase設定 + その他
+      React.createElement('div',null,
+        React.createElement('div',{className:'card',style:{marginBottom:'16px'}},
+          React.createElement('div',{className:'section-title'},'🔌 Supabase 接続設定'),
+          React.createElement('div',{className:'sup-note',style:{marginBottom:'16px'}},'現在: モックデータ動作中 — Supabase URL を設定するとリアルDBに切り替わります'),
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'form-label'},'Supabase URL'),React.createElement('input',{type:'text',className:'form-input',placeholder:'https://xxxx.supabase.co'})),
+          React.createElement('div',{className:'form-group'},React.createElement('label',{className:'form-label'},'Anon Key'),React.createElement('input',{type:'password',className:'form-input',placeholder:'eyJhbGciOiJIUzI1NiIs...'})),
+          React.createElement('button',{className:'btn btn-primary',style:{width:'100%'}},'接続テスト')
+        ),
+        React.createElement('div',{className:'card'},
+          React.createElement('div',{className:'section-title'},'⚙️ システム'),
+          ...[['GAP認証種別','JGAP'],['データエクスポート形式','PDF + Excel'],['言語','日本語']].map(([k,v])=>
+            React.createElement('div',{key:k,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid #F1F5F9',fontSize:'13px'}},
+              React.createElement('span',{style:{color:'#6B7280'}},k),
+              React.createElement('span',{style:{color:'#374151',fontWeight:500}},v)
+            )
+          )
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// 作付計画: モックデータ
+// =====================================================
+const INITIAL_CROP_PLANS = [
+  { id:1, field_id:1, crop:'レタス',  start_month:4, end_month:6,  color:'#0D9972', note:'春作' },
+  { id:2, field_id:1, crop:'ターサイ', start_month:9, end_month:11, color:'#2563EB', note:'秋作' },
+  { id:3, field_id:2, crop:'米',      start_month:5, end_month:9,  color:'#D97706', note:'' },
+  { id:4, field_id:3, crop:'とうもろこし', start_month:5, end_month:7, color:'#EA580C', note:'' },
+  { id:5, field_id:4, crop:'ターサイ', start_month:3, end_month:5,  color:'#7C3AED', note:'早春作' },
+]
+
+// =====================================================
+// 作付計画: PDF出力（html2canvas利用）
+// =====================================================
+async function exportCropPlanPDF(plans, fields) {
+  const el = document.getElementById('crop-plan-pdf-preview')
+  const today = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })
+  const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
+
+  const rows = fields.map(f => {
+    const fPlans = plans.filter(p => p.field_id === f.id)
+    return { field: f, plans: fPlans }
+  })
+
+  el.innerHTML = `
+    <div style="font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;padding:24px;background:#fff;color:#111;width:900px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <h2 style="font-size:18px;font-weight:700;margin:0 0 4px">栽培計画書</h2>
+          <div style="font-size:11px;color:#555">農園名: 中川農園　／　作成日: ${today}</div>
+        </div>
+        <div style="font-size:10px;color:#888;text-align:right">JGAP / GlobalGAP 対応<br>農薬管理・トレーサビリティ用</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="background:#1a5276;color:#fff">
+            <th style="padding:7px 10px;text-align:left;border:1px solid #aaa;width:90px">圃場</th>
+            <th style="padding:7px 10px;text-align:left;border:1px solid #aaa;width:70px">作物</th>
+            ${MONTHS.map(m => `<th style="padding:7px 4px;text-align:center;border:1px solid #aaa;width:56px">${m}</th>`).join('')}
+            <th style="padding:7px 10px;text-align:left;border:1px solid #aaa">備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.flatMap(({field, plans}) => {
+            if (plans.length === 0) {
+              return [`<tr>
+                <td style="padding:6px 10px;border:1px solid #ddd">${field.name}</td>
+                <td style="padding:6px 10px;border:1px solid #ddd;color:#aaa">—</td>
+                ${MONTHS.map(()=>`<td style="border:1px solid #ddd"></td>`).join('')}
+                <td style="border:1px solid #ddd"></td>
+              </tr>`]
+            }
+            return plans.map((plan, pi) => `<tr style="${pi%2===1?'background:#f9f9f9':''}">
+              <td style="padding:6px 10px;border:1px solid #ddd">${pi===0 ? field.name : ''}</td>
+              <td style="padding:6px 10px;border:1px solid #ddd;font-weight:500">${plan.crop}</td>
+              ${MONTHS.map((_,i) => {
+                const m = i + 1
+                const inRange = m >= plan.start_month && m <= plan.end_month
+                return `<td style="border:1px solid #ddd;padding:3px;text-align:center">
+                  ${inRange ? `<div style="background:${plan.color};border-radius:3px;height:18px;font-size:9px;line-height:18px;color:#fff;font-weight:600">${m===plan.start_month?plan.crop:''}</div>` : ''}
+                </td>`
+              }).join('')}
+              <td style="padding:6px 10px;border:1px solid #ddd;font-size:10px;color:#555">${plan.note||''}</td>
+            </tr>`)
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:14px;font-size:9px;color:#888;text-align:right">
+        ※ 本栽培計画書はGAP審査提出用に作成　中川農園
+      </div>
+    </div>
+  `
+  el.style.display = 'block'
+  const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false })
+  el.style.display = 'none'
+  el.innerHTML = ''
+
+  const { jsPDF } = window.jspdf
+  const pdf  = new jsPDF('l', 'mm', 'a4')
+  const imgW = 277
+  const imgH = canvas.height * imgW / canvas.width
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgW, imgH)
+  pdf.save('栽培計画書_中川農園.pdf')
+}
+
+// =====================================================
+// 作付計画: CropPlan コンポーネント（シンプルガント）
+// =====================================================
+const MONTHS = ['1','2','3','4','5','6','7','8','9','10','11','12']
+const MONTH_LABELS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
+const CROP_COLORS = {
+  'レタス':'#0D9972','米':'#D97706','とうもろこし':'#EA580C',
+  'ターサイ':'#a78bfa','トマト':'#ff7070','大豆':'#61b8f5',
+  '玉ねぎ':'#86efac','その他':'#9ba4b5'
+}
+const CROPS_LIST = Object.keys(CROP_COLORS)
+
+function CropPlan({ fields, plans, records, pesticides, onAdd, onDelete }) {
+  const [showForm, setShowForm] = React.useState(false)
+  const [exporting, setExp]     = React.useState(false)
+  const [form, setForm]         = React.useState({
+    field_id: '', crop: 'レタス', start_month: 4, end_month: 6, note: ''
+  })
+  const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // 収穫前日数違反チェック: 作付期間終了月の前 preharvest_days 日以内に農薬散布があるか
+  const violations = React.useMemo(() => {
+    const result = []
+    plans.forEach(plan => {
+      records
+        .filter(r => r.field_id === plan.field_id && r.work_type === '農薬散布' && r.pesticide_id)
+        .forEach(r => {
+          const pest = pesticides.find(p => p.id === r.pesticide_id)
+          if (!pest) return
+          const harvestDate = new Date(2026, plan.end_month, 1) // 収穫月の1日
+          const sprayDate   = new Date(r.date)
+          const diffDays    = Math.ceil((harvestDate - sprayDate) / 86400000)
+          if (diffDays >= 0 && diffDays < pest.preharvest_days) {
+            result.push({
+              planId: plan.id, recordId: r.id,
+              fieldName: fields.find(f=>f.id===plan.field_id)?.name || '?',
+              crop: plan.crop, pestName: pest.name,
+              sprayDate: r.date, preharvest: pest.preharvest_days, diffDays
+            })
+          }
+        })
+    })
+    return result
+  }, [plans, records, pesticides, fields])
+
+  // 重複チェック（同圃場・期間が重なる）
+  const hasOverlap = React.useMemo(() => {
+    if (!form.field_id) return false
+    return plans.some(p =>
+      p.field_id === Number(form.field_id) &&
+      !(form.end_month < p.start_month || form.start_month > p.end_month)
+    )
+  }, [form, plans])
+
+  const handleAdd = () => {
+    if (!form.field_id || hasOverlap) return
+    const crop = form.crop
+    onAdd({
+      ...form, id: Date.now(),
+      field_id: Number(form.field_id),
+      start_month: Number(form.start_month),
+      end_month: Number(form.end_month),
+      color: CROP_COLORS[crop] || '#94A3B8'
+    })
+    setForm({ field_id:'', crop:'レタス', start_month:4, end_month:6, note:'' })
+    setShowForm(false)
+  }
+
+  const handleExportPDF = async () => {
+    setExp(true)
+    try { await exportCropPlanPDF(plans, fields) }
+    catch(e) { alert('PDF出力に失敗しました: '+e.message) }
+    finally { setExp(false) }
+  }
+
+  // 月幅 (%)
+  const monthW = 100 / 12
+
+  return React.createElement('div', { className:'page' },
+
+    // ヘッダー
+    React.createElement('div', { style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'} },
+      React.createElement('div', null,
+        React.createElement('div', { className:'page-title' }, '作付計画'),
+        React.createElement('div', { className:'page-sub', style:{marginBottom:0} }, '年間の圃場別作付スケジュール / GAP栽培計画書として出力できます')
+      ),
+      React.createElement('div', { style:{display:'flex',gap:'8px',flexShrink:0,marginTop:'4px'} },
+        React.createElement('button', {
+          className:'btn btn-primary',
+          onClick: handleExportPDF,
+          disabled: exporting
+        }, exporting ? '⏳ 生成中...' : '📄 栽培計画書 PDF'),
+        React.createElement('button', {
+          className:'btn btn-ghost',
+          onClick: () => setShowForm(s => !s)
+        }, showForm ? '✕ キャンセル' : '+ 作付を追加')
+      )
+    ),
+
+    // 違反アラート
+    violations.length > 0 && React.createElement('div', {
+      style:{background:'#FEF2F2',border:'1px solid #FCA5A5',borderRadius:'8px',padding:'12px 16px',marginBottom:'16px'}
+    },
+      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'} },
+        React.createElement('span', { style:{fontSize:'18px'} }, '🚨'),
+        React.createElement('span', { style:{fontSize:'13px',fontWeight:600,color:'#DC2626'} }, '収穫前日数違反の可能性 (' + violations.length + '件)')
+      ),
+      ...violations.map((v, i) =>
+        React.createElement('div', {
+          key: i,
+          style:{fontSize:'12px',color:'#991B1B',padding:'4px 0',borderTop:i>0?'1px solid #3d1515':'none'}
+        },
+          `⚠️ ${v.fieldName}「${v.crop}」収穫予定 ${v.preharvest}日前以内に「${v.pestName}」散布 (${v.sprayDate}・残${v.diffDays}日)`
+        )
+      )
+    ),
+
+    // 追加フォーム
+    showForm && React.createElement('div', { className:'card', style:{marginBottom:'16px'} },
+      React.createElement('div', { className:'section-title' }, '📅 作付を追加'),
+      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'12px',marginBottom:'12px'} },
+        // 圃場
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '圃場'),
+          React.createElement('select', {
+            className:'form-select', value:form.field_id,
+            onChange:e => up('field_id', e.target.value)
+          },
+            React.createElement('option', {value:''}, '-- 選択 --'),
+            ...fields.map(f => React.createElement('option', {key:f.id, value:f.id}, f.name))
+          )
+        ),
+        // 作物
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '作物'),
+          React.createElement('select', {
+            className:'form-select', value:form.crop,
+            onChange:e => up('crop', e.target.value)
+          },
+            ...CROPS_LIST.map(c => React.createElement('option', {key:c, value:c}, c))
+          )
+        ),
+        // 開始月
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '開始月'),
+          React.createElement('select', {
+            className:'form-select', value:form.start_month,
+            onChange:e => up('start_month', Number(e.target.value))
+          },
+            ...MONTH_LABELS.map((m,i) => React.createElement('option', {key:i, value:i+1}, m))
+          )
+        ),
+        // 終了月
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '終了月'),
+          React.createElement('select', {
+            className:'form-select', value:form.end_month,
+            onChange:e => up('end_month', Number(e.target.value))
+          },
+            ...MONTH_LABELS.map((m,i) => React.createElement('option', {key:i, value:i+1}, m))
+          )
+        )
+      ),
+      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr auto',gap:'12px',alignItems:'flex-end'} },
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '備考（任意）'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.note,
+            onChange:e => up('note', e.target.value), placeholder:'例: 春作・連作注意'
+          })
+        ),
+        React.createElement('div', null,
+          hasOverlap && React.createElement('div', {
+            style:{fontSize:'11px',color:'#DC2626',marginBottom:'6px'}
+          }, '⚠️ 同圃場の期間が重複しています'),
+          React.createElement('button', {
+            className:'btn btn-primary',
+            disabled: !form.field_id || form.start_month > form.end_month || hasOverlap,
+            onClick: handleAdd
+          }, '追加する')
+        )
+      )
+    ),
+
+    // ガントチャート本体
+    React.createElement('div', { className:'card', style:{padding:'16px 20px'} },
+      // 月ヘッダー
+      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'130px 1fr',gap:0,marginBottom:'8px'} },
+        React.createElement('div', { style:{fontSize:'11px',color:'#6B7280'} }, '圃場'),
+        React.createElement('div', { style:{display:'flex'} },
+          ...MONTH_LABELS.map((m, i) =>
+            React.createElement('div', {
+              key:i,
+              style:{
+                flex:1, fontSize:'11px', fontWeight:600, color:'#6B7280',
+                textAlign:'center', padding:'4px 0',
+                background: i % 2 === 0 ? '#1a1e28' : 'transparent',
+                borderRadius:'4px'
+              }
+            }, m)
+          )
+        )
+      ),
+
+      // 圃場ごとの行
+      React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:'6px'} },
+        ...fields.map(field => {
+          const fieldPlans = plans.filter(p => p.field_id === field.id)
+          return React.createElement('div', {
+            key: field.id,
+            style:{display:'grid',gridTemplateColumns:'130px 1fr',gap:0,alignItems:'center',minHeight:'40px'}
+          },
+            // 圃場名
+            React.createElement('div', { style:{paddingRight:'12px'} },
+              React.createElement('div', { style:{fontSize:'13px',fontWeight:500,color:'#374151'} }, field.name),
+              React.createElement('div', { style:{fontSize:'11px',color:'#6B7280'} }, field.crop)
+            ),
+            // バー領域
+            React.createElement('div', {
+              style:{position:'relative',height:'36px',background:'#F8FAFF',borderRadius:'6px',overflow:'visible'}
+            },
+              // 月グリッド線
+              ...MONTHS.map((_, i) =>
+                i > 0 ? React.createElement('div', {
+                  key:'grid'+i,
+                  style:{
+                    position:'absolute', left:(i/12*100)+'%', top:0, bottom:0,
+                    width:'1px', background:'#E5E9F0', pointerEvents:'none'
+                  }
+                }) : null
+              ).filter(Boolean),
+
+              // 今月マーカー
+              React.createElement('div', {
+                style:{
+                  position:'absolute',
+                  left:((new Date().getMonth()) / 12 * 100)+'%',
+                  top:'-4px', bottom:'-4px', width:'2px',
+                  background:'#DC2626', opacity:.7, borderRadius:'2px',
+                  zIndex:3, pointerEvents:'none'
+                }
+              }),
+
+              // 作付バー
+              ...fieldPlans.map(plan => {
+                const left  = ((plan.start_month - 1) / 12 * 100)
+                const width = ((plan.end_month - plan.start_month + 1) / 12 * 100)
+                const hasViol = violations.some(v => v.planId === plan.id)
+                return React.createElement('div', {
+                  key: plan.id,
+                  title: `${plan.crop} ${plan.start_month}月〜${plan.end_month}月${plan.note?' ('+plan.note+')':''}`,
+                  style:{
+                    position:'absolute',
+                    left: left+'%', width: 'calc('+width+'% - 4px)',
+                    top:'4px', bottom:'4px', marginLeft:'2px',
+                    background: plan.color,
+                    borderRadius:'5px',
+                    display:'flex', alignItems:'center', paddingLeft:'8px',
+                    fontSize:'11px', fontWeight:600, color:'#fff',
+                    overflow:'hidden', whiteSpace:'nowrap',
+                    boxShadow: hasViol ? '0 0 0 2px #ff7070' : 'none',
+                    cursor:'pointer', zIndex:2,
+                    opacity:.9
+                  },
+                  onClick: () => { if(window.confirm(plan.crop+'（'+plan.start_month+'〜'+plan.end_month+'月）を削除しますか？')) onDelete(plan.id) }
+                },
+                  React.createElement('span', { style:{overflow:'hidden',textOverflow:'ellipsis'} },
+                    (hasViol ? '⚠️ ' : '') + plan.crop
+                  )
+                )
+              })
+            )
+          )
+        })
+      ),
+
+      // 凡例
+      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'16px',marginTop:'16px',paddingTop:'12px',borderTop:'1px solid #E5E9F0',flexWrap:'wrap'} },
+        React.createElement('div', { style:{fontSize:'11px',color:'#6B7280'} }, '作物:'),
+        ...Object.entries(CROP_COLORS).map(([crop, color]) =>
+          React.createElement('div', { key:crop, style:{display:'flex',alignItems:'center',gap:'5px'} },
+            React.createElement('div', { style:{width:12,height:12,borderRadius:'3px',background:color} }),
+            React.createElement('span', { style:{fontSize:'11px',color:'#6B7280'} }, crop)
+          )
+        ),
+        React.createElement('div', { style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:'5px'} },
+          React.createElement('div', { style:{width:2,height:14,background:'#DC2626',borderRadius:'2px'} }),
+          React.createElement('span', { style:{fontSize:'11px',color:'#6B7280'} }, '今月')
+        )
+      )
+    ),
+
+    // サマリーテーブル
+    React.createElement('div', { style:{marginTop:'16px'} },
+      React.createElement('div', { className:'section-title' }, '作付一覧'),
+      React.createElement('div', { className:'card', style:{padding:0} },
+        plans.length === 0
+          ? React.createElement('div', { style:{padding:'24px',color:'#6B7280',fontSize:'13px',textAlign:'center'} }, '作付計画がまだありません。「+ 作付を追加」から登録してください。')
+          : React.createElement('table', { className:'table' },
+              React.createElement('thead', null,
+                React.createElement('tr', null,
+                  ...['圃場', '作物', '期間', '備考', ''].map(h => React.createElement('th', {key:h}, h))
+                )
+              ),
+              React.createElement('tbody', null,
+                ...plans.map(plan => {
+                  const field = fields.find(f => f.id === plan.field_id)
+                  const hasViol = violations.some(v => v.planId === plan.id)
+                  return React.createElement('tr', { key:plan.id },
+                    React.createElement('td', null,
+                      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'8px'} },
+                        React.createElement('div', { style:{width:8,height:8,borderRadius:'50%',background:field?.color||'#9ba4b5'} }),
+                        field?.name || '—'
+                      )
+                    ),
+                    React.createElement('td', null,
+                      React.createElement('span', {
+                        style:{display:'inline-flex',alignItems:'center',gap:'6px',padding:'2px 10px',borderRadius:'20px',background:plan.color+'22',color:plan.color,fontSize:'12px',fontWeight:600,border:'1px solid '+plan.color+'44'}
+                      }, (hasViol?'⚠️ ':'')+plan.crop)
+                    ),
+                    React.createElement('td', null,
+                      React.createElement('span', { style:{color:'#374151'} }, plan.start_month+'月 〜 '+plan.end_month+'月'),
+                      React.createElement('span', { style:{fontSize:'11px',color:'#6B7280',marginLeft:'6px'} }, '('+((plan.end_month-plan.start_month+1))+'ヶ月)')
+                    ),
+                    React.createElement('td', { style:{color:'#6B7280',fontSize:'12px'} }, plan.note || '—'),
+                    React.createElement('td', null,
+                      React.createElement('button', {
+                        style:{padding:'4px 10px',fontSize:'12px',color:'#6B7280',background:'transparent',border:'1px solid #E5E9F0',borderRadius:'6px',cursor:'pointer'},
+                        onClick: () => onDelete(plan.id)
+                      }, '削除')
+                    )
+                  )
+                })
+              )
+            )
+      )
+    )
+  )
+}
+
+// =====================================================
+// A-3: App — useState ルーティング
+// =====================================================
+function App() {
+  const [page,      setPage]     = React.useState('dashboard')
+  const [fields,    setFields]   = React.useState(INITIAL_FIELDS)
+  const [records,   setRecords]  = React.useState(INITIAL_RECORDS)
+  const [staff,     setStaff]    = React.useState(INITIAL_STAFF)
+  const [gap,       setGap]      = React.useState(INITIAL_GAP_CHECKS)
+  const [rentals,   setRentals]  = React.useState(INITIAL_RENTALS)
+  const [cropPlans, setCropPlans]= React.useState(INITIAL_CROP_PLANS)
+
+  const pageMap = {
+    // ダッシュボード
+    dashboard:   () => React.createElement(Dashboard,   { fields, records, staff, gap }),
+    // 記録
+    records:     () => React.createElement(DailyRecord, { fields, pesticides:INITIAL_PESTICIDES, records, onSave:r=>setRecords(p=>[...p,r]), hideList:true }),
+    record_list: () => React.createElement(DailyRecord, { fields, pesticides:INITIAL_PESTICIDES, records, onSave:r=>setRecords(p=>[...p,r]), hideForm:true }),
+    export:      () => React.createElement(GapSupport,  { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides:INITIAL_PESTICIDES, exportOnly:true }),
+    // 圃場
+    field_map:   () => React.createElement(FieldList,   { fields, onAdd:f=>setFields(p=>[...p,f]), onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), mapOnly:true }),
+    fields:      () => React.createElement(FieldList,   { fields, onAdd:f=>setFields(p=>[...p,f]), onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), listOnly:true }),
+    crop_plan:   () => React.createElement(CropPlan,    { fields, plans:cropPlans, records, pesticides:INITIAL_PESTICIDES, onAdd:p=>setCropPlans(prev=>[...prev,p]), onDelete:id=>setCropPlans(prev=>prev.filter(p=>p.id!==id)) }),
+    // GAP
+    gap:         () => React.createElement(GapSupport,  { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides:INITIAL_PESTICIDES, checklistOnly:true }),
+    gap_package: () => React.createElement(GapSupport,  { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides:INITIAL_PESTICIDES, exportOnly:true }),
+    // 人・機器
+    staff:       () => React.createElement(StaffList,   { staff, onAdd:s=>setStaff(p=>[...p,s]), onDelete:id=>setStaff(p=>p.filter(s=>s.id!==id)), visaOnly:false }),
+    visa:        () => React.createElement(StaffList,   { staff, onAdd:s=>setStaff(p=>[...p,s]), onDelete:id=>setStaff(p=>p.filter(s=>s.id!==id)), visaOnly:true }),
+    equipment:   () => React.createElement(Equipment,   { rentals, onAdd:r=>setRentals(p=>[...p,r]) }),
+    // システム
+    settings:    () => React.createElement(Settings,    null),
+  }
+
+  return React.createElement('div', { style:{display:'flex',height:'100vh',width:'100vw',overflow:'hidden'} },
+    React.createElement(Sidebar, { current:page, onChange:setPage }),
+    React.createElement('main',  { className:'main'+(page==='field_map'?' map-fullscreen':'') }, (pageMap[page] || pageMap.dashboard)())
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('app')).render(React.createElement(App))
+</script>
+</body>
+</html>

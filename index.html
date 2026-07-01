@@ -944,19 +944,31 @@ const INITIAL_FIELDS = []
 //   - 'rice'    : 水稲（畝マップなし・生育ステージタイムライン表示）
 //   - 'leaf_veg': それ以外（レタス・ターサイ等、従来通り畝マップ表示）
 //
-// 新しい作物を追加する場合は、この CROP_NAME_TO_CATEGORY に
-// 1行追記するだけで crop_category が決まる（未登録の作物名は 'leaf_veg' 扱い）。
+// ── 作物カテゴリマスタ（汎用化済み）──
+// ui_mode: 'row_map'=畝マップ管理 | 'growth_stage'=生育ステージ | 'standard'=シンプル
 // =====================================================
-const CROP_NAME_TO_CATEGORY = {
-  'とうもろこし': 'corn',
-  '水稲':         'rice',
-  // 上記以外（レタス・ターサイ・米・トマト・大豆・玉ねぎ・その他）は
-  // すべて畝マップで管理する葉物・通常作物として 'leaf_veg' 扱いにする。
+const INITIAL_CROP_CATEGORIES = [
+  { key:'leaf_veg', name:'葉物野菜',     ui_mode:'row_map',      harvest_grades:['規格内','B品'],             color:'#0D9972', sort_order:0 },
+  { key:'corn',     name:'とうもろこし', ui_mode:'row_map',      harvest_grades:['2L','L','M','S','B品'],     color:'#EA580C', sort_order:1 },
+  { key:'rice',     name:'水稲',         ui_mode:'growth_stage', harvest_grades:['一等米','二等米','くず米'],  color:'#2563EB', sort_order:2 },
+  { key:'other',    name:'その他',       ui_mode:'standard',     harvest_grades:['規格内','B品'],             color:'#6B7280', sort_order:9 },
+]
+
+// モジュールレベル参照 — Appが毎レンダー同期するのでグローバル関数が常に最新カテゴリを参照できる
+let _CROP_CATEGORIES = INITIAL_CROP_CATEGORIES
+
+const getCropCategoryObj = (key) =>
+  _CROP_CATEGORIES.find(c => c.key === key) || _CROP_CATEGORIES[0] || INITIAL_CROP_CATEGORIES[0]
+
+// 作物名 → categoryキー（後方互換: 既存コードがcrop名でlookupしている箇所対応）
+const getCropCategory = (cropName) => {
+  if (!cropName) return _CROP_CATEGORIES[0]?.key || 'leaf_veg'
+  const exact = _CROP_CATEGORIES.find(c => c.name === cropName)
+  return exact ? exact.key : (_CROP_CATEGORIES[0]?.key || 'leaf_veg')
 }
-const getCropCategory = (cropName) => CROP_NAME_TO_CATEGORY[cropName] || 'leaf_veg'
 
 INITIAL_FIELDS.forEach(f => {
-  f.crop_category = getCropCategory(f.crop)
+  if (!f.crop_category) f.crop_category = getCropCategory(f.crop)
 })
 
 // =====================================================
@@ -1296,14 +1308,13 @@ const SHIPMENT_UNIT_TYPES = [
 // （例: とうもろこし=2L/L/M、レタス=玉数規格など）
 // 月曜確認後、正式な規格マスタとして確定する想定の仮データ。
 // =====================================================
-const HARVEST_GRADES = {
-  'とうもろこし': ['2L', 'L', 'M', 'S', 'B品'],
-  'レタス':       ['12玉', '10玉', '8玉', 'B品'],
-  'ターサイ':     ['規格内', 'B品'],
-  '水稲':         ['一等米', '二等米', 'くず米'],
-  'その他':       ['規格内', 'B品'],
+// getHarvestGrades は _CROP_CATEGORIES を動的参照するのでカテゴリ編集が即反映
+const getHarvestGrades = (crop) => {
+  if (!crop) return ['規格内', 'B品']
+  // まず作物名でカテゴリを検索、次にキーで検索
+  const cat = _CROP_CATEGORIES.find(c => c.name === crop) || _CROP_CATEGORIES.find(c => c.key === crop)
+  return cat ? cat.harvest_grades : (_CROP_CATEGORIES[0]?.harvest_grades || ['規格内', 'B品'])
 }
-const getHarvestGrades = (crop) => HARVEST_GRADES[crop] || HARVEST_GRADES['その他']
 
 // =====================================================
 // 【フェーズE・E-3-4／E-4 Step5】収穫記録（HARVEST_RECORDS）── 新規定数
@@ -1658,34 +1669,46 @@ const NAV_SECTIONS_DATA = [
   { id:'field_performance',label:'圃場実績・評価',        icon:'chart-bar'      },
 ]
 const NAV_SECTIONS_SYS = [
-  { id:'staff',         label:'スタッフ管理',         icon:'users'    },  // サイドバー未掲載だったため追加
-  { id:'trainee_diary', label:'技能実習生 作業日誌', icon:'notebook' },  // 【実装手順書 A】
-  { id:'equipment', label:'機器予約',          icon:'truck'         },
-  { id:'simulator', label:'収益シミュレーター', icon:'currency-yen' },
-  { id:'manual',    label:'多言語マニュアル',  icon:'book-2'        },
-  { id:'settings',  label:'設定',              icon:'settings'      },
+  { id:'staff',            label:'スタッフ管理',         icon:'users'       },
+  { id:'trainee_diary',    label:'技能実習生 作業日誌', icon:'notebook'    },
+  { id:'equipment',        label:'機器予約',             icon:'truck'       },
+  { id:'simulator',        label:'収益シミュレーター',  icon:'currency-yen'},
+  { id:'manual',           label:'多言語マニュアル',    icon:'book-2'      },
+  { id:'crop_categories',  label:'作物カテゴリ管理',    icon:'plant-2'     },
+  { id:'settings',         label:'設定',                icon:'settings'    },
 ]
 
 // 圃場追加モーダル
-function AddFieldModal({ onClose, onAdd, initialLatLng }) {
-  const [name, setName]     = React.useState('')
-  const [crop, setCrop]     = React.useState('レタス')
-  const [area, setArea]     = React.useState('')
-  const CROPS = ['レタス','水稲','とうもろこし','ターサイ','その他']
+function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) {
+  const categories = (cats && cats.length > 0) ? cats : _CROP_CATEGORIES
+  const defaultCat = categories[0] || INITIAL_CROP_CATEGORIES[0]
+  const [name,     setName]     = React.useState('')
+  const [catKey,   setCatKey]   = React.useState(defaultCat.key)
+  const [cropName, setCropName] = React.useState('')
+  const [area,     setArea]     = React.useState('')
   const COLORS = ['#0D9972','#2563EB','#EA580C','#7C3AED','#B45309','#DC2626']
-  const [color, setColor]   = React.useState(COLORS[0])
+  const selectedCat = categories.find(c => c.key === catKey) || defaultCat
+  const [color, setColor] = React.useState(selectedCat.color || COLORS[0])
   const disabled = !name.trim() || !area
+
+  // カテゴリ変更時はカラーも自動更新
+  const handleCatChange = (key) => {
+    setCatKey(key)
+    const cat = categories.find(c => c.key === key)
+    if (cat) setColor(cat.color)
+  }
 
   const submit = () => {
     if (disabled) return
     onAdd({
-      id:        Date.now(),
-      name:      name.trim(),
-      crop,
-      area_are:  Number(area),
-      lat:       initialLatLng ? initialLatLng.lat : 35.385,
-      lng:       initialLatLng ? initialLatLng.lng : 139.926,
-      status:    '栽培中',
+      id:           Date.now(),
+      name:         name.trim(),
+      crop:         cropName.trim() || selectedCat.name,
+      crop_category: catKey,
+      area_are:     Number(area),
+      lat:          initialLatLng ? initialLatLng.lat : 35.385,
+      lng:          initialLatLng ? initialLatLng.lng : 139.926,
+      status:       '栽培中',
       color,
     })
     onClose()
@@ -1722,16 +1745,26 @@ function AddFieldModal({ onClose, onAdd, initialLatLng }) {
           autoFocus: true,
         })
       ),
-      // 作物
+      // 作物カテゴリ
       React.createElement('div', { style:{ marginBottom:'12px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '作物'),
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '作物カテゴリ'),
         React.createElement('select', {
           className:'form-select',
-          value: crop,
-          onChange: e => setCrop(e.target.value),
+          value: catKey,
+          onChange: e => handleCatChange(e.target.value),
         },
-          CROPS.map(c => React.createElement('option', { key:c, value:c }, c))
+          categories.map(c => React.createElement('option', { key:c.key, value:c.key }, c.name))
         )
+      ),
+      // 品種名（任意）
+      React.createElement('div', { style:{ marginBottom:'12px' } },
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '品種名（任意）'),
+        React.createElement('input', {
+          className:'form-input',
+          placeholder: 'グリーンウェーブ など（省略可）',
+          value: cropName,
+          onChange: e => setCropName(e.target.value),
+        })
       ),
       // 面積
       React.createElement('div', { style:{ marginBottom:'14px' } },
@@ -8828,14 +8861,16 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
 
   const addFormEl = showAdd && React.createElement(AddFieldModal, {
     onClose: () => setShowAdd(false),
-    onAdd: (f) => { onAdd(f); setShowAdd(false) }
+    onAdd: (f) => { onAdd(f); setShowAdd(false) },
+    cropCategories,
   })
 
   // 地図クリックで開く新規圃場追加モーダル（旧: window.prompt連打）
   const pendingAddModalEl = pendingLatLng && React.createElement(AddFieldModal, {
     initialLatLng: pendingLatLng,
     onClose: () => setPendingLatLng(null),
-    onAdd: (f) => { onAdd(f); setPendingLatLng(null) }
+    onAdd: (f) => { onAdd(f); setPendingLatLng(null) },
+    cropCategories,
   })
 
   // 削除確認モーダル（おしゃれ版・アプリ共通デザイン準拠）
@@ -8923,10 +8958,10 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
 // =====================================================
 // CAT-05-3: FieldMapPage / FieldTablePage — FieldList から分割した専用コンポーネント
 // =====================================================
-function FieldMapPage({ fields, onAdd, onDelete, cropCycles, onNavigate }) {
+function FieldMapPage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories }) {
   return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'map', cropCycles, onNavigate })
 }
-function FieldTablePage({ fields, onAdd, onDelete, cropCycles, onNavigate }) {
+function FieldTablePage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories }) {
   return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'list', cropCycles, onNavigate })
 }
 
@@ -15185,6 +15220,134 @@ function FertilizerUsageHistoryPanel({ fertilizers, topDressingRecords, fields }
 }
 
 // =====================================================
+// 作物カテゴリ管理ページ（汎用化）
+// categories: カテゴリ配列, onSave: setCropCategories
+// =====================================================
+function CropCategoryPage({ categories, onSave }) {
+  const UI_MODES = [
+    { key:'row_map',      label:'畝マップ',     desc:'畝ごとの播種・収穫記録・農薬散布管理' },
+    { key:'growth_stage', label:'生育ステージ', desc:'育苗〜登熟まで時系列で進捗管理（水稲など）' },
+    { key:'standard',     label:'シンプル',     desc:'作業記録のみのシンプルモード' },
+  ]
+  const PALETTE = ['#0D9972','#EA580C','#2563EB','#7C3AED','#B45309','#DC2626','#0891B2','#65A30D','#DB2777','#6B7280']
+  const blank = () => ({ key:'cat_' + Date.now(), name:'', ui_mode:'row_map', harvest_grades:['規格内','B品'], color:'#0D9972', sort_order: (categories.length * 10) })
+  const [editing, setEditing] = React.useState(null)   // null | category object (copy)
+  const [gradesText, setGradesText] = React.useState('')  // comma-separated grades input
+
+  const openNew  = () => { const c = blank(); setEditing(c); setGradesText(c.harvest_grades.join(', ')) }
+  const openEdit = (cat) => { setEditing({ ...cat }); setGradesText(cat.harvest_grades.join(', ')) }
+  const closeEdit = () => setEditing(null)
+
+  const saveEdit = () => {
+    if (!editing.name.trim()) return
+    const grades = gradesText.split(',').map(s => s.trim()).filter(Boolean)
+    const updated = { ...editing, name: editing.name.trim(), harvest_grades: grades.length ? grades : ['規格内','B品'] }
+    const exists = categories.find(c => c.key === updated.key)
+    if (exists) {
+      onSave(categories.map(c => c.key === updated.key ? updated : c))
+    } else {
+      onSave([...categories, updated])
+    }
+    closeEdit()
+  }
+
+  const deleteCat = (key) => {
+    if (categories.length <= 1) return  // 最低1つは必要
+    onSave(categories.filter(c => c.key !== key))
+  }
+
+  const isBuiltin = (key) => ['leaf_veg','corn','rice','other'].includes(key)
+
+  const labelStyle = { fontSize:11, fontWeight:700, color:'#374151', display:'block', marginBottom:4, letterSpacing:'.06em', textTransform:'uppercase' }
+  const inpStyle   = { width:'100%', padding:'8px 10px', border:'1px solid #D8E0DA', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }
+
+  return React.createElement('div', { className:'page-wrap' },
+    React.createElement('div', { className:'page-header' },
+      React.createElement('div', null,
+        React.createElement('div', { className:'page-title' }, '作物カテゴリ管理'),
+        React.createElement('div', { className:'page-sub' }, '作物の種類ごとに管理UIと収穫規格を設定できます')
+      ),
+      React.createElement('button', { className:'btn btn-primary', onClick: openNew }, '+ カテゴリを追加')
+    ),
+
+    // カテゴリ一覧
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16 } },
+      categories.map(cat =>
+        React.createElement('div', { key:cat.key, style:{ background:'#fff', border:'1.5px solid #E2E8E2', borderRadius:10, padding:16, position:'relative' } },
+          // カラーバー
+          React.createElement('div', { style:{ height:4, background:cat.color, borderRadius:4, marginBottom:12 } }),
+          // 名前 + キー
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, marginBottom:8 } },
+            React.createElement('div', { style:{ width:10, height:10, borderRadius:'50%', background:cat.color, flexShrink:0 } }),
+            React.createElement('div', { style:{ fontWeight:700, fontSize:14, color:'#111827' } }, cat.name),
+            React.createElement('div', { style:{ fontSize:10, color:'#94A3B8', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:4, padding:'1px 5px' } }, cat.key)
+          ),
+          // UIモード
+          React.createElement('div', { style:{ fontSize:12, color:'#64748B', marginBottom:8 } },
+            '管理方式: ',
+            React.createElement('span', { style:{ fontWeight:600, color:'#0A6B52' } },
+              UI_MODES.find(m => m.key === cat.ui_mode)?.label || cat.ui_mode
+            )
+          ),
+          // 収穫規格
+          React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:12 } },
+            React.createElement('span', { style:{ fontSize:11, color:'#64748B', marginRight:4 } }, '規格:'),
+            ...(cat.harvest_grades || []).map(g =>
+              React.createElement('span', { key:g, style:{ fontSize:11, background:'#F1F5F9', border:'1px solid #E2E8F0', borderRadius:4, padding:'1px 6px', color:'#374151' } }, g)
+            )
+          ),
+          // 操作ボタン
+          React.createElement('div', { style:{ display:'flex', gap:6 } },
+            React.createElement('button', { onClick:()=>openEdit(cat), style:{ flex:1, padding:'5px 0', background:'#F0F8F4', border:'1px solid #C6DDD0', borderRadius:6, fontSize:12, fontWeight:600, color:'#0A6B52', cursor:'pointer' } }, '✏ 編集'),
+            !isBuiltin(cat.key) && React.createElement('button', { onClick:()=>{ if(window.confirm(cat.name + 'を削除しますか？')) deleteCat(cat.key) }, style:{ padding:'5px 10px', background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:6, fontSize:12, fontWeight:600, color:'#DC2626', cursor:'pointer' } }, '✕')
+          )
+        )
+      )
+    ),
+
+    // ── 編集モーダル ──
+    editing && React.createElement('div', { style:{ position:'fixed', inset:0, background:'rgba(0,0,0,.35)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999 }, onClick:e=>{ if(e.target===e.currentTarget) closeEdit() } },
+      React.createElement('div', { style:{ background:'#fff', borderRadius:12, padding:28, width:440, boxShadow:'0 8px 32px rgba(0,0,0,.18)', maxHeight:'90vh', overflowY:'auto' } },
+        React.createElement('div', { style:{ fontWeight:700, fontSize:16, color:'#111827', marginBottom:20 } }, isBuiltin(editing.key) ? '✏ カテゴリを編集' : '＋ 新しいカテゴリ'),
+
+        // カテゴリ名
+        React.createElement('label', { style:{ display:'block', marginBottom:14 } },
+          React.createElement('span', { style:labelStyle }, 'カテゴリ名 *'),
+          React.createElement('input', { style:inpStyle, value:editing.name, onChange:e=>setEditing(p=>({...p, name:e.target.value})), placeholder:'例: トマト' })
+        ),
+
+        // UIモード
+        React.createElement('label', { style:{ display:'block', marginBottom:14 } },
+          React.createElement('span', { style:labelStyle }, '管理方式'),
+          React.createElement('select', { style:inpStyle, value:editing.ui_mode, onChange:e=>setEditing(p=>({...p, ui_mode:e.target.value})) },
+            UI_MODES.map(m => React.createElement('option', { key:m.key, value:m.key }, m.label + ' — ' + m.desc))
+          )
+        ),
+
+        // 収穫規格
+        React.createElement('label', { style:{ display:'block', marginBottom:14 } },
+          React.createElement('span', { style:labelStyle }, '収穫規格（カンマ区切り）'),
+          React.createElement('input', { style:inpStyle, value:gradesText, onChange:e=>setGradesText(e.target.value), placeholder:'例: 2L, L, M, S, B品' })
+        ),
+
+        // カラー
+        React.createElement('div', { style:{ marginBottom:20 } },
+          React.createElement('span', { style:labelStyle }, 'カラー'),
+          React.createElement('div', { style:{ display:'flex', gap:8, flexWrap:'wrap' } },
+            PALETTE.map(c => React.createElement('button', { key:c, onClick:()=>setEditing(p=>({...p, color:c})), style:{ width:28, height:28, borderRadius:'50%', background:c, border: editing.color===c ? '3px solid #111827' : '2px solid #fff', cursor:'pointer', boxShadow:'0 0 0 1px #D1D5DB' } }))
+          )
+        ),
+
+        React.createElement('div', { style:{ display:'flex', gap:8 } },
+          React.createElement('button', { onClick:saveEdit, style:{ flex:1, padding:10, background:'#0A6B52', color:'#fff', border:'none', borderRadius:6, fontSize:14, fontWeight:600, cursor:'pointer' } }, '保存'),
+          React.createElement('button', { onClick:closeEdit, style:{ padding:'10px 16px', background:'#F1F5F9', border:'1px solid #E2E8F0', borderRadius:6, fontSize:14, color:'#64748B', cursor:'pointer' } }, 'キャンセル')
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
 // A-3: App — useState ルーティング
 // =====================================================
 
@@ -15433,6 +15596,11 @@ function App({ currentOrg, currentFarm, availableFarms, authUser, onFarmChange, 
   const [performanceComments, setPerformanceComments] = useFPS('farm_field_performance_comments', INITIAL_FIELD_PERFORMANCE_COMMENTS)
   // 品種（作物）別メモ。評価コメントと同様の仕組みでシーズン×品種単位にメモを保存
   const [cropComments, setCropComments] = useFPS('farm_crop_comments', [])
+
+  // ── 作物カテゴリ（汎用化）──
+  const [cropCategories, setCropCategories] = useFPS('farm_crop_categories', INITIAL_CROP_CATEGORIES)
+  // モジュールレベル参照を同期 — グローバル関数 getCropCategory / getHarvestGrades が最新を参照できる
+  _CROP_CATEGORIES = cropCategories
 
   // =====================================================
   // 農薬在庫連動ヘルパー（3点セット）
@@ -15686,8 +15854,8 @@ function App({ currentOrg, currentFarm, availableFarms, authUser, onFarmChange, 
     dashboard:         () => React.createElement(Dashboard,   { fields, records, staff, gap, todayTasks, onToggleTodayTask:toggleTodayTask, onAddTodayTask:addTodayTask, cropPlans, pesticides, pesticideStock, fertilizers, fertilizerStock, onNavigate: p => setPage(p), onSaveRecord: onSaveRecordWithStock, onUpdateRecord: onUpdateRecordWithStock, onDeleteRecord: onDeleteRecordWithStock }),
     record_list:       () => React.createElement(RecordTablePage, { records, fields, pesticides, onUpdate: onUpdateRecordWithStock, onDelete: onDeleteRecordWithStock, cropCycles, onUpdateRecordCycle }),
     export:            () => React.createElement(GapExport,  { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides }),
-    field_map:         () => React.createElement(FieldMapPage,   { fields, onAdd:f=>setFields(p=>[...p,f]), onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage }),
-    fields:            () => React.createElement(FieldTablePage, { fields, onAdd:f=>setFields(p=>[...p,f]), onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage }),
+    field_map:         () => React.createElement(FieldMapPage,   { fields, onAdd:f=>setFields(p=>[...p,f]), onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage, cropCategories }),
+    fields:            () => React.createElement(FieldTablePage, { fields, onAdd:f=>setFields(p=>[...p,f]), onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage, cropCategories }),
     crop_plan:         () => React.createElement(CropPlan,    { fields, plans:cropPlans, records, pesticides, onAdd:p=>setCropPlans(prev=>[...prev,p]), onDelete:id=>setCropPlans(prev=>prev.filter(p=>p.id!==id)) }),
     gap:               () => React.createElement(GapChecklist, { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)) }),
     gap_package:       () => React.createElement(GapExport,   { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides }),
@@ -15704,6 +15872,7 @@ function App({ currentOrg, currentFarm, availableFarms, authUser, onFarmChange, 
     simulator:         () => React.createElement(RevenueSimulator, null),
     manual:            () => React.createElement(ManualLibrary,    null),
     settings:          () => React.createElement(Settings,    null),
+    crop_categories:   () => React.createElement(CropCategoryPage, { categories: cropCategories, onSave: setCropCategories }),
     pesticide_master:  () => React.createElement(PesticideMasterPage, {
       pesticides,
       pesticideStock,

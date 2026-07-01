@@ -15213,7 +15213,7 @@ function usePersistState(key, initial) {
      ============================================================ -->
 <script>
 function LoadingScreen() {
-  return React.createElement('div', { style:{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', background:'#FAFBFA', gap:16 } },
+  return React.createElement('div', { style:{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100vh', width:'100%', background:'#FAFBFA', gap:16 } },
     React.createElement('style', null, '@keyframes sb-spin{to{transform:rotate(360deg)}}'),
     React.createElement('div', { style:{ width:44, height:44, border:'4px solid #E2E8E2', borderTop:'4px solid #0A6B52', borderRadius:'50%', animation:'sb-spin .8s linear infinite' } }),
     React.createElement('p', { style:{ color:'#64748B', fontSize:14 } }, '読み込み中...')
@@ -15230,6 +15230,10 @@ function LoginScreen({ onAuth }) {
   const inp  = { width:'100%', padding:'8px 12px', border:'1px solid #D8E0DA', borderRadius:6, fontSize:14, outline:'none', boxSizing:'border-box' }
   const lbl  = { display:'block', marginBottom:14 }
   const spn  = { fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 }
+  const DEMO_EMAIL = 'demo@syatyo-suport.jp'
+  const DEMO_PASS  = 'demo1234'
+  const fillDemo = () => { setEmail(DEMO_EMAIL); setPassword(DEMO_PASS); setError(''); setSuccess('') }
+
   const handle = async (e) => {
     e.preventDefault(); setLoading(true); setError(''); setSuccess('')
     try {
@@ -15245,13 +15249,27 @@ function LoginScreen({ onAuth }) {
       setError(err.message === 'Invalid login credentials' ? 'メールまたはパスワードが正しくありません' : err.message)
     } finally { setLoading(false) }
   }
-  return React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#FAFBFA' } },
-    React.createElement('div', { style:{ background:'#fff', borderRadius:12, padding:40, width:360, boxShadow:'0 4px 24px rgba(10,107,82,.12)', border:'1px solid #DDE8DE' } },
+  return React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', width:'100%', background:'#FAFBFA' } },
+    React.createElement('div', { style:{ background:'#fff', borderRadius:12, padding:40, width:380, boxShadow:'0 4px 24px rgba(10,107,82,.12)', border:'1px solid #DDE8DE' } },
       React.createElement('div', { style:{ textAlign:'center', marginBottom:28 } },
         React.createElement('div', { style:{ fontSize:36, marginBottom:8 } }, '🌱'),
         React.createElement('h1', { style:{ fontSize:20, fontWeight:700, color:'#111827', margin:'0 0 4px' } }, '農場管理システム'),
         React.createElement('p', { style:{ color:'#64748B', fontSize:13, margin:0 } }, mode === 'login' ? 'ログイン' : '新規登録')
       ),
+
+      // デモアカウント案内
+      mode === 'login' && React.createElement('div', { style:{ background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:8, padding:'10px 14px', marginBottom:20, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 } },
+        React.createElement('div', null,
+          React.createElement('div', { style:{ fontSize:11, fontWeight:700, color:'#166534', marginBottom:2 } }, '🌿 デモアカウント'),
+          React.createElement('div', { style:{ fontSize:11, color:'#4B5563', fontFamily:'monospace' } }, DEMO_EMAIL),
+          React.createElement('div', { style:{ fontSize:11, color:'#4B5563', fontFamily:'monospace' } }, DEMO_PASS)
+        ),
+        React.createElement('button', {
+          type:'button', onClick:fillDemo,
+          style:{ padding:'6px 12px', background:'#0A6B52', color:'#fff', border:'none', borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }
+        }, '入力する')
+      ),
+
       React.createElement('form', { onSubmit:handle },
         React.createElement('label', { style:lbl }, React.createElement('span', { style:spn }, 'メールアドレス'), React.createElement('input', { type:'email', value:email, onChange:e=>setEmail(e.target.value), required:true, placeholder:'farm@example.com', style:inp })),
         React.createElement('label', { style:{...lbl, marginBottom:20} }, React.createElement('span', { style:spn }, 'パスワード'), React.createElement('input', { type:'password', value:password, onChange:e=>setPassword(e.target.value), required:true, minLength:6, placeholder:'6文字以上', style:inp })),
@@ -15278,7 +15296,7 @@ function OnboardingScreen({ user, onComplete }) {
   const lbl = { display:'block', marginBottom:14 }
   const spn = { fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 }
   const card = (sel) => ({ padding:20, border:`2px solid ${sel?'#0A6B52':'#E2E8E2'}`, borderRadius:8, background:sel?'#F0FDF4':'#fff', cursor:'pointer', textAlign:'left', width:'100%' })
-  const wrapStyle = { display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', background:'#FAFBFA' }
+  const wrapStyle = { display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', width:'100%', background:'#FAFBFA' }
   const boxStyle  = { background:'#fff', borderRadius:12, padding:40, boxShadow:'0 4px 24px rgba(10,107,82,.12)', border:'1px solid #DDE8DE' }
   const handleCreate = async (e) => {
     e.preventDefault(); setLoading(true); setError('')

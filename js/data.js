@@ -1,0 +1,649 @@
+﻿// =====================================================
+// A-2: モックデータ定義
+// Supabase移行時はここだけ置き換える
+// =====================================================
+// 【20圃場対応】農場名さんの実圃場数（20）に合わせて拡張。
+// id5〜20は面積・座標・ステータスがまだ未確定のプレースホルダー。
+// 実データ（畝数・面積・座標）が届いたら値を差し替える。
+const INITIAL_FIELDS = []
+
+// =====================================================
+// 【サンプル農園実データ統合 フェーズ6・Step B】crop_category の正式導入
+// ─────────────────────────────────────────────────────
+// 旧実装は「field.crop === 'とうもろこし'」のような作物名の文字列比較で
+// とうもろこし／水稲を判定していた（畝マップ表示切替・水稲ステージ表示など）。
+// 今後 field.crop に新しい作物名（例: 大豆・玉ねぎ等）が増えるたびに
+// 判定箇所を一つずつ洗い直す必要があり、保守性が低い。
+//
+// そこで「表示用の作物名（field.crop）」と「システムが分岐に使うカテゴリ
+// （field.crop_category）」を分離する。INITIAL_FIELDS本体の各要素は
+// 変更せず（既存ロジックを壊さない方針）、生成直後に1回だけ
+// crop_category を自動付与するマッピングを通す。
+//
+//   crop_category: 'leaf_veg' | 'corn' | 'rice'
+//   - 'corn'    : とうもろこし（畝マップ表示・トンネル等の専用項目あり）
+//   - 'rice'    : 水稲（畝マップなし・生育ステージタイムライン表示）
+//   - 'leaf_veg': それ以外（レタス・ターサイ等、従来通り畝マップ表示）
+//
+// ── 作物カテゴリマスタ（汎用化済み）──
+// ui_mode: 'row_map'=畝マップ管理 | 'growth_stage'=生育ステージ | 'standard'=シンプル
+// =====================================================
+const INITIAL_CROP_CATEGORIES = [
+  { key:'leaf_veg', name:'葉物野菜',     ui_mode:'row_map',      harvest_grades:['規格内','B品'],             color:'#0D9972', sort_order:0 },
+  { key:'corn',     name:'とうもろこし', ui_mode:'row_map',      harvest_grades:['2L','L','M','S','B品'],     color:'#EA580C', sort_order:1 },
+  { key:'rice',     name:'水稲',         ui_mode:'growth_stage', harvest_grades:['一等米','二等米','くず米'],  color:'#2563EB', sort_order:2 },
+  { key:'other',    name:'その他',       ui_mode:'standard',     harvest_grades:['規格内','B品'],             color:'#6B7280', sort_order:9 },
+]
+
+// モジュールレベル参照 — Appが毎レンダー同期するのでグローバル関数が常に最新カテゴリを参照できる
+let _CROP_CATEGORIES = INITIAL_CROP_CATEGORIES
+
+const getCropCategoryObj = (key) =>
+  _CROP_CATEGORIES.find(c => c.key === key) || _CROP_CATEGORIES[0] || INITIAL_CROP_CATEGORIES[0]
+
+// 作物名 → categoryキー（後方互換: 既存コードがcrop名でlookupしている箇所対応）
+const getCropCategory = (cropName) => {
+  if (!cropName) return _CROP_CATEGORIES[0]?.key || 'leaf_veg'
+  const exact = _CROP_CATEGORIES.find(c => c.name === cropName)
+  return exact ? exact.key : (_CROP_CATEGORIES[0]?.key || 'leaf_veg')
+}
+
+INITIAL_FIELDS.forEach(f => {
+  if (!f.crop_category) f.crop_category = getCropCategory(f.crop)
+})
+
+// =====================================================
+// 【サンプル農園実データ統合 フェーズ2・Step2-1】圃場まとめ系シート 実データ参照テーブル
+// ─────────────────────────────────────────────────────
+// 受領した5シートから「圃場番号 → 畝本数(row_count)」を解析した結果。
+//   レタス: 「レタス圃場情報まとめ」(2024-2025) / 「R7レタス圃場情報まとめ(2)」(2025-2026) / 「レタス圃場情報まとめ」(2025-2026最終版)
+//   とうもろこし: 「スイートコーン圃場まとめ」(2025) / 「スイートコーン圃場まとめ」(2026)
+//
+// 【重要】実際の圃場番号（49,25,42n,3n,2001 等）は、現在のINITIAL_FIELDSのid/name
+// （第4圃場〜第20圃場という連番の仮名称）とは対応していない（圃場番号の表記ゆれ問題＝G5/確認事項3）。
+// 圃場の再構築（LOTSの実データ化・圃場番号の正規化）はフェーズ2のStep2-2の作業範囲のため、
+// 今回のStep2-1では「既存のINITIAL_FIELDSに実在する第49・第25・第42n圃場」のrow_countの照合のみ反映し、
+// それ以外の実圃場番号については下記参照テーブルとして記録するのみに留める
+// （月曜の打ち合わせで圃場番号の正式なルールを確認してからStep2-2で本反映する）。
+// 条（W/E）の情報は畝マップの設計方針どおり今回は使用しない。
+// =====================================================
+const REAL_FIELD_LAYOUT_REFERENCE = {}
+
+
+// =====================================================
+// 【サンプル農園実データ統合 フェーズ2・Step2-2】圃場番号の表記ゆれ正規化テーブル
+// ─────────────────────────────────────────────────────
+// 「管理表」シートに現れる圃場番号の表記バリエーションを正規化キーにマッピングする。
+// 月曜の打ち合わせで担当者に「これが正式ルールか」を確認する前提で、
+// 今回は実データから読み取れる表記パターンをすべて一覧化した。
+//
+// 正規化ルール（仮・要確認）:
+//   - アルファベットは大文字統一（3s→3S, 3n→3N）
+//   - 「～」や「・」で結合されたロット番号（2001～2002）はそれぞれ独立して扱う
+//   - ハウス表記（2000(ハウス東)など）はカッコを除去してハウスフラグで区別
+// =====================================================
+const FIELD_NO_NORMALIZE = {}
+
+// =====================================================
+// 【実装手順書 Step0】圃場番号 表記ゆれ正規化 ― 検索・表示・登録用ヘルパー
+// ─────────────────────────────────────────────────────
+// 目的: FIELD_NO_NORMALIZE（紙日報からわかっている表記ゆれ）を、デバッグパネル
+// だけでなく実際の入力フォーム・一覧表示でも使えるようにする。
+// 見た目（圃場名の表示）は今までと変えず、検索・登録のみ拡張する方針。
+//
+// 手動登録分（オペレーターが「この表記はこの圃場です」と登録したもの）は
+// localStorage に保存し、ページをまたいでも消えないようにする。
+// プロップで毎回バケツリレーしなくて済むよう、シンプルな購読の仕組みにしている。
+// =====================================================
+const FIELD_NO_OVERRIDE_KEY = 'farm_field_no_overrides_v1'
+const _fieldNoOverrideListeners = new Set()
+function _readFieldNoOverrides() {
+  try { return JSON.parse(localStorage.getItem(FIELD_NO_OVERRIDE_KEY) || '{}') } catch { return {} }
+}
+function _writeFieldNoOverrides(next) {
+  try { localStorage.setItem(FIELD_NO_OVERRIDE_KEY, JSON.stringify(next)) } catch {}
+  _fieldNoOverrideListeners.forEach(fn => fn(next))
+}
+// 圃場選択UIから呼び出す共通フック。登録すると同じページを開いている他のUIにも即反映される。
+function useFieldNoOverrides() {
+  const [overrides, setOverridesState] = React.useState(_readFieldNoOverrides)
+  React.useEffect(() => {
+    const listener = (next) => setOverridesState(next)
+    _fieldNoOverrideListeners.add(listener)
+    return () => _fieldNoOverrideListeners.delete(listener)
+  }, [])
+  const registerOverride = React.useCallback((raw, fieldId) => {
+    const key = (raw || '').trim()
+    if (!key) return
+    _writeFieldNoOverrides({ ..._readFieldNoOverrides(), [key]: fieldId })
+  }, [])
+  return [overrides, registerOverride]
+}
+
+// ある圃場(field)に紐づく「元表記（紙日報での書かれ方）」をすべて集める
+// （FIELD_NO_NORMALIZEの定義分 ＋ 手動登録分）
+function getFieldRawLabels(field, overrides) {
+  const raws = new Set()
+  if (field.field_no) raws.add(field.field_no)
+  Object.entries(FIELD_NO_NORMALIZE).forEach(([raw, v]) => {
+    if (v.canonical === field.field_no) raws.add(raw)
+  })
+  if (overrides) {
+    Object.entries(overrides).forEach(([raw, fid]) => {
+      if (Number(fid) === field.id) raws.add(raw)
+    })
+  }
+  return [...raws]
+}
+
+// 圃場名・正式番号・元表記のいずれかにマッチするか（検索用）
+function fieldMatchesQuery(field, query, overrides) {
+  const q = (query || '').trim().toLowerCase()
+  if (!q) return true
+  if (field.name && field.name.toLowerCase().includes(q)) return true
+  if (field.field_no && field.field_no.toLowerCase().includes(q)) return true
+  return getFieldRawLabels(field, overrides).some(r => r.toLowerCase().includes(q))
+}
+
+// 入力された表記が「既存の圃場にも正規化テーブルにも一致しない＝未登録」かどうか
+function isUnregisteredFieldQuery(fields, query, overrides) {
+  const q = (query || '').trim()
+  if (!q) return false
+  const inFields     = fields.some(f => f.field_no === q || f.name === q)
+  const inNormalize  = Object.prototype.hasOwnProperty.call(FIELD_NO_NORMALIZE, q)
+  const inOverrides  = overrides && Object.prototype.hasOwnProperty.call(overrides, q)
+  return !inFields && !inNormalize && !inOverrides
+}
+
+// =====================================================
+// 【実装手順書 Step0】圃場選択コンボボックス（表記ゆれ対応）
+// ─────────────────────────────────────────────────────
+// 見た目は通常のプルダウンと同じだが、クリックすると検索欄が開き、
+// 圃場名だけでなく「9s」「3n」のような紙日報の元表記でも検索できる。
+// 検索語がどの圃場にも一致しない場合は、控えめな黄色バッジで
+// 「未登録の表記です」と知らせ、その場でどの圃場の表記かを選んで登録できる。
+// =====================================================
+function FieldSearchSelect({ fields, value, onChange, placeholder }) {
+  const [overrides, registerOverride] = useFieldNoOverrides()
+  const selectedField = fields.find(f => String(f.id) === String(value))
+  const [open, setOpen]     = React.useState(false)
+  const [query, setQuery]   = React.useState('')
+  const [registerTarget, setRegisterTarget] = React.useState('')
+  const wrapRef = React.useRef(null)
+
+  React.useEffect(() => {
+    const onClickOutside = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
+
+  const filtered     = fields.filter(f => fieldMatchesQuery(f, query, overrides))
+  const unregistered = isUnregisteredFieldQuery(fields, query, overrides)
+
+  const boxStyle = {
+    background:'#FFFFFF', border:'1.5px solid #D8E4D8',
+    borderRadius:'7px', padding:'7px 10px', fontSize:'13px',
+    color:'#111827', outline:'none', width:'100%', boxSizing:'border-box'
+  }
+
+  return React.createElement('div', { ref: wrapRef, style:{ position:'relative' } },
+    // 表示部分（既存の<select>と見た目を揃える）
+    React.createElement('div', {
+      onClick: () => setOpen(o => !o),
+      style:{ ...boxStyle, display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }
+    },
+      React.createElement('span', { style:{ color: selectedField ? '#111827' : '#94A3B8' } },
+        selectedField
+          ? selectedField.name + (selectedField.field_no ? `（${selectedField.field_no}）` : '')
+          : (placeholder || '圃場を選択')
+      ),
+      React.createElement('i', { className:'ti ti-chevron-down', 'aria-hidden':'true', style:{ fontSize:'13px', color:'#94A3B8' } })
+    ),
+    open && React.createElement('div', {
+      style:{
+        position:'absolute', top:'calc(100% + 4px)', left:0, right:0, zIndex:60,
+        background:'#FFFFFF', border:'1px solid #DDE8DE', borderRadius:'8px',
+        boxShadow:'0 8px 24px rgba(17,24,39,.14)', padding:'8px',
+        display:'flex', flexDirection:'column', gap:'6px'
+      }
+    },
+      React.createElement('input', {
+        autoFocus: true,
+        value: query,
+        onChange: e => setQuery(e.target.value),
+        placeholder: '圃場名・番号・元表記（例: 9s, 3n）で検索',
+        style:{ ...boxStyle, padding:'6px 8px' }
+      }),
+      React.createElement('div', { style:{ overflowY:'auto', maxHeight:'200px' } },
+        filtered.length === 0
+          ? React.createElement('div', { style:{ fontSize:'12px', color:'#94A3B8', padding:'8px 4px' } }, '該当する圃場がありません')
+          : filtered.map(f => {
+              const raws = getFieldRawLabels(f, overrides).filter(r => r !== f.field_no)
+              const isSelected = String(f.id) === String(value)
+              return React.createElement('div', {
+                key: f.id,
+                onClick: () => { onChange(String(f.id)); setOpen(false); setQuery('') },
+                style:{
+                  display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px',
+                  padding:'7px 8px', borderRadius:'6px', cursor:'pointer', fontSize:'13px',
+                  background: isSelected ? '#F0F8F4' : 'transparent'
+                }
+              },
+                React.createElement('span', { style:{ color:'#111827', fontWeight: isSelected ? 600 : 500 } },
+                  f.name + (f.field_no ? `（${f.field_no}）` : '')
+                ),
+                raws.length > 0 && React.createElement('span', { style:{ fontSize:'10px', color:'#94A3B8', flexShrink:0 } },
+                  '元表記: ' + raws.join('/')
+                )
+              )
+            })
+      ),
+      // 未登録の表記に対する控えめな警告 + その場で登録できるミニUI
+      unregistered && React.createElement('div', {
+        style:{ borderTop:'1px solid #F0F4F0', paddingTop:'6px', marginTop:'2px' }
+      },
+        React.createElement('div', {
+          style:{
+            display:'flex', alignItems:'center', gap:'6px', fontSize:'11px',
+            color:'#92400E', background:'#FFFBEB', border:'1px solid #FDE68A',
+            borderRadius:'6px', padding:'6px 8px'
+          }
+        },
+          React.createElement('span', null, '⚠️'),
+          React.createElement('span', null, `「${query}」は未登録の表記です`)
+        ),
+        React.createElement('div', { style:{ display:'flex', gap:'6px', marginTop:'6px' } },
+          React.createElement('select', {
+            value: registerTarget,
+            onChange: e => setRegisterTarget(e.target.value),
+            style:{ ...boxStyle, padding:'5px 6px', fontSize:'12px', flex:1 }
+          },
+            React.createElement('option', { value:'' }, 'どの圃場の表記？'),
+            fields.map(f => React.createElement('option', { key:f.id, value:f.id },
+              f.name + (f.field_no ? `（${f.field_no}）` : '')
+            ))
+          ),
+          React.createElement('button', {
+            type: 'button',
+            disabled: !registerTarget,
+            onClick: () => { registerOverride(query, Number(registerTarget)); setRegisterTarget('') },
+            style:{
+              fontSize:'11px', fontWeight:600, padding:'5px 10px', borderRadius:'6px',
+              border:'none', cursor: registerTarget ? 'pointer' : 'not-allowed',
+              background: registerTarget ? '#0A6B52' : '#E5E7EB',
+              color:      registerTarget ? '#FFFFFF' : '#9CA3AF'
+            }
+          }, '登録')
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// 【サンプル農園実データ統合 フェーズ2・Step2-2】LOTSを実データの作付け記録に置き換え
+// ─────────────────────────────────────────────────────
+// 「管理表」シート（とうもろこし・レタス両方）の
+// 圃場番号・畝番号・品種・播種日・定植日・収穫開始/終了日からLOTSを再構築。
+//
+// 【方針】
+//   ・既存フィールド（id/row_range/variety/seed_date等）はそのまま保持
+//   ・新規フィールドとして field_no_raw（元表記）・season（年度）・crop_type を追加
+//   ・とうもろこし圃場: 2025シーズン（3S/3N/12/4/2001W/2002E/2000H/25/37）
+//                       2026シーズン（3N/3/12/4/2001W/2002E/2000H/25/37/2）を追加
+//   ・レタス圃場: 既存データ（field_id 1/2/3 = 圃場番号49/25/42N）は継続使用
+//   ・施肥情報・農薬情報は同一行に同居するため、
+//     fertilizer_refs / pesticide_refs フィールドで参照IDを保持（Step3・4の元データ）
+//
+// 【圃場ID割当ルール（仮）】
+//   field_id 1-3: レタス圃場（49/25/42N）- 既存のまま
+//   field_id 4-20: 仮の連番圃場 - Step2-2以降で実圃場番号に紐付ける予定
+//   とうもろこし実圃場のfield_idは月曜確認後に正式割当予定のため、
+//   今回はcorn_3S=101, corn_3N=102, corn_12=103, corn_4=104,
+//   corn_2001W=105, corn_2002E=106, corn_2000H=107, corn_25=108, corn_37=109, corn_2=110
+//   という仮IDで管理し、確認後にINITIAL_FIELDSの実データと結合する。
+// =====================================================
+
+// =====================================================
+// 【実装手順書 3.2.2】作物別管理項目の柔軟な対応
+// ─────────────────────────────────────────────────────
+// 作物（crop）ごとに異なる特有の管理項目（例: とうもろこしの
+// 「トンネル解体日」「パスライト回収日」など、レタス等には無い項目）を、
+// 圃場(field)単位のデータとして記録・表示するための仕組み。
+//
+// ・CROP_SPECIFIC_FIELD_DEFS: 作物名 → 入力項目定義の配列。
+//   新しい作物の特有項目を増やしたい場合は、このオブジェクトに
+//   エントリを追加するだけで、入力フォーム・表示画面の両方に
+//   自動的に反映される（個別のUIコードの追加は不要）。
+// ・各圃場(field)は crop_specific_details オブジェクトに
+//   { 項目key: 値 } の形で実データを保持する（INITIAL_FIELDS参照）。
+// =====================================================
+const CROP_SPECIFIC_FIELD_DEFS = {
+  'とうもろこし': [
+    { key:'tunnel_set_date',       label:'トンネル設置日',     type:'date' },
+    { key:'tunnel_removed_date',   label:'トンネル解体日',     type:'date' },
+    { key:'passlite_set_date',     label:'パスライト設置日',   type:'date' },
+    { key:'passlite_removed_date', label:'パスライト回収日',   type:'date' },
+    { key:'harvest_start_date',    label:'収穫開始日',         type:'date' },
+    { key:'harvest_end_date',      label:'収穫終了日',         type:'date' },
+  ],
+  // 他の作物に特有の管理項目が出てきた場合も、同じ形式でここに追記するだけで対応できる。
+  // 例: 'レタス': [ { key:'mulch_removed_date', label:'マルチ除去日', type:'date' } ],
+}
+
+// 【フェーズE / Step2-2】圃場 → ロット（畝範囲）の2階層管理用データ
+// ロット = 同じ品種・播種日で植えられた畝範囲が管理の基本単位
+// ステータス: growing(栽培中) = 緑 / ready(収穫待ち) = 金 / harvested(収穫済) = 青 / fallow(休耕) = グレー
+const ROW_STATUS_CONFIG = {
+  growing:   { label:'栽培中',   color:'#0D9972', bg:'#ECFDF5' },
+  ready:     { label:'収穫待ち', color:'#B45309', bg:'#FFFBEB' },
+  harvested: { label:'収穫済',   color:'#1D4ED8', bg:'#EFF6FF' },
+  fallow:    { label:'休耕',     color:'#6B7280', bg:'#F8FAFC' },
+}
+const LOTS = {}
+const INITIAL_PESTICIDES = []
+
+// =====================================================
+// 【フェーズE・E-3-3／E-4 Step4】ロット単位の農薬散布記録（LOT_SPRAY_RECORDS）
+// records（日報）とは別に、畝範囲（row_range）・複数薬剤・散布液量を持つ専用データとして保持する。
+// E-0の方針: records テーブルとの厳密な紐付けは行わず、field_id 単位の独立データとする。
+// 在庫連動は既存pesticidesマスタのpesticide_idで紐付け、adjustStockロジックを流用する。
+// 【実装手順書 3.1.1】薬剤散布記録における廃棄量管理
+//   pesticides 配列の各要素に disposal_amount（廃棄量・L）を追加。
+//   薬剤ごとに廃棄量を記録できるようにし、栽培プロセス管理の要件
+//   （廃棄量まで詳細に記録する独立した薬剤散布記録）に対応する。
+// =====================================================
+const INITIAL_LOT_SPRAY_RECORDS = []
+
+// =====================================================
+// 【サンプル農園実データ統合 フェーズ5・Step5-1】出荷先マスタの一元化
+// 「サンプル農園収穫集計表」の列構成（朝採りJA／取引先A／取引先A（午後）／取引先B／
+// 取引先C／直売／B品袋詰め）をSHIPMENT_DESTINATIONSとして一元管理する。
+// 各出荷先は規格別に「本数」「コンテナ数」の両方を記録できる想定（収穫集計表の列構造に対応）。
+// 畝マップ実装時のStep7「命名の一元化」と同じ考え方で、出荷先名の表記揺れを防ぐ。
+// 【注記】規格（グレード）自体は作物ごとに異なるため、規格リストはStep5-3で別途対応する。
+// 【実装手順書 Step2】このリストは初期値（デフォルト出荷先）として使う。
+// 実際の出荷先マスタはApp側でusePersistStateにより状態化し、後から
+// 追加・編集（名称変更）・削除できるようにする（ShipmentDestinationManageModal）。
+// frequent: true の出荷先は、収穫記録フォームの新規入力時にデフォルトで行を表示する
+// 「よく使う出荷先」。frequent: false は「+ 出荷先を追加」で必要な時だけ追加する。
+// =====================================================
+const SHIPMENT_DESTINATIONS = [
+  { key:'ja_morning',         label:'朝採りJA',       frequent:true  },
+  { key:'dealer_a',            label:'取引先A',           frequent:true  },
+  { key:'dealer_a_afternoon',  label:'取引先A（午後）',    frequent:false },
+  { key:'dealer_b',              label:'取引先B',       frequent:true  },
+  { key:'dealer_c',          label:'取引先C',         frequent:true  },
+  { key:'direct',             label:'直売',           frequent:false },
+  { key:'b_grade_bag',        label:'B品袋詰め',      frequent:true  },
+]
+// 各出荷先で記録する単位（規格別に本数・コンテナ数の両方を持てる）
+const SHIPMENT_UNIT_TYPES = [
+  { key:'count_pcs',       label:'本数' },
+  { key:'container_count', label:'コンテナ数' },
+]
+
+// =====================================================
+// 【サンプル農園実データ統合 フェーズ5・Step5-3】作物別 収穫規格マスタ
+// 規格（グレード）は作物ごとに表記が異なるため、field.cropをキーに切り替える。
+// （例: とうもろこし=2L/L/M、レタス=玉数規格など）
+// 月曜確認後、正式な規格マスタとして確定する想定の仮データ。
+// =====================================================
+// getHarvestGrades は _CROP_CATEGORIES を動的参照するのでカテゴリ編集が即反映
+const getHarvestGrades = (crop) => {
+  if (!crop) return ['規格内', 'B品']
+  // まず作物名でカテゴリを検索、次にキーで検索
+  const cat = _CROP_CATEGORIES.find(c => c.name === crop) || _CROP_CATEGORIES.find(c => c.key === crop)
+  return cat ? cat.harvest_grades : (_CROP_CATEGORIES[0]?.harvest_grades || ['規格内', 'B品'])
+}
+
+// =====================================================
+// 【フェーズE・E-3-4／E-4 Step5】収穫記録（HARVEST_RECORDS）── 新規定数
+// ロット単位・出荷先別ケース数を記録する。records（日報）とは独立したデータとして保持。
+// 出荷先×サイズの組み合わせが多い（20列以上）ため、shipmentsを動的配列で保持する。
+// =====================================================
+const INITIAL_HARVEST_RECORDS = []
+
+// =====================================================
+// 【フェーズE・E-3-5／E-4 Step6】圃場実績・評価（FIELD_PERFORMANCE）── 新規定数
+// 年度別・圃場別の合計ケース数・反収（10aあたりケース数）・前年比を
+// 全圃場横断（圃場詳細ページの外）で一覧するためのデータ。
+// 【注記】field_id:1（第49圃場）はヒアリング資料に記載された実データ値
+//   （area_are/total_cases/cases_per_are/prev_season_cases）をそのまま使用。
+//   field_id:2,3（第25・第42n圃場）は実データの管理表が未着のため、
+//   面積・畝数のみLOTSと整合させた上でのサンプル値（is_estimated:true）。
+//   実データ入手後はtotal_cases等を差し替えること。
+// =====================================================
+const INITIAL_FIELD_PERFORMANCE = []
+
+// 年度ごとの評価コメント（自由記述）── ヒアリング資料に記載の実データ（原文ママ、以下略部分は省略表記）
+const INITIAL_FIELD_PERFORMANCE_COMMENTS = []
+
+// ── 農薬在庫管理データ（Step①: 新規追加） ──
+// pesticide_stock: INITIAL_PESTICIDESのstock_Lを初期値として同期させる
+// Supabase移行時は pesticide_stock テーブルに置き換える
+const INITIAL_PESTICIDE_STOCK = INITIAL_PESTICIDES.map(p => ({
+  pesticide_id:        p.id,
+  stock_L:             p.stock_L,
+  alert_threshold_L:   p.alert_threshold_L,
+}))
+
+// pesticide_purchases: 購入履歴のモックデータ（実データが届いたら差し替え）
+const INITIAL_PESTICIDE_PURCHASES = []
+
+// =====================================================
+// 【サンプル農園実データ統合 フェーズ3・Step3-2〜3-3】肥料マスタ・肥料在庫・肥料仕入れ
+// 既存のpesticides系データ構造とは完全に独立させる（混在させない）。
+// 「肥料在庫管理台帳（サンプル農園）」「2025年肥料在庫表 サンプル農園」（xlsx原本）を実データとして投入。
+//   - name / weight_per_bag_kg ＝ 肥料在庫管理台帳の「肥料名」「容量」
+//   - stock_kg（初期在庫）＝ 2025年肥料在庫表の最新の「在庫数」行（2026/1月末時点）
+//
+// 【Step3-3】単位の整理 & 価格マスタ実データ反映
+//   ■ 単位ルール（仮・月曜確認事項）
+//     農薬: 「希釈倍率×散布液量(L)」で原液消費量を計算 → 単位 L
+//     肥料: 「袋数」「kg」の両方の表記が実データに混在するため、
+//           月曜の確認まで「kg単位に統一」という仮ルールで実装する。
+//           weight_per_bag_kg を持つことで、袋⇔kg の変換は常に可能な状態にしておく。
+//     ⚠️ 月曜確認: 袋管理にするか kg管理にするか → UNIT_NOTE フラグを参照
+//   ■ 価格マスタ（レタス管理表_2025-2026 > 「肥料.農薬マスタ」シート）の実データを反映
+//     price_per_bag_yen / unit_price_yen_per_kg:
+//       苦土重焼燐１号  ¥2,972 / 20kg / ¥148.6/kg
+//       苦土石灰(粒状)  ¥430   / 20kg / ¥21.5/kg
+//       ジシアン555     ¥2,713 / 20kg / ¥135.65/kg
+//       SUPER BIO-X(SBX) ¥0   / 12kg / ¥0/kg（価格未記入）
+//     価格マスタに名称が見つからないものは null のまま（月曜確認事項として残す）
+//   - エコレット〜BOSOペレットの4品目は在庫管理台帳に記載が無く容量未確定のため
+//     weight_per_bag_kgは20kg仮置き（要確認）
+// =====================================================
+
+// 単位管理方針フラグ（Step3-3 仮ルール）
+// unit: 'kg'（固定）。袋数入力された場合は weight_per_bag_kg で換算する。
+// confirmed: false = 月曜に担当者へ確認が必要
+const FERTILIZER_UNIT_POLICY = {
+  unit: 'kg',
+  confirmed: false,  // ⚠️ 月曜確認: 袋管理か kg管理か
+  note: '在庫台帳は「袋数」「kg」が混在。月曜確認まで kg単位に統一して運用。weight_per_bag_kg で袋⇔kg変換可能。',
+}
+
+const INITIAL_FERTILIZERS = [].map(f => ({ default_dilution: null, crop_dilutions: {}, ...f }))
+
+// 肥料の希釈倍率を、肥料マスタの設定（基本倍率 or 作物別の上書き）から取得するヘルパー。
+// 農薬と違い法定の固定値ではないため、ここで返す値は「目安」であり、入力画面側で編集可能にする。
+function getSuggestedFertilizerDilution(fertilizer, cropName) {
+  if (!fertilizer) return null
+  const crop = (cropName || '').trim()
+  if (crop && fertilizer.crop_dilutions && fertilizer.crop_dilutions[crop] != null) {
+    return fertilizer.crop_dilutions[crop]
+  }
+  return fertilizer.default_dilution ?? null
+}
+
+// fertilizer_stock: INITIAL_FERTILIZERSのstock_kgを初期値として同期させる（pesticide_stockと同パターン）
+const INITIAL_FERTILIZER_STOCK = INITIAL_FERTILIZERS.map(f => ({
+  fertilizer_id:       f.id,
+  stock_kg:            f.stock_kg,
+  alert_threshold_kg:  f.alert_threshold_kg,
+}))
+
+// fertilizer_purchases: 仕入れ履歴。実データの「2025年肥料在庫表」は日次の入庫(+)・出庫(-)の
+// 増減ログ形式のため、仕入れ＝入庫があった日を抽出して購入履歴として投入（仕入れ先・金額は未記載のため空欄）。
+const INITIAL_FERTILIZER_PURCHASES = []
+
+// top_dressing_records: 追肥記録のモックデータ（「サンプル農園追肥」シート列構成に準拠した仮データ）
+// pesticidesのdilution（希釈倍率）入力に加え、amount_kg（散布量kg直接入力）にも対応する点が
+// 既存のlotSprayRecordsとの違い（フェーズ4-2 在庫連動ロジックで両対応する）
+const INITIAL_TOP_DRESSING_RECORDS = []
+
+// =====================================================
+// 【実装手順書 3.1.2】在庫管理の5段階チェック構造の導入
+// 農薬・肥料の在庫管理を「前回数→使用量→残予定数→今回数→差」の
+// 5段階チェック構造で月次運用できるようにするためのデータ構造一式。
+// =====================================================
+
+// ── Step1: 肥料の在庫管理用データ構造（新規定義） ──
+// 「肥料の袋写し」マスタ: 肥料袋に記載された正式名称・メーカー・規格を
+// 参照情報として保持する。肥料名入力時のサジェスト・名称バリデーションに使用。
+const INITIAL_FERTILIZER_BAG_MASTER = []
+
+// 【メモ】肥料マスタ（INITIAL_FERTILIZERS）・肥料在庫（INITIAL_FERTILIZER_STOCK）・
+// 仕入れ履歴（INITIAL_FERTILIZER_PURCHASES）は、上部の
+// 「サンプル農園実データ統合 フェーズ1・Step1-1」ブロックで定義済み（kg単位の仮ルールに統一）。
+// ここでは official_name を袋写しマスタと紐付けるための参照情報のみ残す。
+
+// ── Step4: 月次棚卸しシート（5段階チェック構造）の履歴データ ──
+// 「前回数→使用量→残予定数→今回数→差」の5項目を月単位でスナップショットとして保存する。
+// 農薬・肥料はそれぞれ別配列で管理し、pesticide_id / fertilizer_id で対象資材と紐付ける。
+const INITIAL_PESTICIDE_MONTHLY_CHECKS = []
+const INITIAL_FERTILIZER_MONTHLY_CHECKS = []
+
+// 【フェーズ2】作物ごとの使用可能農薬・希釈倍率を自動セットするためのマップ
+// 作物を選択した時点で、使用できる農薬とその倍率はシステム側で自動セットされる
+// （育てる作物ごとに法律・マニュアルで決まっているため、現場での倍率入力は不要）
+const CROP_PESTICIDE_MAP = {
+  'レタス':      [{ pesticide_id:1, dilution:1000 }, { pesticide_id:3, dilution:1500 }, { pesticide_id:4, dilution:2000 }, { pesticide_id:5, dilution:2000 }],
+  'とうもろこし': [{ pesticide_id:2, dilution:2000 }, { pesticide_id:6, dilution:2000 }, { pesticide_id:7, dilution:1 }],
+  '水稲':        [{ pesticide_id:8, dilution:1 }, { pesticide_id:9, dilution:1000 }],
+  'ターサイ':    [{ pesticide_id:1, dilution:1000 }],
+}
+const INITIAL_STAFF = []
+const INITIAL_RECORDS = []
+
+// 🧪【動作確認用・一時データ】収穫前日数アラートに「収穫可能日」表示を追加した変更の見え方を
+// 確認するためのテストレコード。圃場1（レタス）に「2日前に農薬散布した」想定の記録を1件だけ追加し、
+// ダッシュボードのアラートカードが「残留○日あります（○月○日〜収穫可能）」と表示されることを確認する。
+// 確認が完了したらこのブロックは削除してください。
+;(function () {
+  const testDate = new Date()
+  testDate.setDate(testDate.getDate() - 2) // 2日前に散布した想定
+  const y = testDate.getFullYear()
+  const m = String(testDate.getMonth() + 1).padStart(2, '0')
+  const d = String(testDate.getDate()).padStart(2, '0')
+  INITIAL_RECORDS.push({
+    id: 9001, date: y + '-' + m + '-' + d, field_id: 1, work_type: '農薬散布',
+    pesticide_id: 2, dilution: 2000, amount: 40, weather: '晴', worker: '（動作確認用テスト）'
+  })
+})()
+const INITIAL_GAP_CHECKS = [
+  // ── 農薬管理 ──
+  { id:1,  category:'農薬管理', item:'農薬保管庫の施錠確認',                      is_cleared:false },
+  { id:2,  category:'農薬管理', item:'農薬散布記録の保管（5年間）',                is_cleared:false },
+  { id:3,  category:'農薬管理', item:'農薬ラベルの確認と遵守',                     is_cleared:false },
+  { id:4,  category:'農薬管理', item:'PPE（防護具）の使用記録',                    is_cleared:false },
+  { id:5,  category:'農薬管理', item:'農薬の購入・入庫記録の保管',                 is_cleared:false },
+  { id:6,  category:'農薬管理', item:'使用回数・使用量の基準値遵守確認',           is_cleared:false },
+  // ── 肥料管理 ──
+  { id:7,  category:'肥料管理', item:'肥料の購入・在庫記録の保管',                 is_cleared:false },
+  { id:8,  category:'肥料管理', item:'施肥記録（圃場・日付・量）の作成',           is_cleared:false },
+  { id:9,  category:'肥料管理', item:'堆肥の使用記録（原材料・施用日）',           is_cleared:false },
+  // ── 労働安全 ──
+  { id:10, category:'労働安全', item:'作業前安全教育の実施記録',                   is_cleared:false },
+  { id:11, category:'労働安全', item:'緊急時連絡先の掲示',                         is_cleared:false },
+  { id:12, category:'労働安全', item:'熱中症対策の実施記録',                       is_cleared:false },
+  { id:13, category:'労働安全', item:'外国人スタッフへの多言語安全教育記録',       is_cleared:false },
+  { id:14, category:'労働安全', item:'農薬散布時の防護具（マスク・手袋）着用確認', is_cleared:false },
+  // ── 衛生管理 ──
+  { id:15, category:'衛生管理', item:'手洗い設備の設置確認',                       is_cleared:false },
+  { id:16, category:'衛生管理', item:'トイレ設備の衛生点検記録',                   is_cleared:false },
+  { id:17, category:'衛生管理', item:'作業着の洗濯・管理記録',                     is_cleared:false },
+  { id:18, category:'衛生管理', item:'収穫後の洗浄・選別エリアの衛生管理',         is_cleared:false },
+  // ── 水質・土壌 ──
+  { id:19, category:'水質・土壌', item:'灌漑用水の水質検査記録（年1回以上）',     is_cleared:false },
+  { id:20, category:'水質・土壌', item:'土壌検査の実施記録',                       is_cleared:false },
+  // ── 機械管理 ──
+  { id:21, category:'機械管理', item:'トラクターの定期点検記録',                   is_cleared:false },
+  { id:22, category:'機械管理', item:'スプレーヤーの洗浄・点検記録',               is_cleared:false },
+  { id:23, category:'機械管理', item:'収穫機・搬送機器の清掃記録',                 is_cleared:false },
+  // ── 記録管理 ──
+  { id:24, category:'記録管理', item:'生産工程記録の作成・保管（作付〜出荷）',     is_cleared:false },
+  { id:25, category:'記録管理', item:'出荷記録のトレーサビリティ確保',             is_cleared:false },
+  { id:26, category:'記録管理', item:'収穫ロット番号の採番・記録',                 is_cleared:false },
+  { id:27, category:'記録管理', item:'出荷先別の規格・数量記録の保管',             is_cleared:false },
+  // ── リスク管理（TBD：ヒアリング後に精査） ──
+  { id:28, category:'リスク管理（TBD）', item:'異物混入リスク評価の実施',          is_cleared:false },
+  { id:29, category:'リスク管理（TBD）', item:'食品安全ハザード分析の記録',        is_cleared:false },
+  { id:30, category:'リスク管理（TBD）', item:'苦情・インシデント対応記録',        is_cleared:false },
+]
+const INITIAL_RENTALS = []
+// ===== 今日のタスクモックデータ =====
+// 「今日 どの畑で 誰が 何をする」を一目で把握するためのデータ
+// Supabase接続後は work_schedules テーブルに移行
+const INITIAL_TODAY_TASKS = []
+
+// C06-4: INITIAL_CROP_PLANS をモックデータセクションに集約
+const INITIAL_CROP_PLANS = []
+
+// =====================================================
+// 【作付け構造リファクタリング フェーズ1】作付け（crop_cycle）エンティティ
+// ─────────────────────────────────────────────────────
+// 既存の CROP_PLANS（作付け計画）を土台に、圃場ごとの作付け履歴を
+// 正式なエンティティとして管理する。
+// status: 'planned'（計画中）/ 'active'（栽培中）/ 'completed'（収穫完了・終了）
+// 既存の CROP_PLANS データはそのまま「作付け履歴の初期データ」として転用する。
+// =====================================================
+const INITIAL_CROP_CYCLES = INITIAL_CROP_PLANS.map(p => ({
+  ...p,
+  status: 'active',       // 既存データは「現在進行中」として扱う
+  year: CONFIG.CURRENT_YEAR,
+}))
+
+// 圃場の「現在の作付け」を取得するヘルパー
+// ※ 同一圃場に複数のactiveがある場合は最新（id最大）を採用
+function getCurrentCropCycle(cropCycles, fieldId) {
+  const actives = cropCycles.filter(c => c.field_id === fieldId && c.status === 'active')
+  if (actives.length === 0) return null
+  return actives.reduce((a, b) => (b.id > a.id ? b : a))
+}
+
+// 圃場の作付け履歴を時系列（新しい順）で取得するヘルパー
+function getCropCycleHistory(cropCycles, fieldId) {
+  return cropCycles
+    .filter(c => c.field_id === fieldId)
+    .sort((a, b) => b.id - a.id)
+}
+
+// C06-4: EQUIP_LIST / EQUIP_DEFAULTS をモックデータセクションに集約
+//         （Equipmentコンポーネント直前から移動）
+const EQUIP_LIST = ['トラクター','スプレーヤー','田植え機','コンバイン','管理機']
+const EQUIP_DEFAULTS = {
+  'トラクター':    { rate: 25000, cost: 3000 },
+  'スプレーヤー':  { rate: 15000, cost: 1500 },
+  '田植え機':      { rate: 20000, cost: 2500 },
+  'コンバイン':    { rate: 30000, cost: 4000 },
+  '管理機':        { rate: 8000,  cost: 800  },
+}
+
+// =====================================================
+// A-4: 共通サイドバーコンポーネント
+// ナビアイテムをクリックで画面切り替え
+// アクティブ状態ハイライト / アイコンはテキスト絵文字
+// =====================================================
+// =====================================================
+// A-4: サイドバー（A案: 検索+2列グリッド）
+// ・圃場を検索でフィルタリング
+// ・2列グリッドで圃場ボタン一覧
+// ・選択中圃場のサブメニューをグリッド下に展開
+// ・「+ 追加」ボタンと各圃場の削除ボタン内蔵
+// ・畝マップ想定: FIELD_SUB_ITEMS に 'rows' を追加済み
+// =====================================================
+// 【フェーズE・E-4 Step3】E-2確定版の並び順（dashboard→rows→daily→pesticide→harvest）に合わせて
+// 「圃場ダッシュボード」を先頭に追加

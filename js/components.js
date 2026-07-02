@@ -1,0 +1,13969 @@
+﻿const FIELD_SUB_ITEMS = [
+  { id:'dashboard',        label:'圃場ダッシュボード', icon:'home'        },
+  { id:'daily',            label:'日報入力',           icon:'notebook'    },
+  { id:'pesticide',        label:'農薬散布',           icon:'spray'       },
+  { id:'harvest',          label:'収穫・出荷',         icon:'basket'      },
+  { id:'field_eval',       label:'実績評価',           icon:'chart-bar'   },
+]
+
+const NAV_SECTIONS_TOP = [
+  { id:'dashboard', label:'総合ダッシュボード', icon:'home' },
+]
+const NAV_SECTIONS_DATA = [
+  { id:'crop_plan',        label:'作付計画 / 経営予測', icon:'calendar-event' },
+  { id:'export',           label:'GAP帳票出力',          icon:'file-export'    },
+  { id:'gap',              label:'GAPチェックリスト',    icon:'checklist'      },
+  { id:'record_list',      label:'日報管理',              icon:'list-details'   },
+  { id:'pesticide_master', label:'農薬マスタ管理',        icon:'flask'          },
+  // 【サンプル農園実データ統合 フェーズ3・Step3-1】肥料マスタ管理（農薬マスタのコピーで新規作成）
+  { id:'fertilizer_master',label:'肥料マスタ管理',        icon:'leaf'           },
+  // 【フェーズE・E-4 Step6】年度別の圃場サマリー（全圃場横断、圃場詳細ページの外）
+  { id:'field_performance',label:'圃場実績・評価',        icon:'chart-bar'      },
+]
+const NAV_SECTIONS_SYS = [
+  { id:'staff',            label:'スタッフ管理',         icon:'users'       },
+  { id:'trainee_diary',    label:'技能実習生 作業日誌', icon:'notebook'    },
+  { id:'equipment',        label:'機器予約',             icon:'truck'       },
+  { id:'simulator',        label:'収益シミュレーター',  icon:'currency-yen'},
+  { id:'manual',           label:'多言語マニュアル',    icon:'book-2'      },
+  { id:'crop_categories',  label:'作物カテゴリ管理',    icon:'plant-2'     },
+  { id:'settings',         label:'設定',                icon:'settings'    },
+]
+
+// 圃場追加モーダル
+function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) {
+  const categories = (cats && cats.length > 0) ? cats : _CROP_CATEGORIES
+  const defaultCat = categories[0] || INITIAL_CROP_CATEGORIES[0]
+  const [name,     setName]     = React.useState('')
+  const [catKey,   setCatKey]   = React.useState(defaultCat.key)
+  const [cropName, setCropName] = React.useState('')
+  const [area,     setArea]     = React.useState('')
+  const COLORS = ['#0D9972','#2563EB','#EA580C','#7C3AED','#B45309','#DC2626']
+  const selectedCat = categories.find(c => c.key === catKey) || defaultCat
+  const [color, setColor] = React.useState(selectedCat.color || COLORS[0])
+  const disabled = !name.trim() || !area
+
+  // カテゴリ変更時はカラーも自動更新
+  const handleCatChange = (key) => {
+    setCatKey(key)
+    const cat = categories.find(c => c.key === key)
+    if (cat) setColor(cat.color)
+  }
+
+  const submit = () => {
+    if (disabled) return
+    onAdd({
+      id:           Date.now(),
+      name:         name.trim(),
+      crop:         cropName.trim() || selectedCat.name,
+      crop_category: catKey,
+      area_are:     Number(area),
+      lat:          initialLatLng ? initialLatLng.lat : 35.385,
+      lng:          initialLatLng ? initialLatLng.lng : 139.926,
+      status:       '栽培中',
+      color,
+    })
+    onClose()
+  }
+
+  return React.createElement('div', {
+    style:{
+      position:'fixed', inset:0, background:'rgba(0,0,0,.38)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999
+    },
+    onClick: e => { if (e.target === e.currentTarget) onClose() }
+  },
+    React.createElement('div', {
+      style:{
+        background:'#fff', borderRadius:'12px', padding:'24px',
+        width:'340px', boxShadow:'0 8px 32px rgba(0,0,0,.18)'
+      }
+    },
+      React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827', marginBottom: initialLatLng ? '6px' : '18px' } },
+        '➕ 圃場を追加'
+      ),
+      initialLatLng && React.createElement('div', { style:{ fontSize:'11px', color:'#0A6B52', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'6px', padding:'5px 8px', marginBottom:'14px' } },
+        '📍 選択した地点に登録します（' + initialLatLng.lat.toFixed(5) + ', ' + initialLatLng.lng.toFixed(5) + '）'
+      ),
+      // 圃場名
+      React.createElement('div', { style:{ marginBottom:'12px' } },
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '圃場名'),
+        React.createElement('input', {
+          className:'form-input',
+          placeholder:'例: 第21圃場',
+          value: name,
+          onChange: e => setName(e.target.value),
+          onKeyDown: e => e.key === 'Enter' && submit(),
+          autoFocus: true,
+        })
+      ),
+      // 作物カテゴリ
+      React.createElement('div', { style:{ marginBottom:'12px' } },
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '作物カテゴリ'),
+        React.createElement('select', {
+          className:'form-select',
+          value: catKey,
+          onChange: e => handleCatChange(e.target.value),
+        },
+          categories.map(c => React.createElement('option', { key:c.key, value:c.key }, c.name))
+        )
+      ),
+      // 品種名（任意）
+      React.createElement('div', { style:{ marginBottom:'12px' } },
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '品種名（任意）'),
+        React.createElement('input', {
+          className:'form-input',
+          placeholder: 'グリーンウェーブ など（省略可）',
+          value: cropName,
+          onChange: e => setCropName(e.target.value),
+        })
+      ),
+      // 面積
+      React.createElement('div', { style:{ marginBottom:'14px' } },
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '面積 (a)'),
+        React.createElement('input', {
+          className:'form-input',
+          type:'number', min:'1', placeholder:'例: 20',
+          value: area,
+          onChange: e => setArea(e.target.value),
+        })
+      ),
+      // カラー
+      React.createElement('div', { style:{ marginBottom:'20px' } },
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'6px', letterSpacing:'.06em', textTransform:'uppercase' } }, 'マップ色'),
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          COLORS.map(c => React.createElement('button', {
+            key:c,
+            onClick: () => setColor(c),
+            style:{
+              width:'26px', height:'26px', borderRadius:'50%', background:c,
+              border: color === c ? '3px solid #111827' : '2px solid transparent',
+              cursor:'pointer', flexShrink:0,
+            }
+          }))
+        )
+      ),
+      // ボタン
+      React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+        React.createElement('button', {
+          onClick: onClose,
+          style:{ flex:1, padding:'10px', borderRadius:'8px', border:'1.5px solid #D8E4D8', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+        }, 'キャンセル'),
+        React.createElement('button', {
+          onClick: submit,
+          disabled,
+          style:{
+            flex:1, padding:'10px', borderRadius:'8px', border:'none',
+            background: disabled ? '#D1D5DB' : '#0A6B52',
+            color:'#fff', fontSize:'13px', fontWeight:700, cursor: disabled ? 'not-allowed' : 'pointer'
+          }
+        }, '追加する')
+      )
+    )
+  )
+}
+
+// ── Step3: アコーディオンアニメーション用サブコンポーネント ──
+// Step4: fieldSubItems を props で受け取る形に変更（グローバル依存を排除）
+function FieldAccordionItem({ f, isOpen, onChange, onDeleteTarget }) {
+  return React.createElement('div', { className:'nav-field-group' },
+    React.createElement('div', { style:{ position:'relative', display:'flex', alignItems:'center' } },
+      React.createElement('button', {
+        className: 'nav-field-parent' + (isOpen ? ' open' : ''),
+        onClick: () => onChange('field:' + f.id + ':dashboard'),
+        style:{ paddingRight:'36px' },
+      },
+        React.createElement('span', { className:'nav-icon', style:{ color: isOpen ? '#0A6B52' : '#94A3B8' } },
+          React.createElement('i', { className: isOpen ? 'ti ti-folder-open' : 'ti ti-folder' })
+        ),
+        React.createElement('span', { style:{ flex:1, overflow:'hidden', textOverflow:'ellipsis', fontSize:'13px', fontWeight:700, color: isOpen ? '#0A6B52' : '#374151' } },
+          f.name
+        ),
+        React.createElement('span', { style:{ fontSize:'11px', color:'#94A3B8', fontWeight:500, flexShrink:0 } },
+          f.crop
+        ),
+      ),
+      React.createElement('button', {
+        onClick: e => { e.stopPropagation(); onDeleteTarget(f.id) },
+        title: '削除',
+        style:{
+          position:'absolute', right:'6px', top:'50%', transform:'translateY(-50%)',
+          width:'18px', height:'18px', borderRadius:'50%',
+          background:'transparent', border:'none',
+          color:'#CBD5E1', fontSize:'12px',
+          cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+          transition:'all .1s', flexShrink:0,
+        },
+        onMouseEnter: e => { e.currentTarget.style.background='#FEE2E2'; e.currentTarget.style.color='#DC2626' },
+        onMouseLeave: e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.color='#CBD5E1' },
+      }, 'x')
+    )
+  )
+}
+
+function Sidebar({ current, onChange, fields, onAddField, onDeleteField, currentOrg, currentFarm, availableFarms, onFarmChange, onSignOut, authUser }) {
+  const [farmMenuOpen, setFarmMenuOpen] = React.useState(false)
+  const isCorp    = currentOrg && currentOrg.type === 'corp'
+  const multiFarm = isCorp && availableFarms && availableFarms.length > 1
+  // 現在の圃場IDとサブタブを解析
+  const parseFieldPage = (p) => {
+    if (!p.startsWith('field:')) return { fieldId: null, sub: null }
+    const parts = p.split(':')
+    return { fieldId: Number(parts[1]), sub: parts[2] || 'dashboard' }
+  }
+  const { fieldId: curFieldId, sub: curSub } = parseFieldPage(current)
+
+  const NavBtn = ({ item }) =>
+    React.createElement('button', {
+      className: 'nav-item' + (current === item.id ? ' active' : ''),
+      onClick: () => onChange(item.id),
+    },
+      React.createElement('span', { className:'nav-icon' },
+        React.createElement('i', { className:'ti ti-' + item.icon, 'aria-hidden':'true' })
+      ),
+      item.label
+    )
+
+  return React.createElement('nav', { className:'sidebar', style:{ display:'flex', flexDirection:'column', overflowY:'auto', overflowX:'hidden' } },
+    React.createElement('div', { className:'sb-logo', style:{ flexShrink:0, position:'relative' } },
+      React.createElement('div', { className:'farm-name' }, '🌱 ' + (currentFarm ? currentFarm.name : CONFIG.FARM_NAME)),
+      React.createElement('div', { className:'farm-sub'  }, isCorp ? (currentOrg.name + ' — 管理システム') : '農場管理システム v2.0'),
+      multiFarm && React.createElement('button', {
+        onClick: () => setFarmMenuOpen(o => !o),
+        style:{ position:'absolute', top:16, right:10, background:'#F0F8F4', border:'1px solid #C6DDD0', borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:600, color:'#0A6B52', cursor:'pointer' }
+      }, '切替 ▾'),
+      multiFarm && farmMenuOpen && React.createElement('div', {
+        style:{ position:'absolute', top:64, left:12, right:12, background:'#fff', border:'1px solid #DDE8DE', borderRadius:8, boxShadow:'0 4px 12px rgba(0,0,0,.12)', zIndex:1000 }
+      },
+        availableFarms.map(f =>
+          React.createElement('button', { key:f.id,
+            onClick: () => { onFarmChange(f); setFarmMenuOpen(false) },
+            style:{ display:'block', width:'100%', padding:'10px 14px', textAlign:'left', background:currentFarm.id===f.id?'#F0FDF4':'transparent', border:'none', borderBottom:'1px solid #F0F4F1', fontSize:13, fontWeight:currentFarm.id===f.id?700:500, color:currentFarm.id===f.id?'#0A6B52':'#374151', cursor:'pointer' }
+          }, (currentFarm.id === f.id ? '✓ ' : '') + f.name)
+        )
+      )
+    ),
+
+    // ── 上部固定：ダッシュボード ──
+    React.createElement('div', { className:'nav-wrap', style:{ flexShrink:0, paddingBottom:0 } },
+      ...NAV_SECTIONS_TOP.map(n => React.createElement(NavBtn, { key:n.id, item:n })),
+      React.createElement('div', { style:{ marginTop:'10px', paddingLeft:'10px', paddingRight:'10px' } },
+        React.createElement('div', { className:'nav-section', style:{ marginBottom:'6px', fontSize:'11px', letterSpacing:'.04em' } }, '圃場別管理'),
+        React.createElement('div', { style:{ display:'flex', gap:'6px' } },
+          React.createElement('button', {
+            onClick: () => onChange('fields'),
+            title:'圃場一覧',
+            style:{
+              flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+              gap:'4px', padding:'10px 4px', borderRadius:'10px', cursor:'pointer',
+              border: (current === 'fields') ? '2px solid #0A6B52' : '2px solid #DDE8DE',
+              background: (current === 'fields') ? '#0A6B52' : '#F4FAF6',
+              color: (current === 'fields') ? '#fff' : '#3D6B50',
+              fontWeight: 600, fontSize:'12px', transition:'all .15s',
+            },
+            onMouseEnter: e => { if (current !== 'fields') { e.currentTarget.style.background='#E0F0E8'; e.currentTarget.style.borderColor='#0A6B52' } },
+            onMouseLeave: e => { if (current !== 'fields') { e.currentTarget.style.background='#F4FAF6'; e.currentTarget.style.borderColor='#DDE8DE' } },
+          },
+            React.createElement('i', { className:'ti ti-layout-list', style:{ fontSize:'20px' } }),
+            '一覧'
+          ),
+          React.createElement('button', {
+            onClick: () => onChange('field_map'),
+            title:'圃場マップ',
+            style:{
+              flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+              gap:'4px', padding:'10px 4px', borderRadius:'10px', cursor:'pointer',
+              border: (current === 'field_map') ? '2px solid #0A6B52' : '2px solid #DDE8DE',
+              background: (current === 'field_map') ? '#0A6B52' : '#F4FAF6',
+              color: (current === 'field_map') ? '#fff' : '#3D6B50',
+              fontWeight: 600, fontSize:'12px', transition:'all .15s',
+            },
+            onMouseEnter: e => { if (current !== 'field_map') { e.currentTarget.style.background='#E0F0E8'; e.currentTarget.style.borderColor='#0A6B52' } },
+            onMouseLeave: e => { if (current !== 'field_map') { e.currentTarget.style.background='#F4FAF6'; e.currentTarget.style.borderColor='#DDE8DE' } },
+          },
+            React.createElement('i', { className:'ti ti-map-2', style:{ fontSize:'20px' } }),
+            'マップ'
+          )
+        )
+      ),
+
+    ),
+
+    // ── 下部：営農データ・システム ──
+    React.createElement('div', { className:'nav-wrap', style:{ flexShrink:0, paddingTop:'14px' } },
+      React.createElement('div', { className:'nav-section', style:{ marginTop:'4px' } }, '営農データ'),
+      ...NAV_SECTIONS_DATA.map(n => React.createElement(NavBtn, { key:n.id, item:n })),
+      React.createElement('div', { className:'nav-section', style:{ marginTop:'8px' } }, 'システム'),
+      ...NAV_SECTIONS_SYS.map(n => React.createElement(NavBtn, { key:n.id, item:n })),
+    ),
+
+    // ── フッター: ユーザー情報 + サインアウト ──
+    React.createElement('div', { style:{ marginTop:'auto', padding:'12px 14px 14px', borderTop:'1px solid #DDE8DE', flexShrink:0 } },
+      authUser && React.createElement('div', { style:{ fontSize:11, color:'#94A3B8', marginBottom:8, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, authUser.email),
+      React.createElement('button', {
+        onClick: onSignOut,
+        style:{ display:'flex', alignItems:'center', gap:6, background:'none', border:'1px solid #DDE8DE', borderRadius:6, padding:'6px 10px', fontSize:12, color:'#64748B', cursor:'pointer', width:'100%' }
+      }, React.createElement('i', { className:'ti ti-logout', style:{ fontSize:14 } }), 'ログアウト')
+    )
+  )
+}
+
+function SectionTitle({ icon, children, style }) {
+  return React.createElement('div', { className:'section-title', style },
+    React.createElement('i', {
+      className: 'ti ti-' + icon,
+      'aria-hidden': 'true',
+      style: { fontSize:'15px', verticalAlign:'-2px', marginRight:'6px' }
+    }),
+    children
+  )
+}
+
+// =====================================================
+// UX-11: 月次作業サマリーグラフ（改善版）
+// ・バーをクリックすると月別内訳パネルが展開
+// ・今月ミニサマリー（農薬散布・施肥・総作業）を先月比付きでグラフ下に統合
+// =====================================================
+function MonthlySummaryChart({ records }) {
+  const [selectedIdx, setSelectedIdx] = React.useState(null)
+  const buckets  = aggregateMonthlyWork(records, 6)
+  const workKeys = Object.keys(WORK_ICON_MAP).filter(w =>
+    buckets.some(b => b.counts[w] > 0)
+  )
+  const maxTotal = Math.max(1, ...buckets.map(b => b.total))
+
+  // 今月・先月のバケットを取得
+  const thisMonth = buckets[buckets.length - 1]
+  const lastMonth = buckets[buckets.length - 2]
+
+  const miniStats = [
+    {
+      label: '今月の農薬散布',
+      now:   thisMonth ? (thisMonth.counts['農薬散布'] || 0) : 0,
+      prev:  lastMonth ? (lastMonth.counts['農薬散布'] || 0) : null,
+      unit:  '回',
+      color: '#DC2626',
+    },
+    {
+      label: '今月の施肥',
+      now:   thisMonth ? (thisMonth.counts['施肥'] || 0) : 0,
+      prev:  lastMonth ? (lastMonth.counts['施肥'] || 0) : null,
+      unit:  '回',
+      color: '#0D9972',
+    },
+    {
+      label: '今月の総作業',
+      now:   thisMonth ? thisMonth.total : 0,
+      prev:  lastMonth ? lastMonth.total : null,
+      unit:  '件',
+      color: '#2563EB',
+    },
+  ]
+
+  const W = 600, H = 180, padL = 28, padB = 24, padT = 10
+  const chartW = W - padL - 8
+  const chartH = H - padT - padB
+  const barSlot = chartW / buckets.length
+  const barW = Math.min(36, barSlot * 0.5)
+
+  const selectedBucket = selectedIdx !== null ? buckets[selectedIdx] : null
+
+  return React.createElement('div', { className:'card', style:{ marginBottom:'24px' } },
+    React.createElement(SectionTitle, { icon:'chart-bar' }, '月次作業サマリー（直近6ヶ月）'),
+
+    workKeys.length === 0
+      ? React.createElement('div', { style:{ padding:'24px 0', color:'#94A3B8', fontSize:'13px', textAlign:'center' } },
+          '直近6ヶ月の作業記録がありません')
+      : React.createElement('div', null,
+
+          // --- SVG 棒グラフ（バークリックで内訳展開） ---
+          React.createElement('svg', {
+            viewBox: '0 0 '+W+' '+H,
+            style: { width:'100%', height:'180px', display:'block', cursor:'pointer' }
+          },
+            React.createElement('line', {
+              x1:padL, y1:H-padB, x2:W-4, y2:H-padB,
+              stroke:'#E5EDE5', strokeWidth:1
+            }),
+            ...buckets.map((b, i) => {
+              const x = padL + i * barSlot + (barSlot - barW) / 2
+              const isSelected = selectedIdx === i
+              let yCursor = H - padB
+              const segs = workKeys.map(w => {
+                const cnt = b.counts[w] || 0
+                if (cnt === 0) return null
+                const segH = (cnt / maxTotal) * chartH
+                yCursor -= segH
+                return React.createElement('rect', {
+                  key: w,
+                  x, y: yCursor, width: barW, height: segH,
+                  fill: WORK_ICON_MAP[w].color,
+                  rx: 2,
+                  opacity: isSelected ? 1 : (selectedIdx !== null ? 0.45 : 1),
+                })
+              })
+              return React.createElement('g', {
+                key: b.key,
+                onClick: () => setSelectedIdx(selectedIdx === i ? null : i),
+                style:{ cursor:'pointer' },
+              },
+                // ホバー背景
+                React.createElement('rect', {
+                  x: padL + i * barSlot, y: padT,
+                  width: barSlot, height: chartH + 4,
+                  fill: isSelected ? '#F0FDF4' : 'transparent',
+                  rx: 4,
+                }),
+                segs,
+                b.total > 0 && React.createElement('text', {
+                  x: x + barW / 2, y: yCursor - 6,
+                  fontSize: 11, fontWeight: isSelected ? 800 : 700,
+                  fill: isSelected ? '#0A6B52' : '#374151',
+                  textAnchor:'middle'
+                }, b.total),
+                React.createElement('text', {
+                  x: x + barW / 2, y: H - 6,
+                  fontSize: 11,
+                  fill: isSelected ? '#0A6B52' : '#94A3B8',
+                  fontWeight: isSelected ? 700 : 400,
+                  textAnchor:'middle'
+                }, b.label)
+              )
+            })
+          ),
+
+          // --- 月別内訳パネル（クリック時に展開） ---
+          selectedBucket && React.createElement('div', {
+            style:{
+              margin:'10px 0', padding:'12px 16px',
+              background:'#F0FDF4', border:'1px solid #A7F3D0',
+              borderRadius:'10px',
+            }
+          },
+            React.createElement('div', {
+              style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' }
+            },
+              React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color:'#0A6B52' } },
+                selectedBucket.label+'の内訳'
+              ),
+              React.createElement('button', {
+                onClick: () => setSelectedIdx(null),
+                style:{ background:'none', border:'none', cursor:'pointer', fontSize:'16px', color:'#9CA3AF', lineHeight:1, padding:'2px' }
+              }, '✕')
+            ),
+            React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'8px' } },
+              workKeys.filter(w => (selectedBucket.counts[w] || 0) > 0).map(w =>
+                React.createElement('div', {
+                  key: w,
+                  style:{
+                    display:'flex', alignItems:'center', gap:'6px',
+                    background:'#fff', border:'1px solid #D1FAE5',
+                    borderRadius:'8px', padding:'6px 12px', fontSize:'12px',
+                  }
+                },
+                  React.createElement('span', { style:{ width:8, height:8, borderRadius:'2px', background:WORK_ICON_MAP[w].color, display:'inline-block', flexShrink:0 } }),
+                  React.createElement('span', { style:{ color:'#374151' } }, WORK_ICON_MAP[w].emoji+' '+w),
+                  React.createElement('span', { style:{ fontWeight:700, color:'#0A6B52', marginLeft:'4px' } }, selectedBucket.counts[w]+'件')
+                )
+              ),
+              selectedBucket.total === 0 && React.createElement('span', { style:{ color:'#94A3B8', fontSize:'12px' } }, 'この月の記録はありません')
+            )
+          ),
+
+          // --- 凡例 ---
+          React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'12px', marginTop:'8px', paddingTop:'10px', borderTop:'1px solid #EDF2ED' } },
+            ...workKeys.map(w =>
+              React.createElement('div', { key:w, style:{ display:'flex', alignItems:'center', gap:'5px', fontSize:'11px', color:'#64748B' } },
+                React.createElement('span', { style:{ width:'10px', height:'10px', borderRadius:'2px', background:WORK_ICON_MAP[w].color, display:'inline-block' } }),
+                WORK_ICON_MAP[w].emoji + ' ' + w
+              )
+            )
+          ),
+
+          // --- 今月ミニサマリー（先月比付き）---
+          React.createElement('div', {
+            style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px', marginTop:'16px', paddingTop:'14px', borderTop:'1px solid #EDF2ED' }
+          },
+            ...miniStats.map(s => {
+              const diff = s.prev !== null ? s.now - s.prev : null
+              const isUp   = diff !== null && diff > 0
+              const isDown = diff !== null && diff < 0
+              const isFlat = diff === 0
+              return React.createElement('div', {
+                key: s.label,
+                style:{
+                  background:'#F8FAF8', borderRadius:'10px', padding:'12px 14px',
+                  border:'1px solid #E2E8E2',
+                }
+              },
+                React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', fontWeight:600, letterSpacing:'.06em', textTransform:'uppercase', marginBottom:'4px' } }, s.label),
+                React.createElement('div', { style:{ display:'flex', alignItems:'baseline', gap:'6px' } },
+                  React.createElement('span', { style:{ fontSize:'24px', fontWeight:700, color: s.color, lineHeight:1 } }, s.now),
+                  React.createElement('span', { style:{ fontSize:'12px', color:'#94A3B8' } }, s.unit)
+                ),
+                diff !== null && React.createElement('div', {
+                  style:{
+                    display:'flex', alignItems:'center', gap:'3px',
+                    marginTop:'5px', fontSize:'11px', fontWeight:600,
+                    color: isUp ? '#C2410C' : isDown ? '#0A6B52' : '#94A3B8',
+                  }
+                },
+                  React.createElement('i', {
+                    className: isUp ? 'ti ti-arrow-up' : isDown ? 'ti ti-arrow-down' : 'ti ti-minus',
+                    style:{ fontSize:'12px' }
+                  }),
+                  isFlat
+                    ? '先月と同じ'
+                    : '先月比 '+(isUp ? '+' : '')+diff+s.unit
+                )
+              )
+            })
+          )
+        )
+  )
+}
+
+// C06-1: WORK_ICON_MAP に emoji を統合し、WORK_TYPES はここから導出（二重定義解消）
+const WORK_ICON_MAP = {
+  '農薬散布': { icon:'spray',        color:'#DC2626', emoji:'🧴' },
+  '施肥':     { icon:'leaf',         color:'#0D9972', emoji:'🌿' },
+  '除草':     { icon:'scissors',     color:'#D97706', emoji:'✂️' },
+  '収穫':     { icon:'basket',       color:'#7C3AED', emoji:'🌾' },
+  '播種':     { icon:'seeding',      color:'#2563EB', emoji:'🌱' },
+  '灌水':     { icon:'droplet',      color:'#2563EB', emoji:'💧' },
+  '耕起':     { icon:'tractor',      color:'#854D0E', emoji:'🚜' },
+  '定植':     { icon:'plant-2',      color:'#0D9972', emoji:'🌱' },
+  '点検':     { icon:'search',       color:'#64748B', emoji:'🔍' },
+  'その他':   { icon:'dots',         color:'#6B7280', emoji:'📝' },
+}
+// WORK_TYPES は WORK_ICON_MAP から自動生成 — DailyRecord内の独立定義は削除済み
+const WORK_TYPES = Object.entries(WORK_ICON_MAP).map(([v, cfg]) => ({
+  v, icon: cfg.emoji, color: cfg.color
+}))
+
+// C06-2: roleLabel / natLabel をファイルスコープ定数に外出し（StaffList内の重複定義を削除）
+const ROLE_LABEL = { manager:'管理者', worker:'一般作業員', trainee:'技能実習生' }
+const NAT_LABEL  = { JP:'🇯🇵 日本', VN:'🇻🇳 ベトナム', CN:'🇨🇳 中国', PH:'🇵🇭 フィリピン', ID:'🇮🇩 インドネシア' }
+
+// 【スタッフ スキル管理 Step1-1】スキルマスタ・レベル定義
+// スキル項目は実際の作業内容に合わせて要調整（サンプル農園さんへの確認ポイント）
+const SKILL_MASTER = [
+  { id:'harvest',    label:'収穫',         icon:'basket'   },
+  { id:'sorting',    label:'選別・調整',    icon:'filter'   },
+  { id:'pesticide',  label:'農薬散布',     icon:'spray'    },
+  { id:'fertilize',  label:'施肥',         icon:'leaf'     },
+  { id:'machine',    label:'機械操作',     icon:'tractor'  },
+  { id:'packing',    label:'梱包・出荷',   icon:'box'      },
+]
+// レベル定義（1〜3段階。資格・習熟度に対応）
+const SKILL_LEVEL_LABEL = { 1:'研修中', 2:'独力可', 3:'指導可' }
+
+// 【スタッフ カタカナ表記 機能】ローマ字→カタカナ簡易自動変換
+// ※ 完全な精度は出せないため「下書き」として生成し、必ず人の手で確認・修正する前提の設計
+//    ヘボン式ローマ字を主眼に、よくあるベトナム語・中国語ピンインの綴りにも一部対応
+function romajiToKatakana(input) {
+  if (!input) return ''
+  let s = input.trim().toLowerCase()
+  if (!s) return ''
+
+  // 長い綴りから優先的にマッチさせるため、置換テーブルは多文字から並べる
+  const rules = [
+    // ベトナム語によくある二重母音・子音群
+    [/nguyen/g, 'グエン'], [/nguy/g, 'グイ'],
+    [/thi/g, 'ティ'], [/th/g, 'ト'],
+    [/ph/g, 'フ'], [/ng/g, 'ン'], [/nh/g, 'ニ'],
+    [/tr/g, 'チ'], [/gi/g, 'ジ'],
+    // 中国語ピンインによくある綴り
+    [/zh/g, 'ジ'], [/xi/g, 'シ'], [/qi/g, 'チ'], [/x/g, 'シ'], [/q/g, 'チ'], [/zi/g, 'ズ'],
+    // 一般的な英字・ローマ字の音節（長いものから。ch/sh等の2文字パターンは単独音節より先に評価しない）
+    [/sha/g,'シャ'],[/shi/g,'シ'],[/shu/g,'シュ'],[/sho/g,'ショ'],[/she/g,'シェ'],
+    [/cha/g,'チャ'],[/chi/g,'チ'],[/chu/g,'チュ'],[/cho/g,'チョ'],[/che/g,'チェ'],
+    [/ch/g, 'チ'],
+    [/kya/g,'キャ'],[/kyu/g,'キュ'],[/kyo/g,'キョ'],
+    [/tya/g,'チャ'],[/tyu/g,'チュ'],[/tyo/g,'チョ'],
+    [/ja/g,'ジャ'],[/ju/g,'ジュ'],[/jo/g,'ジョ'],[/ji/g,'ジ'],
+    [/wa/g,'ワ'],[/wo/g,'ヲ'],[/wi/g,'ウィ'],[/we/g,'ウェ'],
+    [/ka/g,'カ'],[/ki/g,'キ'],[/ku/g,'ク'],[/ke/g,'ケ'],[/ko/g,'コ'],
+    [/sa/g,'サ'],[/si/g,'シ'],[/su/g,'ス'],[/se/g,'セ'],[/so/g,'ソ'],
+    [/ta/g,'タ'],[/ti/g,'ティ'],[/tu/g,'トゥ'],[/te/g,'テ'],[/to/g,'ト'],
+    [/na/g,'ナ'],[/ni/g,'ニ'],[/nu/g,'ヌ'],[/ne/g,'ネ'],[/no/g,'ノ'],
+    [/ha/g,'ハ'],[/hi/g,'ヒ'],[/hu/g,'フ'],[/fu/g,'フ'],[/he/g,'ヘ'],[/ho/g,'ホ'],
+    [/ma/g,'マ'],[/mi/g,'ミ'],[/mu/g,'ム'],[/me/g,'メ'],[/mo/g,'モ'],
+    [/ya/g,'ヤ'],[/yu/g,'ユ'],[/yo/g,'ヨ'],
+    [/ra/g,'ラ'],[/ri/g,'リ'],[/ru/g,'ル'],[/re/g,'レ'],[/ro/g,'ロ'],
+    [/la/g,'ラ'],[/li/g,'リ'],[/lu/g,'ル'],[/le/g,'レ'],[/lo/g,'ロ'],
+    [/ga/g,'ガ'],[/gi/g,'ギ'],[/gu/g,'グ'],[/ge/g,'ゲ'],[/go/g,'ゴ'],
+    [/za/g,'ザ'],[/zu/g,'ズ'],[/ze/g,'ゼ'],[/zo/g,'ゾ'],
+    [/da/g,'ダ'],[/di/g,'ディ'],[/du/g,'ドゥ'],[/de/g,'デ'],[/do/g,'ド'],
+    [/ba/g,'バ'],[/bi/g,'ビ'],[/bu/g,'ブ'],[/be/g,'ベ'],[/bo/g,'ボ'],
+    [/pa/g,'パ'],[/pi/g,'ピ'],[/pu/g,'プ'],[/pe/g,'ペ'],[/po/g,'ポ'],
+    [/van/g,'バン'],[/van$/g,'バン'],
+    [/a/g,'ア'],[/i/g,'イ'],[/u/g,'ウ'],[/e/g,'エ'],[/o/g,'オ'],
+    [/n/g,'ン'],
+    [/m/g,'ム'],  // 末尾等に残りがちな子音の保険ルール（例: Pham→Phaの後にmが残る場合）
+  ]
+
+  let out = ''
+  // 空白・ハイフンで単語ごとに区切り、単語間は中黒（・）でつなぐ
+  const words = s.split(/[\s\-]+/).filter(Boolean)
+  out = words.map(word => {
+    let w = word
+    rules.forEach(([pattern, kana]) => { w = w.replace(pattern, kana) })
+    return w
+  }).join('・')
+
+  return out
+}
+
+// C06-3: MONTHS / MONTH_LABELS / CROP_COLORS / CROPS_LIST をファイル上部に集約
+//         （CropPlan直前に散在していたものを移動）
+const MONTHS       = ['1','2','3','4','5','6','7','8','9','10','11','12']
+const MONTH_LABELS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
+const CROP_COLORS  = {
+  'レタス':'#0D9972','米':'#D97706','とうもろこし':'#EA580C',
+  '水稲':'#2563EB','ターサイ':'#a78bfa','トマト':'#ff7070','大豆':'#61b8f5',
+  '玉ねぎ':'#86efac','その他':'#9ba4b5'
+}
+const CROPS_LIST = Object.keys(CROP_COLORS)
+
+// C06-4: MANUAL_DATA / LANG_CONFIG をモックデータセクション上部に集約
+// 【実装手順書 B】サンプル農園向けコンテンツに差し替え（2026-06-21）
+const MANUAL_DATA = {
+  ja: [
+    { id:1,  type:'pdf',   title:'農作業 安全マニュアル',              desc:'熱中症・農薬被曝・機械事故の防止手順と緊急時対応フロー',                        thumb:'📄', pages:8,  updated:'2026-04-01' },
+    { id:2,  type:'pdf',   title:'レタス収穫 作業手順書',              desc:'サイズ選別（2L／L／M）・コンテナ積み・出荷先仕分けの手順（写真付き）',          thumb:'📄', pages:5,  updated:'2026-03-15' },
+    { id:3,  type:'pdf',   title:'とうもろこし 収穫・出荷手順',        desc:'収穫タイミングの見極め・袋詰め・JA／取引先A／直売別の仕分け方法',                  thumb:'📄', pages:4,  updated:'2026-05-10' },
+    { id:4,  type:'pdf',   title:'農薬散布 安全マニュアル',            desc:'PPE着用・希釈倍率確認・散布後の記録記入と器具洗浄手順',                        thumb:'📄', pages:6,  updated:'2026-01-10' },
+    { id:5,  type:'pdf',   title:'日報アプリ 操作ガイド（収穫記録）',  desc:'収穫記録・出荷内訳・ロット番号の入力ステップを画面キャプチャ付きで解説',        thumb:'📄', pages:7,  updated:'2026-06-01' },
+    { id:6,  type:'pdf',   title:'圃場マップ 使い方ガイド',            desc:'畝の選択方法・散布区画の記録・収穫実績の確認方法',                              thumb:'📄', pages:4,  updated:'2026-06-01' },
+    { id:7,  type:'video', title:'収穫記録の入力方法（動画）',          desc:'アプリを使った収穫日報の記入から保存までを動画でわかりやすく解説',               thumb:'🎬', duration:'3分20秒', updated:'2026-06-01' },
+    { id:8,  type:'video', title:'農薬散布記録の入力方法（動画）',      desc:'農薬選択・散布液量・圃場指定から記録保存までの操作手順',                        thumb:'🎬', duration:'2分50秒', updated:'2026-05-20' },
+  ],
+  en: [
+    { id:9,  type:'pdf',   title:'Farm Work Safety Manual',              desc:'Prevention and emergency procedures for heat stroke, pesticide exposure, and machinery accidents', thumb:'📄', pages:8,  updated:'2026-04-01' },
+    { id:10, type:'pdf',   title:'Lettuce Harvest Procedure',             desc:'Size grading (2L/L/M), container loading, and sorting by shipping destination',                    thumb:'📄', pages:5,  updated:'2026-03-15' },
+    { id:11, type:'pdf',   title:'Sweet Corn Harvest & Shipping Guide',   desc:'How to judge harvest timing, bag packing, and sorting by destination (JA / dealer_a / Direct)',     thumb:'📄', pages:4,  updated:'2026-05-10' },
+    { id:12, type:'pdf',   title:'Pesticide Application Safety Manual',   desc:'PPE requirements, dilution ratios, post-spray record entry, and equipment cleaning',               thumb:'📄', pages:6,  updated:'2026-01-10' },
+    { id:13, type:'pdf',   title:'App Guide: Harvest Record Entry',        desc:'Step-by-step screenshots showing how to enter harvest data, shipment breakdown, and lot numbers',  thumb:'📄', pages:7,  updated:'2026-06-01' },
+    { id:14, type:'video', title:'How to Enter a Harvest Record (Video)',  desc:'Video walkthrough of filling in and saving a harvest daily report using the app',                  thumb:'🎬', duration:'3:20', updated:'2026-06-01' },
+  ],
+  vi: [
+    { id:15, type:'pdf',   title:'Hướng dẫn an toàn lao động nông nghiệp',  desc:'Phòng tránh say nắng, tiếp xúc hóa chất nông nghiệp và tai nạn máy móc; quy trình xử lý khẩn cấp', thumb:'📄', pages:8,  updated:'2026-04-01' },
+    { id:16, type:'pdf',   title:'Quy trình thu hoạch rau diếp',             desc:'Phân loại kích thước (2L/L/M), xếp thùng và phân loại theo điểm giao hàng (có ảnh minh họa)',       thumb:'📄', pages:5,  updated:'2026-03-15' },
+    { id:17, type:'pdf',   title:'Quy trình thu hoạch và giao ngô ngọt',     desc:'Cách xác định thời điểm thu hoạch, đóng túi và phân loại theo JA / dealer_a / bán trực tiếp',        thumb:'📄', pages:4,  updated:'2026-05-10' },
+    { id:18, type:'pdf',   title:'Hướng dẫn an toàn phun thuốc trừ sâu',    desc:'Yêu cầu PPE, tỷ lệ pha loãng, ghi chép sau khi phun và vệ sinh dụng cụ',                             thumb:'📄', pages:6,  updated:'2026-01-10' },
+    { id:19, type:'pdf',   title:'Hướng dẫn ứng dụng: Nhập dữ liệu thu hoạch', desc:'Ảnh chụp màn hình từng bước nhập dữ liệu thu hoạch, chi tiết xuất hàng và mã lô',               thumb:'📄', pages:7,  updated:'2026-06-01' },
+    { id:20, type:'video', title:'Cách nhập hồ sơ thu hoạch (Video)',        desc:'Video hướng dẫn điền và lưu nhật ký thu hoạch hàng ngày bằng ứng dụng',                              thumb:'🎬', duration:'3 phút 20 giây', updated:'2026-06-01' },
+    { id:21, type:'video', title:'Cách nhập hồ sơ phun thuốc (Video)',       desc:'Các bước chọn thuốc, nhập lượng phun, chỉ định thửa ruộng và lưu hồ sơ',                             thumb:'🎬', duration:'2 phút 50 giây', updated:'2026-05-20' },
+  ],
+}
+
+const LANG_CONFIG = [
+  { key:'ja', label:'🇯🇵 日本語', badge:'JA', color:'#1A5276' },
+  { key:'en', label:'🇬🇧 English', badge:'EN', color:'#117A65' },
+  { key:'vi', label:'🇻🇳 Tiếng Việt', badge:'VI', color:'#B03A2E' },
+]
+
+
+// =====================================================
+// B-1: ダッシュボード画面（完全実装）
+// GAP進捗バー / アラートカード / 圃場サマリーカード / 最近の記録ログ
+// =====================================================
+
+/* --- サブコンポーネント --- */
+
+// =====================================================
+// 在庫アラートウィジェット（ダッシュボード用）
+// A-1: 統計カード直下に配置
+// 発注アラート閾値以下の農薬を赤バッジで一覧 / 全て余裕あり → グリーン
+// =====================================================
+function PesticideStockWidget({ pesticides, pesticideStock, onNavigate, _inGrid }) {
+  const stockOf  = (p) => {
+    const s = (pesticideStock || []).find(s => s.pesticide_id === p.id)
+    return s ? s.stock_L : (p.stock_L ?? 0)
+  }
+  const threshOf = (p) => {
+    const s = (pesticideStock || []).find(s => s.pesticide_id === p.id)
+    return s ? s.alert_threshold_L : (p.alert_threshold_L ?? 0)
+  }
+
+  const alertItems = (pesticides || []).filter(p => stockOf(p) <= threshOf(p))
+  const hasAlert   = alertItems.length > 0
+
+  // ── 全在庫余裕あり ──
+  if (!hasAlert) {
+    return React.createElement('div', {
+      style:{
+        background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'10px',
+        padding:'12px 18px', marginBottom: _inGrid ? 0 : '20px',
+        display:'flex', alignItems:'center', gap:'12px', flexDirection:'column',
+        justifyContent:'center',
+      }
+    },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px', width:'100%' } },
+        React.createElement('i', { className:'ti ti-circle-check', style:{ fontSize:'22px', color:'#0A6B52', flexShrink:0 } }),
+        React.createElement('div', { style:{ flex:1 } },
+          React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:'#065F46' } }, '農薬在庫'),
+          React.createElement('div', { style:{ fontSize:'12px', color:'#065F46', fontWeight:600 } }, '全て十分あります'),
+          React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginTop:'2px' } }, '発注アラートなし')
+        ),
+        React.createElement('button', {
+          onClick: () => onNavigate('pesticide_master'),
+          style:{
+            fontSize:'11px', color:'#0A6B52', background:'#fff',
+            border:'1px solid #A7F3D0', borderRadius:'7px',
+            padding:'5px 10px', cursor:'pointer', fontWeight:600,
+            whiteSpace:'nowrap', flexShrink:0,
+          }
+        }, '一覧 →')
+      )
+    )
+  }
+
+  // ── 要発注あり ──
+  return React.createElement('div', {
+    style:{
+      background:'#fff', border:'1px solid #FECACA', borderRadius:'10px',
+      marginBottom: _inGrid ? 0 : '20px', overflow:'hidden',
+    }
+  },
+    // ヘッダー
+    React.createElement('div', {
+      style:{
+        background:'#FFF1F2', padding:'10px 18px',
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        borderBottom:'1px solid #FECACA',
+      }
+    },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+        React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'16px', color:'#C2410C' } }),
+        React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color:'#9A3412' } },
+          '要発注 ' + alertItems.length + '品目'
+        )
+      ),
+      React.createElement('button', {
+        onClick: () => onNavigate('pesticide_master'),
+        style:{
+          fontSize:'12px', color:'#C2410C', background:'#fff',
+          border:'1px solid #FECACA', borderRadius:'7px',
+          padding:'5px 14px', cursor:'pointer', fontWeight:600,
+          whiteSpace:'nowrap',
+        }
+      }, '農薬マスタへ →')
+    ),
+    // アラートリスト
+    React.createElement('div', { style:{ padding:'10px 14px', display:'flex', flexDirection:'column', gap:'7px' } },
+      ...alertItems.map(p => {
+        const stock  = stockOf(p)
+        const thresh = threshOf(p)
+        const isNeg  = stock < 0
+        // 残量バー幅: 0〜100%（マイナスは0扱い）
+        const barPct = thresh > 0 ? Math.max(0, Math.min(100, (stock / thresh) * 100)) : 0
+        return React.createElement('div', {
+          key: p.id,
+          style:{
+            display:'flex', alignItems:'center', gap:'14px',
+            padding:'10px 14px', borderRadius:'9px',
+            background: isNeg ? '#FFF1EE' : '#FFFBEB',
+            border:'1px solid ' + (isNeg ? '#FECACA' : '#FDE68A'),
+          }
+        },
+          React.createElement('i', {
+            className:'ti ti-flask',
+            style:{ fontSize:'16px', color: isNeg ? '#C2410C' : '#B45309', flexShrink:0 }
+          }),
+          // 農薬名 + 残量バー
+          React.createElement('div', { style:{ flex:1, minWidth:0 } },
+            React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:'5px' } },
+              p.name
+            ),
+            React.createElement('div', { style:{ background:'#E5E7EB', borderRadius:'4px', height:'5px', overflow:'hidden' } },
+              React.createElement('div', {
+                style:{
+                  height:'100%', borderRadius:'4px',
+                  background: isNeg ? '#DC2626' : '#F59E0B',
+                  width: barPct + '%',
+                  transition:'width .4s ease',
+                }
+              })
+            )
+          ),
+          // 残量数値
+          React.createElement('div', { style:{ textAlign:'right', flexShrink:0 } },
+            React.createElement('div', {
+              style:{ fontSize:'15px', fontWeight:700, color: isNeg ? '#C2410C' : '#B45309', lineHeight:1.2 }
+            }, stock + ' L'),
+            React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF', marginTop:'2px' } },
+              '閾値 ' + thresh + ' L'
+            )
+          )
+        )
+      })
+    )
+  )
+}
+
+// =====================================================
+// 棚卸し入力パネル（農薬マスタページ用）
+// =====================================================
+function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
+  const [inputs, setInputs] = React.useState(() => {
+    const obj = {}
+    pesticides.forEach(p => {
+      const s = pesticideStock.find(s => s.pesticide_id === p.id)
+      obj[p.id] = String(s ? s.stock_L : 0)
+    })
+    return obj
+  })
+  const [saved, setSaved] = React.useState(false)
+
+  const handleSaveAll = () => {
+    Object.entries(inputs).forEach(([id, val]) => {
+      onUpdateStock(Number(id), Number(val))
+    })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const C = { green:'#0A6B52', greenL:'#E8F5F0', red:'#C2410C', redL:'#FFF1EE', border:'#E2E8E2', muted:'#9CA3AF', ink:'#111827', sub:'#4B5563' }
+
+  return React.createElement('div', null,
+    // ヘッダーバナー
+    React.createElement('div', {
+      style:{
+        background:'#F5F3FF', border:'1px solid #DDD6FE', borderRadius:'10px',
+        padding:'14px 18px', marginBottom:'16px',
+        display:'flex', alignItems:'center', gap:'10px'
+      }
+    },
+      React.createElement('i', { className:'ti ti-clipboard-check', style:{ fontSize:'20px', color:'#6D28D9' } }),
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:'#4C1D95' } }, '棚卸し入力'),
+        React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } },
+          '現在の実在庫量を確認して入力してください。「一括保存」で在庫数が更新されます。'
+        )
+      )
+    ),
+    // 農薬ごとの入力行
+    React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'8px', marginBottom:'16px' } },
+      ...pesticides.map(p => {
+        const s = pesticideStock.find(s => s.pesticide_id === p.id)
+        const thresh = s ? s.alert_threshold_L : 0
+        const current = Number(inputs[p.id] ?? 0)
+        const isAlertNow = current <= thresh
+        // 在庫バー: 閾値を100%の基準とし、現在値の位置を可視化（農薬一覧カードと同じ視覚言語）
+        const barRatio = thresh > 0
+          ? Math.max(0, Math.min(100, (current / thresh) * 100))
+          : (current > 0 ? 100 : 0)
+        return React.createElement('div', {
+          key: p.id,
+          style:{
+            display:'flex', flexDirection:'column', gap:'10px',
+            padding:'12px 16px', background:'#fff',
+            border:'1px solid ' + (isAlertNow ? '#FECACA' : C.border),
+            borderRadius:'10px',
+          }
+        },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px' } },
+            React.createElement('div', {
+              style:{
+                width:'36px', height:'36px', borderRadius:'9px', flexShrink:0,
+                background: isAlertNow ? '#FFF1EE' : '#E8F5F0',
+                display:'flex', alignItems:'center', justifyContent:'center'
+              }
+            },
+              React.createElement('i', { className:'ti ti-flask', style:{ fontSize:'17px', color: isAlertNow ? C.red : C.green } })
+            ),
+            React.createElement('div', { style:{ flex:1, minWidth:0 } },
+              React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:C.ink, marginBottom:'2px' } }, p.name),
+              React.createElement('div', { style:{ fontSize:'11px', color:C.muted } }, '発注閾値: ' + thresh + ' L')
+            ),
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', flexShrink:0 } },
+              React.createElement('input', {
+                type:'number', min:'0', step:'0.1',
+                value: inputs[p.id],
+                onChange: e => setInputs(prev => ({ ...prev, [p.id]: e.target.value })),
+                style:{
+                  width:'90px', padding:'7px 10px', borderRadius:'7px',
+                  border:'1.5px solid ' + (isAlertNow ? '#FECACA' : '#D8E4D8'),
+                  fontSize:'14px', fontWeight:700,
+                  color: isAlertNow ? C.red : C.ink,
+                  textAlign:'right', outline:'none', background:'#fff',
+                }
+              }),
+              React.createElement('span', { style:{ fontSize:'12px', color:C.muted, width:'14px' } }, 'L'),
+              isAlertNow && React.createElement('span', {
+                style:{
+                  fontSize:'10px', background:'#FFF1EE', color:C.red,
+                  border:'1px solid #FECACA', borderRadius:'5px',
+                  padding:'2px 7px', fontWeight:700,
+                }
+              }, '要発注')
+            )
+          ),
+          React.createElement('div', { style:{ background:'#EDF2ED', borderRadius:'6px', height:'6px', overflow:'hidden' } },
+            React.createElement('div', {
+              style:{
+                height:'100%', borderRadius:'6px',
+                width: barRatio + '%',
+                background: isAlertNow ? C.red : C.green,
+                transition:'width .25s ease',
+              }
+            })
+          )
+        )
+      })
+    ),
+    // 一括保存ボタン
+    React.createElement('div', { style:{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:'12px' } },
+      saved && React.createElement('span', {
+        style:{ fontSize:'13px', color:C.green, fontWeight:600, display:'flex', alignItems:'center', gap:'5px' }
+      },
+        React.createElement('i', { className:'ti ti-circle-check' }), '保存しました'
+      ),
+      React.createElement('button', {
+        onClick: handleSaveAll,
+        style:{
+          padding:'10px 24px', borderRadius:'8px', border:'none',
+          background:C.green, color:'#fff', fontSize:'13px', fontWeight:700, cursor:'pointer',
+          display:'flex', alignItems:'center', gap:'6px',
+        }
+      },
+        React.createElement('i', { className:'ti ti-device-floppy', style:{ fontSize:'15px' } }),
+        '在庫を一括保存'
+      )
+    )
+  )
+}
+
+// =====================================================
+// 使用履歴パネル（農薬マスタページ用）
+// =====================================================
+// =====================================================
+// 月別使用量 簡易バーチャート（共通部品）
+// 過去6ヶ月分の使用量を月単位の縦バーで表示。
+// 農薬の使用履歴・肥料の使用履歴の両パネルで共用する。
+// =====================================================
+function MonthlyUsageBarChart({ records, unit, color }) {
+  const C = { ink:'#111827', sub:'#4B5563', muted:'#9CA3AF', border:'#E2E8E2' }
+  const barColor = color || '#1D4ED8'
+
+  // 直近6ヶ月分のYM配列（古い→新しい）を生成
+  const now = new Date()
+  const months = []
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    months.push({
+      ym:    d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'),
+      label: (d.getMonth() + 1) + '月',
+    })
+  }
+
+  const totals = months.map(m =>
+    records.filter(r => r.date && r.date.startsWith(m.ym))
+           .reduce((a, r) => a + (Number(r.amount) || 0), 0)
+  )
+  const maxVal = Math.max(1, ...totals)
+
+  return React.createElement('div', { style:{ marginBottom:'20px' } },
+    React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:C.muted, letterSpacing:'.06em', textTransform:'uppercase', marginBottom:'10px' } },
+      '月別使用量（直近6ヶ月）'
+    ),
+    React.createElement('div', {
+      style:{ background:'#fff', border:`1px solid ${C.border}`, borderRadius:'10px', padding:'16px 14px 10px', display:'flex', alignItems:'flex-end', gap:'10px', height:'120px' }
+    },
+      ...months.map((m, i) => {
+        const v = totals[i]
+        const h = Math.round((v / maxVal) * 78)
+        return React.createElement('div', { key:m.ym, style:{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end', height:'100%' } },
+          React.createElement('div', { style:{ fontSize:'10px', fontWeight:700, color: v > 0 ? C.ink : C.muted, marginBottom:'4px' } },
+            v > 0 ? (Math.round(v * 100) / 100) : ''
+          ),
+          React.createElement('div', {
+            style:{
+              width:'100%', maxWidth:'28px', minHeight:'2px',
+              height: (v > 0 ? Math.max(h, 4) : 2) + 'px',
+              background: v > 0 ? barColor : '#EDF2ED',
+              borderRadius:'4px 4px 2px 2px',
+              transition:'height .4s ease',
+            }
+          }),
+          React.createElement('div', { style:{ fontSize:'10px', color:C.sub, fontWeight:600, marginTop:'6px' } }, m.label)
+        )
+      })
+    )
+  )
+}
+
+function PesticideHistoryPanel({ pesticides, records }) {
+  const [selectedId, setSelectedId] = React.useState(
+    pesticides.length > 0 ? pesticides[0].id : null
+  )
+
+  // 今月・先月の判定
+  const now = new Date()
+  const thisYM = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
+  const lastDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const lastYM = lastDate.getFullYear() + '-' + String(lastDate.getMonth() + 1).padStart(2, '0')
+
+  const sprayRecords = records
+    .filter(r => r.work_type === '農薬散布' && r.pesticide_id === selectedId)
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  const totalUsed   = sprayRecords.reduce((a, r) => a + (Number(r.amount) || 0), 0)
+  const thisMonth   = sprayRecords.filter(r => r.date.startsWith(thisYM)).reduce((a, r) => a + (Number(r.amount) || 0), 0)
+  const lastMonth   = sprayRecords.filter(r => r.date.startsWith(lastYM)).reduce((a, r) => a + (Number(r.amount) || 0), 0)
+  const diff        = Math.round((thisMonth - lastMonth) * 100) / 100
+  const diffSign    = diff > 0 ? '+' : ''
+
+  const C = { green:'#0A6B52', blue:'#1D4ED8', blueL:'#EFF6FF', greenL:'#F0FDF4', border:'#E2E8E2', muted:'#9CA3AF', ink:'#111827', sub:'#4B5563' }
+
+  return React.createElement('div', null,
+    // 農薬セレクタ（チップ）— 横スクロール時の見切れ防止フェード付き
+    React.createElement('div', { style:{ position:'relative', marginBottom:'20px' } },
+      React.createElement('div', { style:{ display:'flex', gap:'8px', overflowX:'auto', paddingBottom:'4px' } },
+        ...pesticides.map(p => {
+          const isActiveChip = selectedId === p.id
+          return React.createElement('button', {
+            key: p.id,
+            onClick: () => setSelectedId(p.id),
+            style:{
+              padding:'7px 16px', borderRadius:'20px', flexShrink:0, whiteSpace:'nowrap',
+              border:'1.5px solid ' + (isActiveChip ? C.green : C.border),
+              background: isActiveChip ? C.green : '#fff',
+              color: isActiveChip ? '#fff' : C.sub,
+              fontSize:'12px', fontWeight:600, cursor:'pointer',
+              transition:'all .15s', fontFamily:"'Inter',sans-serif",
+            }
+          }, p.name)
+        })
+      ),
+      // 左フェード
+      React.createElement('div', {
+        style:{
+          position:'absolute', left:0, top:0, bottom:'4px', width:'20px',
+          background:'linear-gradient(90deg, #fff 0%, rgba(255,255,255,0) 100%)',
+          pointerEvents:'none',
+        }
+      }),
+      // 右フェード
+      React.createElement('div', {
+        style:{
+          position:'absolute', right:0, top:0, bottom:'4px', width:'20px',
+          background:'linear-gradient(270deg, #fff 0%, rgba(255,255,255,0) 100%)',
+          pointerEvents:'none',
+        }
+      })
+    ),
+
+    // 月次サマリーカード（3枚）
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'20px' } },
+      // 総使用回数
+      React.createElement('div', { style:{ background:C.greenL, border:'1px solid #A7F3D0', borderRadius:'10px', padding:'14px 16px' } },
+        React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('i', { className:'ti ti-repeat', style:{ fontSize:'12px' } }), '総使用回数'
+        ),
+        React.createElement('div', { style:{ fontSize:'24px', fontWeight:700, color:C.green } }, sprayRecords.length + ' 回')
+      ),
+      // 今月使用量
+      React.createElement('div', { style:{ background:C.blueL, border:'1px solid #BFDBFE', borderRadius:'10px', padding:'14px 16px' } },
+        React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('i', { className:'ti ti-calendar-month', style:{ fontSize:'12px' } }), '今月使用量'
+        ),
+        React.createElement('div', { style:{ fontSize:'24px', fontWeight:700, color:C.blue } },
+          Math.round(thisMonth * 100) / 100 + ' L'
+        )
+      ),
+      // 先月比
+      React.createElement('div', { style:{ background: diff > 0 ? '#FFF1EE' : diff < 0 ? C.greenL : '#F9FAFB', border:'1px solid ' + (diff > 0 ? '#FECACA' : diff < 0 ? '#A7F3D0' : C.border), borderRadius:'10px', padding:'14px 16px' } },
+        React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('i', { className:'ti ti-trending-up', style:{ fontSize:'12px' } }), '先月比'
+        ),
+        React.createElement('div', { style:{ fontSize:'24px', fontWeight:700, color: diff > 0 ? '#C2410C' : diff < 0 ? C.green : C.muted } },
+          lastMonth === 0 && thisMonth === 0 ? '—' : diffSign + diff + ' L'
+        )
+      )
+    ),
+
+    // 月別使用量バーチャート
+    React.createElement(MonthlyUsageBarChart, { records: sprayRecords, unit:'L', color: C.blue }),
+
+    // 時系列リスト
+    React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:C.muted, letterSpacing:'.06em', textTransform:'uppercase', marginBottom:'10px' } }, '使用履歴'),
+    sprayRecords.length === 0
+      ? React.createElement('div', {
+          style:{ padding:'40px 0', textAlign:'center', color:C.muted, fontSize:'13px', background:'#F9FAFB', borderRadius:'10px', border:'1px dashed ' + C.border }
+        },
+          React.createElement('i', { className:'ti ti-flask-off', style:{ fontSize:'28px', display:'block', marginBottom:'8px', color:C.border } }),
+          '散布記録がありません'
+        )
+      : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'6px' } },
+          ...sprayRecords.map((r) => React.createElement('div', {
+            key: r.id,
+            style:{
+              display:'flex', alignItems:'center', gap:'12px',
+              padding:'10px 14px', background:'#fff',
+              border:'1px solid ' + C.border, borderRadius:'9px',
+            }
+          },
+            React.createElement('div', {
+              style:{
+                width:'8px', height:'8px', borderRadius:'50%',
+                background:C.green, flexShrink:0
+              }
+            }),
+            React.createElement('div', { style:{ flex:1 } },
+              React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:C.ink } }, r.date),
+              React.createElement('div', { style:{ fontSize:'11px', color:C.muted, marginTop:'2px', display:'flex', gap:'10px' } },
+                React.createElement('span', null, '👤 ' + r.worker),
+                r.weather && React.createElement('span', null, '☁ ' + r.weather)
+              )
+            ),
+            React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:C.blue, flexShrink:0 } },
+              (Number(r.amount) || 0) + ' L'
+            )
+          ))
+        )
+  )
+}
+
+// =====================================================
+// 在庫アラートウィジェット（ダッシュボード用）
+// 発注アラート閾値以下の農薬を一覧表示
+// =====================================================
+function PesticideStockWidget({ pesticides, pesticideStock, onNavigate }) {
+  const stockOf  = (p) => {
+    const s = pesticideStock.find(s => s.pesticide_id === p.id)
+    return s ? s.stock_L : (p.stock_L ?? 0)
+  }
+  const threshOf = (p) => {
+    const s = pesticideStock.find(s => s.pesticide_id === p.id)
+    return s ? s.alert_threshold_L : (p.alert_threshold_L ?? 0)
+  }
+
+  const alertItems = pesticides.filter(p => stockOf(p) <= threshOf(p))
+  const hasAlert   = alertItems.length > 0
+  // 緊急度が高い（閾値からの不足量が大きい）順にソート
+  const sortedAlertItems = [...alertItems].sort((a, b) => (stockOf(a) - threshOf(a)) - (stockOf(b) - threshOf(b)))
+  const PREVIEW_COUNT = 3
+  const [showAll, setShowAll] = React.useState(false)
+  const visibleItems = showAll ? sortedAlertItems : sortedAlertItems.slice(0, PREVIEW_COUNT)
+  const hiddenCount  = sortedAlertItems.length - visibleItems.length
+
+  if (!hasAlert) {
+    return React.createElement('div', {
+      style:{
+        background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'10px',
+        padding:'12px 16px', marginBottom:'20px',
+        display:'flex', alignItems:'center', gap:'12px'
+      }
+    },
+      React.createElement('i', { className:'ti ti-circle-check', style:{ fontSize:'20px', color:'#0A6B52' } }),
+      React.createElement('div', { style:{ flex:1 } },
+        React.createElement('div', { style:{ fontSize:'14px', fontWeight:600, color:'#065F46' } }, '農薬在庫は全て十分あります'),
+        React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } },
+          '発注アラート閾値を超えている農薬はありません'
+        )
+      ),
+      React.createElement('button', {
+        onClick: () => onNavigate('pesticide_master'),
+        style:{
+          fontSize:'12px', color:'#0A6B52', background:'#fff',
+          border:'1px solid #A7F3D0', borderRadius:'6px',
+          padding:'5px 12px', cursor:'pointer', fontWeight:600,
+          whiteSpace:'nowrap',
+        }
+      }, '在庫一覧 →')
+    )
+  }
+
+  return React.createElement('div', {
+    style:{
+      background:'#fff', border:'1px solid #FECACA', borderRadius:'10px',
+      marginBottom:'20px', overflow:'hidden'
+    }
+  },
+    // ヘッダー
+    React.createElement('div', {
+      style:{
+        background:'#FFF1F2', padding:'10px 16px',
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        borderBottom:'1px solid #FECACA'
+      }
+    },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+        React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'16px', color:'#C2410C' } }),
+        React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color:'#9A3412' } },
+          '要発注 ' + alertItems.length + '品目'
+        )
+      ),
+      React.createElement('button', {
+        onClick: () => onNavigate('pesticide_master'),
+        style:{
+          fontSize:'12px', color:'#C2410C', background:'#fff',
+          border:'1px solid #FECACA', borderRadius:'6px',
+          padding:'4px 12px', cursor:'pointer', fontWeight:600,
+        }
+      }, '農薬マスタへ →')
+    ),
+    // アラートリスト
+    React.createElement('div', { style:{ padding:'8px 12px', display:'flex', flexDirection:'column', gap:'6px' } },
+      ...visibleItems.map(p => {
+        const stock  = stockOf(p)
+        const thresh = threshOf(p)
+        const isNeg  = stock < 0
+        return React.createElement('div', {
+          key: p.id,
+          style:{
+            display:'flex', alignItems:'center', gap:'12px',
+            padding:'8px 10px', borderRadius:'8px',
+            background: isNeg ? '#FFF1EE' : '#FFFBEB',
+            border:'1px solid ' + (isNeg ? '#FECACA' : '#FDE68A'),
+          }
+        },
+          React.createElement('i', { className:'ti ti-flask', style:{ fontSize:'16px', color: isNeg ? '#C2410C' : '#B45309', flexShrink:0 } }),
+          React.createElement('div', { style:{ flex:1, minWidth:0 } },
+            React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, p.name),
+            // 残量バー
+            React.createElement('div', { style:{ marginTop:'4px', background:'#E5E7EB', borderRadius:'4px', height:'5px', overflow:'hidden' } },
+              React.createElement('div', {
+                style:{
+                  height:'100%', borderRadius:'4px',
+                  background: isNeg ? '#DC2626' : '#F59E0B',
+                  width: Math.max(0, Math.min(100, thresh > 0 ? (stock / thresh) * 100 : 0)) + '%',
+                  transition:'width .4s',
+                }
+              })
+            )
+          ),
+          React.createElement('div', { style:{ textAlign:'right', flexShrink:0 } },
+            React.createElement('div', {
+              style:{
+                fontSize:'14px', fontWeight:700,
+                color: isNeg ? '#C2410C' : '#B45309',
+              }
+            }, stock + ' L'),
+            React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF' } }, '閾値 ' + thresh + ' L')
+          )
+        )
+      }),
+      // 「他N品目を表示／閉じる」トグル（プレビュー件数を超える場合のみ表示）
+      sortedAlertItems.length > PREVIEW_COUNT && React.createElement('button', {
+        onClick: () => setShowAll(s => !s),
+        style:{
+          fontSize:'12px', color:'#C2410C', background:'none',
+          border:'none', borderTop:'1px solid #FEE2E2', marginTop:'2px',
+          padding:'8px 4px 2px', cursor:'pointer', fontWeight:600,
+          display:'flex', alignItems:'center', justifyContent:'center', gap:'4px',
+        }
+      },
+        showAll ? '閉じる' : `他${hiddenCount}品目を表示`,
+        React.createElement('i', { className: showAll ? 'ti ti-chevron-up' : 'ti ti-chevron-down', style:{ fontSize:'12px' } })
+      )
+    )
+  )
+}
+
+// =====================================================
+// 【肥料 発注アラート Step2-1】肥料版 在庫アラートウィジェット
+// PesticideStockWidget をコピーし、pesticide→fertilizer / stock_L→stock_kg / L→kg に置換
+// =====================================================
+function FertilizerStockWidget({ fertilizers, fertilizerStock, onNavigate, _inGrid }) {
+  const stockOf  = (f) => {
+    const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
+    return s ? s.stock_kg : (f.stock_kg ?? 0)
+  }
+  const threshOf = (f) => {
+    const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
+    return s ? s.alert_threshold_kg : (f.alert_threshold_kg ?? 0)
+  }
+
+  const alertItems = fertilizers.filter(f => stockOf(f) <= threshOf(f))
+  const hasAlert   = alertItems.length > 0
+  // 緊急度が高い（閾値からの不足量が大きい）順にソート
+  const sortedAlertItems = [...alertItems].sort((a, b) => (stockOf(a) - threshOf(a)) - (stockOf(b) - threshOf(b)))
+  const PREVIEW_COUNT = 3
+  const [showAll, setShowAll] = React.useState(false)
+  const visibleItems = showAll ? sortedAlertItems : sortedAlertItems.slice(0, PREVIEW_COUNT)
+  const hiddenCount  = sortedAlertItems.length - visibleItems.length
+
+  if (!hasAlert) {
+    return React.createElement('div', {
+      style:{
+        background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'10px',
+        padding:'12px 16px', marginBottom: _inGrid ? 0 : '20px',
+        display:'flex', alignItems:'center', gap:'12px', flexDirection:'column',
+        justifyContent:'center',
+      }
+    },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px', width:'100%' } },
+        React.createElement('i', { className:'ti ti-circle-check', style:{ fontSize:'20px', color:'#0A6B52', flexShrink:0 } }),
+        React.createElement('div', { style:{ flex:1 } },
+          React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:'#065F46' } }, '肥料在庫'),
+          React.createElement('div', { style:{ fontSize:'12px', color:'#065F46', fontWeight:600 } }, '全て十分あります'),
+          React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginTop:'2px' } }, '発注アラートなし')
+        ),
+        React.createElement('button', {
+          onClick: () => onNavigate('fertilizer_master'),
+          style:{
+            fontSize:'11px', color:'#0A6B52', background:'#fff',
+            border:'1px solid #A7F3D0', borderRadius:'6px',
+            padding:'5px 10px', cursor:'pointer', fontWeight:600,
+            whiteSpace:'nowrap', flexShrink:0,
+          }
+        }, '一覧 →')
+      )
+    )
+  }
+
+  return React.createElement('div', {
+    style:{
+      background:'#fff', border:'1px solid #FECACA', borderRadius:'10px',
+      marginBottom: _inGrid ? 0 : '20px', overflow:'hidden'
+    }
+  },
+    // ヘッダー
+    React.createElement('div', {
+      style:{
+        background:'#FFF1F2', padding:'10px 16px',
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        borderBottom:'1px solid #FECACA'
+      }
+    },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+        React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'16px', color:'#C2410C' } }),
+        React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color:'#9A3412' } },
+          '要発注 ' + alertItems.length + '品目'
+        )
+      ),
+      React.createElement('button', {
+        onClick: () => onNavigate('fertilizer_master'),
+        style:{
+          fontSize:'12px', color:'#C2410C', background:'#fff',
+          border:'1px solid #FECACA', borderRadius:'6px',
+          padding:'4px 12px', cursor:'pointer', fontWeight:600,
+        }
+      }, '肥料マスタへ →')
+    ),
+    // アラートリスト
+    React.createElement('div', { style:{ padding:'8px 12px', display:'flex', flexDirection:'column', gap:'6px' } },
+      ...visibleItems.map(f => {
+        const stock  = stockOf(f)
+        const thresh = threshOf(f)
+        const isNeg  = stock < 0
+        return React.createElement('div', {
+          key: f.id,
+          style:{
+            display:'flex', alignItems:'center', gap:'12px',
+            padding:'8px 10px', borderRadius:'8px',
+            background: isNeg ? '#FFF1EE' : '#FFFBEB',
+            border:'1px solid ' + (isNeg ? '#FECACA' : '#FDE68A'),
+          }
+        },
+          React.createElement('i', { className:'ti ti-leaf', style:{ fontSize:'16px', color: isNeg ? '#C2410C' : '#B45309', flexShrink:0 } }),
+          React.createElement('div', { style:{ flex:1, minWidth:0 } },
+            React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, f.name),
+            // 残量バー
+            React.createElement('div', { style:{ marginTop:'4px', background:'#E5E7EB', borderRadius:'4px', height:'5px', overflow:'hidden' } },
+              React.createElement('div', {
+                style:{
+                  height:'100%', borderRadius:'4px',
+                  background: isNeg ? '#DC2626' : '#F59E0B',
+                  width: Math.max(0, Math.min(100, thresh > 0 ? (stock / thresh) * 100 : 0)) + '%',
+                  transition:'width .4s',
+                }
+              })
+            )
+          ),
+          React.createElement('div', { style:{ textAlign:'right', flexShrink:0 } },
+            React.createElement('div', {
+              style:{
+                fontSize:'14px', fontWeight:700,
+                color: isNeg ? '#C2410C' : '#B45309',
+              }
+            }, stock + ' kg'),
+            React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF' } }, '閾値 ' + thresh + ' kg')
+          )
+        )
+      }),
+      // 「他N品目を表示／閉じる」トグル（プレビュー件数を超える場合のみ表示）
+      sortedAlertItems.length > PREVIEW_COUNT && React.createElement('button', {
+        onClick: () => setShowAll(s => !s),
+        style:{
+          fontSize:'12px', color:'#C2410C', background:'none',
+          border:'none', borderTop:'1px solid #FEE2E2', marginTop:'2px',
+          padding:'8px 4px 2px', cursor:'pointer', fontWeight:600,
+          display:'flex', alignItems:'center', justifyContent:'center', gap:'4px',
+        }
+      },
+        showAll ? '閉じる' : `他${hiddenCount}品目を表示`,
+        React.createElement('i', { className: showAll ? 'ti ti-chevron-up' : 'ti ti-chevron-down', style:{ fontSize:'12px' } })
+      )
+    )
+  )
+}
+
+// GAP進捗バー（ダッシュボード用）
+function GapProgressBarDashboard({ pct, _inGrid }) {
+  const color  = pct >= 80 ? CONFIG.COLOR.primary : pct >= 50 ? CONFIG.COLOR.amber : '#DC2626'
+  const bg     = pct >= 80 ? '#ECFDF5' : pct >= 50 ? '#FFFBEB' : '#FFF1F2'
+  const border = pct >= 80 ? '#A7F3D0' : pct >= 50 ? '#FDE68A' : '#FECACA'
+  const msg    = pct >= 80 ? '✓ 申請準備ができています' : pct >= 50 ? '引き続き項目をクリアしましょう' : '未完了の項目が多くあります'
+  return React.createElement('div', {
+    style:{ background:bg, border:'1px solid '+border, borderRadius:'12px', padding:'14px 18px', marginBottom: _inGrid ? 0 : '20px' }
+  },
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', fontSize:'14px', marginBottom:'8px' } },
+      React.createElement('span', { style:{ color:'#374151', fontWeight:500 } }, '📋 GAP認証 進捗'),
+      React.createElement('span', { style:{ color, fontWeight:700, fontSize:'18px' } }, pct + '%')
+    ),
+    React.createElement('div', { style:{ background:'#F4F6F9', borderRadius:'6px', height:'8px', overflow:'hidden' } },
+      React.createElement('div', { style:{ height:'100%', borderRadius:'6px', background:color, width:pct+'%', transition:'width .8s ease' } })
+    ),
+    React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'6px' } }, msg)
+  )
+}
+// 収穫前日数アラートカード（農薬残留リスク警告）
+function HarvestRiskAlertCard({ risk }) {
+  const isUrgent = risk.daysToHarvest <= 7
+  return React.createElement('div', {
+    style:{
+      background: isUrgent ? '#FFF1F2' : '#FFFBEB',
+      border: '1px solid ' + (isUrgent ? '#FECACA' : '#FDE68A'),
+      borderRadius:'8px', padding:'12px 16px', marginBottom:'8px',
+      display:'flex', alignItems:'center', gap:'12px'
+    }
+  },
+    React.createElement('span', { style:{ fontSize:'18px' } }, isUrgent ? '🚨' : '⚠️'),
+    React.createElement('div', { style:{ flex:1 } },
+      React.createElement('div', { style:{ fontSize:'14px', color: isUrgent ? '#B91C1C' : '#92400E', fontWeight:500 } },
+        risk.fieldName + '（' + risk.cropName + '）の収穫まで' + risk.daysToHarvest + '日'
+      ),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } },
+        risk.pesticideName + 'の残留期間があと' + risk.daysRemaining + '日あります'
+        + (risk.harvestableDateLabel ? '（' + risk.harvestableDateLabel + '〜収穫可能）' : '')
+      )
+    ),
+    React.createElement('span', {
+      className:'badge ' + (isUrgent ? 'badge-red' : 'badge-amber')
+    }, '残留' + risk.daysRemaining + '日')
+  )
+}
+
+// 収穫前日数アラート: 0件のときに表示するグリーンバッジ
+function HarvestRiskClearBadge() {
+  return React.createElement('div', {
+    style:{
+      background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'8px',
+      padding:'12px 16px', marginBottom:'8px',
+      display:'flex', alignItems:'center', gap:'12px'
+    }
+  },
+    React.createElement('span', { style:{ fontSize:'18px' } }, '🌱'),
+    React.createElement('div', { style:{ flex:1 } },
+      React.createElement('div', { style:{ fontSize:'14px', color:'#065F46', fontWeight:500 } }, '今週の農薬リスクはありません'),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } }, '近日収穫予定の圃場に残留農薬の懸念はありません')
+    )
+  )
+}
+
+// 来年の作付提案カード（C-5: 作付計画 → 来年同時期の植え付け候補を提示）
+// 「記録→来年計画」のバリューを可視化するためのダッシュボード用カード
+function CropSuggestionCard({ fields, cropPlans }) {
+  const nextMonth = ((new Date().getMonth() + 1) % 12) + 1 // 1-12
+  const candidates = (cropPlans || []).filter(p => p.start_month === nextMonth)
+
+  return React.createElement('div', {
+    style:{ background:'#F5F3FF', border:'1px solid #DDD6FE', borderRadius:'10px', padding:'16px', marginBottom:'12px' }
+  },
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'8px' } },
+      React.createElement('span', { style:{ fontSize:'18px' } }, '🌱'),
+      React.createElement('div', { style:{ fontSize:'14px', fontWeight:600, color:'#5B21B6' } },
+        '来年の' + nextMonth + '月、何を植える？'
+      )
+    ),
+    candidates.length === 0
+      ? React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } },
+          '来月の作付記録はまだありません。記録が増えるほど来年の計画づくりが楽になります。'
+        )
+      : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'6px' } },
+          ...candidates.map(c => {
+            const field = fields.find(f => f.id === c.field_id)
+            return React.createElement('div', {
+              key: c.id,
+              style:{ display:'flex', alignItems:'center', gap:'8px', background:'#FFFFFF', borderRadius:'6px', padding:'8px 10px', fontSize:'12px' }
+            },
+              React.createElement('span', { style:{ width:'8px', height:'8px', borderRadius:'50%', background:c.color, flexShrink:0 } }),
+              React.createElement('span', { style:{ fontWeight:600, color:'#1A1F2E' } }, field ? field.name : ('圃場'+c.field_id)),
+              React.createElement('span', { style:{ color:'#6B7280' } }, '→ ' + c.crop + (c.note ? '（' + c.note + '）' : '')),
+              React.createElement('span', { style:{ marginLeft:'auto', color:'#6B7280' } }, c.start_month + '〜' + c.end_month + '月')
+            )
+          })
+        ),
+    React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', marginTop:'8px' } },
+      '※ 今年の作付計画記録をもとに表示しています。記録が溜まるほど来年の提案が充実します。'
+    )
+  )
+}
+
+// 圃場サマリーカード
+function FieldCard({ field, records }) {
+  const fieldRecords = records.filter(r => r.field_id === field.id)
+  const lastRecord   = fieldRecords.length > 0 ? fieldRecords[fieldRecords.length - 1] : null
+  const statusClass  = field.status === '栽培中' ? 'badge-green' : field.status === '休閑' ? 'badge-gray' : field.status === '収穫期' ? 'badge-amber' : 'badge-blue'
+  // 【実装手順書 Step0】正式名称に加えて、紙日報での元表記（あれば）を併記する
+  const [overrides] = useFieldNoOverrides()
+  const rawLabels = getFieldRawLabels(field, overrides).filter(r => r !== field.field_no)
+  return React.createElement('div', {
+    style:{ background:'#FFFFFF', borderRadius:'10px', padding:'16px', position:'relative', overflow:'hidden', boxShadow:'none', border:'1px solid #D8E0DA' }
+  },
+    React.createElement('div', { style:{ position:'absolute', top:0, right:0, width:60, height:60, borderRadius:'0 0 0 60px', background:field.color+'12' } }),
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'12px' } },
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'14px', fontWeight:600, color:'#1A1F2E' } }, field.name),
+        React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } }, field.crop),
+        (field.field_no || rawLabels.length > 0) && React.createElement('div', {
+          style:{ fontSize:'10px', color:'#94A3B8', marginTop:'3px' }
+        },
+          field.field_no ? `圃場番号: ${field.field_no}` : '',
+          rawLabels.length > 0 ? `　元表記: ${rawLabels.join('/')}` : ''
+        )
+      ),
+      React.createElement('span', { className:'badge '+statusClass }, field.status)
+    ),
+    React.createElement('div', { style:{ display:'flex', gap:'16px', marginBottom:'12px' } },
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'18px', fontWeight:600, color:field.color } }, field.area_are + 'a'),
+        React.createElement('div', { style:{ fontSize:'10px', color:'#6B7280' } }, '面積')
+      ),
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'18px', fontWeight:600, color:'#6B7280' } }, fieldRecords.length),
+        React.createElement('div', { style:{ fontSize:'10px', color:'#6B7280' } }, '記録数')
+      )
+    ),
+    React.createElement('div', { style:{ borderTop:'1px solid #F1F5F9', paddingTop:'10px', fontSize:'12px', color:'#6B7280' } },
+      lastRecord
+        ? '最終作業: ' + lastRecord.date + ' — ' + lastRecord.work_type
+        : '記録なし'
+    )
+  )
+}
+
+// =====================================================
+// 圃場サマリー — コンパクトカード（ダッシュボード用タブUI向け）
+// FieldCard より情報を絞ってサイズを小さくしたバージョン
+// =====================================================
+function FieldCardCompact({ field, records }) {
+  const fieldRecords = records.filter(r => r.field_id === field.id)
+  const lastRecord   = fieldRecords.length > 0 ? fieldRecords[fieldRecords.length - 1] : null
+  const statusColor  = field.status === '栽培中' ? '#0A6B52' : field.status === '収穫期' ? '#B45309' : '#6B7280'
+  const statusBg     = field.status === '栽培中' ? '#ECFDF5' : field.status === '収穫期' ? '#FFFBEB' : '#F1F5F9'
+  const statusBorder = field.status === '栽培中' ? '#A7F3D0' : field.status === '収穫期' ? '#FDE68A' : '#CBD5E1'
+  // 【実装手順書 Step0】元表記（紙日報の書き方）があれば小さく併記する
+  const [overrides] = useFieldNoOverrides()
+  const rawLabels = getFieldRawLabels(field, overrides).filter(r => r !== field.field_no)
+  return React.createElement('div', {
+    style:{
+      background:'#FFFFFF', borderRadius:'8px', padding:'10px 12px',
+      border:'1px solid #DDE8DE', boxShadow:'none',
+    }
+  },
+    // 圃場名 + ステータスバッジ
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'6px' } },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px', minWidth:0 } },
+        React.createElement('span', { style:{ width:'7px', height:'7px', borderRadius:'50%', background:field.color, flexShrink:0 } }),
+        React.createElement('span', { style:{ fontSize:'12px', fontWeight:700, color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, field.name),
+      ),
+      React.createElement('span', {
+        style:{
+          fontSize:'10px', fontWeight:600, padding:'2px 7px', borderRadius:'20px',
+          background: statusBg, color: statusColor, border:'1px solid '+statusBorder,
+          flexShrink:0, marginLeft:'4px',
+        }
+      }, field.status)
+    ),
+    // 作物 + 面積
+    React.createElement('div', { style:{ display:'flex', alignItems:'baseline', gap:'8px', marginBottom:'5px', flexWrap:'wrap' } },
+      React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color:field.color } }, field.area_are + 'a'),
+      React.createElement('span', { style:{ fontSize:'11px', color:'#6B7280' } }, field.crop),
+      rawLabels.length > 0 && React.createElement('span', { style:{ fontSize:'10px', color:'#94A3B8' } },
+        '元表記: ' + rawLabels.join('/')
+      )
+    ),
+    // 最終作業
+    React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', borderTop:'1px solid #F1F5F9', paddingTop:'5px' } },
+      lastRecord
+        ? lastRecord.work_type + ' · ' + lastRecord.date.slice(5)  // MM-DD のみ
+        : '記録なし'
+    )
+  )
+}
+
+// =====================================================
+// 圃場サマリー タブパネル
+// ステータス（全て / 栽培中 / 収穫期 / 休閑）でフィルタ
+// 3列グリッド、最大表示数を超えたら「+N圃場」フッターを表示
+// =====================================================
+const FIELD_STATUS_TABS = [
+  { key: 'all',    label: '全て'  },
+  { key: '栽培中', label: '栽培中' },
+  { key: '収穫期', label: '収穫期' },
+  { key: '休閑',   label: '休閑'  },
+]
+const SUMMARY_MAX_VISIBLE = 9  // 3列 × 3行
+
+function FieldSummaryTabPanel({ fields, records }) {
+  const [activeTab, setActiveTab] = React.useState('all')
+  const [showAll,   setShowAll]   = React.useState(false)
+
+  // タブ切り替え時はリセット
+  const handleTab = (key) => { setActiveTab(key); setShowAll(false) }
+
+  const filtered = activeTab === 'all' ? fields : fields.filter(f => f.status === activeTab)
+  const visible  = showAll ? filtered : filtered.slice(0, SUMMARY_MAX_VISIBLE)
+  const overflow = filtered.length - SUMMARY_MAX_VISIBLE
+
+  // タブ件数バッジ
+  const countOf = (key) => key === 'all' ? fields.length : fields.filter(f => f.status === key).length
+
+  // タブのスタイル生成
+  const tabStyle = (key) => {
+    const isActive = activeTab === key
+    const colorMap = {
+      '栽培中': { bg:'#ECFDF5', color:'#065F46', border:'#A7F3D0', activeBg:'#0A6B52', activeColor:'#fff' },
+      '収穫期': { bg:'#FFFBEB', color:'#78350F', border:'#FDE68A', activeBg:'#B45309', activeColor:'#fff' },
+      '休閑':   { bg:'#F1F5F9', color:'#475569', border:'#CBD5E1', activeBg:'#475569', activeColor:'#fff' },
+      'all':    { bg:'#F0F4F1', color:'#374151', border:'#DDE8DE', activeBg:'#0A6B52', activeColor:'#fff' },
+    }
+    const c = colorMap[key] || colorMap['all']
+    return {
+      padding:'4px 11px', borderRadius:'20px', fontSize:'11px', fontWeight:600,
+      cursor:'pointer', border:'1px solid', transition:'all .12s',
+      background: isActive ? c.activeBg : c.bg,
+      color:       isActive ? c.activeColor : c.color,
+      borderColor: isActive ? c.activeBg : c.border,
+    }
+  }
+
+  return React.createElement('div', {
+    style:{ background:'#FFFFFF', border:'1px solid #DDE8DE', borderRadius:'10px', overflow:'hidden' }
+  },
+    // ヘッダー: タイトル + タブ
+    React.createElement('div', {
+      style:{ padding:'12px 14px', borderBottom:'1px solid #EDF2ED', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'8px' }
+    },
+      React.createElement('span', { style:{ fontSize:'11px', fontWeight:700, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'.06em' } },
+        '圃場サマリー'
+      ),
+      React.createElement('div', { style:{ display:'flex', gap:'4px', flexWrap:'wrap' } },
+        ...FIELD_STATUS_TABS.map(tab =>
+          React.createElement('button', {
+            key: tab.key,
+            onClick: () => handleTab(tab.key),
+            style: tabStyle(tab.key),
+          },
+            tab.label,
+            React.createElement('span', { style:{ marginLeft:'4px', opacity:.7, fontSize:'10px' } }, countOf(tab.key))
+          )
+        )
+      )
+    ),
+
+    // グリッド
+    React.createElement('div', {
+      style:{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'8px', padding:'12px 14px' }
+    },
+      filtered.length === 0
+        ? React.createElement('div', {
+            style:{ gridColumn:'1 / -1', padding:'20px 0', textAlign:'center', fontSize:'13px', color:'#94A3B8' }
+          }, 'このステータスの圃場はありません')
+        : visible.map(f => React.createElement(FieldCardCompact, { key:f.id, field:f, records }))
+    ),
+
+    // フッター: +N件 / 閉じる
+    !showAll && overflow > 0 && React.createElement('button', {
+      onClick: () => setShowAll(true),
+      style:{
+        width:'100%', padding:'9px', background:'#F8FAF8',
+        border:'none', borderTop:'1px solid #EDF2ED',
+        fontSize:'11px', color:'#0A6B52', fontWeight:600,
+        cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px',
+      }
+    },
+      React.createElement('i', { className:'ti ti-chevron-down', style:{ fontSize:'13px' } }),
+      '+ ' + overflow + '圃場をすべて表示'
+    ),
+    showAll && filtered.length > SUMMARY_MAX_VISIBLE && React.createElement('button', {
+      onClick: () => setShowAll(false),
+      style:{
+        width:'100%', padding:'9px', background:'#F8FAF8',
+        border:'none', borderTop:'1px solid #EDF2ED',
+        fontSize:'11px', color:'#64748B', fontWeight:600,
+        cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px',
+      }
+    },
+      React.createElement('i', { className:'ti ti-chevron-up', style:{ fontSize:'13px' } }),
+      '折りたたむ'
+    )
+  )
+}
+
+// 記録ログ行
+function RecordLogRow({ record, fields }) {
+  const field = fields.find(f => f.id === record.field_id)
+  const cfg = WORK_ICON_MAP[record.work_type] || WORK_ICON_MAP['その他']
+  return React.createElement('div', {
+    style:{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 0', borderBottom:'1px solid #F1F5F9' }
+  },
+    React.createElement('div', {
+      style:{ width:32, height:32, borderRadius:'50%', background:cfg.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }
+    },
+      React.createElement('i', { className:'ti ti-'+cfg.icon, 'aria-hidden':'true', style:{ fontSize:'16px', color:'#FFFFFF' } })
+    ),
+    React.createElement('div', { style:{ flex:1, minWidth:0 } },
+      React.createElement('div', { style:{ fontSize:'14px', color:'#374151', fontWeight:600 } }, record.work_type + (field ? ' — ' + field.name : '')),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } }, record.date + (record.worker ? ' · ' + record.worker : ''))
+    ),
+    field && React.createElement('div', { style:{ width:8, height:8, borderRadius:'50%', background:field.color, flexShrink:0 } })
+  )
+}
+
+// =====================================================
+// 最近の作業記録パネル（折りたたみ対応）
+// ダッシュボード「今日の作業配置」右側に並べる
+// =====================================================
+function RecentRecordsPanel({ records, fields, onSelectRecord }) {
+  const MAX_VISIBLE = 5
+  const [open, setOpen] = React.useState(true)
+  const [showAll, setShowAll] = React.useState(false)
+
+  const recent = [...records].reverse().slice(0, 7)
+  const displayed = showAll ? recent : recent.slice(0, MAX_VISIBLE)
+  const hasMore = recent.length > MAX_VISIBLE
+
+  return React.createElement('div', {
+    className: 'card',
+    style: {
+      padding: '0', overflow: 'hidden',
+      width: '300px', flexShrink: 0,
+      transition: 'all .2s',
+    }
+  },
+    // ── ヘッダー（クリックで折りたたみ） ──
+    React.createElement('div', {
+      onClick: () => setOpen(o => !o),
+      style: {
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '14px 16px 10px',
+        borderBottom: open ? '1px solid #E8EEE8' : 'none',
+        background: '#F8FAF8',
+        cursor: 'pointer',
+        userSelect: 'none',
+      }
+    },
+      React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '7px' } },
+        React.createElement('span', { style: { fontSize: '15px' } }, '📝'),
+        React.createElement('span', { style: { fontSize: '13px', fontWeight: 700, color: '#111827' } }, '最近の作業記録'),
+        React.createElement('span', {
+          style: {
+            fontSize: '10px', fontWeight: 600, padding: '1px 7px', borderRadius: '20px',
+            background: '#E0F2FE', color: '#0369A1', border: '1px solid #BAE6FD'
+          }
+        }, recent.length + '件')
+      ),
+      React.createElement('div', {
+        style: {
+          fontSize: '11px', color: '#94A3B8', fontWeight: 700,
+          transition: 'transform .22s cubic-bezier(.4,0,.2,1)',
+          transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+          lineHeight: 1,
+        }
+      }, '▼')
+    ),
+
+    // ── 本体（なめらかな折りたたみ） ──
+    React.createElement('div', { className: 'smooth-collapse-wrap' + (open ? ' open' : '') },
+      React.createElement('div', { className: 'smooth-collapse-inner' },
+      recent.length === 0
+        ? React.createElement('div', {
+            style: { padding: '20px 16px', fontSize: '13px', color: '#9CA3AF', textAlign: 'center' }
+          }, '作業記録がありません')
+        : React.createElement('div', { style: { padding: '4px 0' } },
+            displayed.map((r, idx) => {
+              const field = fields.find(f => f.id === r.field_id)
+              const cfg = WORK_ICON_MAP[r.work_type] || WORK_ICON_MAP['その他']
+              const isLast = idx === displayed.length - 1
+              return React.createElement('div', {
+                key: r.id,
+                onClick: () => onSelectRecord && onSelectRecord(r),
+                style: {
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                  padding: '9px 16px',
+                  borderBottom: isLast ? 'none' : '1px solid #F1F5F9',
+                  cursor: 'pointer',
+                  transition: 'background .1s',
+                },
+                onMouseEnter: e => e.currentTarget.style.background = '#F8FAF8',
+                onMouseLeave: e => e.currentTarget.style.background = 'transparent',
+              },
+                React.createElement('div', {
+                  style: {
+                    width: 28, height: 28, borderRadius: '50%',
+                    background: cfg.color,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                  }
+                },
+                  React.createElement('i', { className: 'ti ti-' + cfg.icon, style: { fontSize: '13px', color: '#fff' } })
+                ),
+                React.createElement('div', { style: { flex: 1, minWidth: 0 } },
+                  React.createElement('div', {
+                    style: { fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }
+                  }, r.work_type + (field ? ' — ' + field.name : '')),
+                  React.createElement('div', { style: { fontSize: '11px', color: '#94A3B8', marginTop: '1px' } },
+                    r.date + (r.worker ? ' · ' + r.worker : '')
+                  )
+                ),
+                field && React.createElement('div', {
+                  style: { width: 7, height: 7, borderRadius: '50%', background: field.color || '#0A6B52', flexShrink: 0 }
+                })
+              )
+            }),
+
+            // 「もっと見る / 閉じる」トグル
+            hasMore && React.createElement('div', {
+              onClick: () => setShowAll(s => !s),
+              style: {
+                padding: '9px 16px', borderTop: '1px solid #F1F5F9',
+                fontSize: '12px', fontWeight: 600, color: '#0A6B52',
+                cursor: 'pointer', textAlign: 'center', background: '#FAFBFA',
+                transition: 'background .12s',
+              }
+            }, showAll ? '▲ 閉じる' : '▼ もっと見る（' + (recent.length - MAX_VISIBLE) + '件）')
+          )
+      ) // end smooth-collapse-inner
+    ) // end smooth-collapse-wrap
+  )
+}
+
+// =====================================================
+// 今日やることリスト — ダッシュボード専用コンポーネント
+// 「今日 どの畑で 誰が 何をする」が1秒でわかる
+// =====================================================
+const TASK_PRIORITY_MAP = {
+  high:   { label:'重要', bg:'#FEF2F2', border:'#FECACA', dot:'#EF4444', text:'#DC2626' },
+  medium: { label:'通常', bg:'#FFFBEB', border:'#FDE68A', dot:'#F59E0B', text:'#B45309' },
+  low:    { label:'低',   bg:'#F0F9FF', border:'#BAE6FD', dot:'#38BDF8', text:'#0369A1' },
+}
+function TodayTaskList({ tasks, fields, staff, onToggle, onAdd, onOpenRecord }) {
+  const sorted    = [...tasks].sort((a, b) => a.time.localeCompare(b.time))
+  const doneCount = tasks.filter(t => t.done).length
+
+  // UX-03: インライン追加フォームの state
+  const [showForm,  setShowForm]  = React.useState(false)
+  const [formField, setFormField] = React.useState(fields[0]?.id ?? '')
+  const [formWork,  setFormWork]  = React.useState('農薬散布')
+  const [formTime,  setFormTime]  = React.useState('08:00')
+  const [formWorker,setFormWorker]= React.useState(staff[0]?.name ?? '')
+  const [formPrio,  setFormPrio]  = React.useState('medium')
+
+  const handleAdd = () => {
+    if (!formField || !formWork || !formTime || !formWorker) return
+    onAdd({
+      id:        Date.now(),
+      field_id:  Number(formField),
+      work_type: formWork,
+      time:      formTime,
+      worker:    formWorker,
+      priority:  formPrio,
+      done:      false,
+    })
+    setShowForm(false)
+    setFormWork('農薬散布')
+    setFormTime('08:00')
+  }
+
+  // フォーム用スタイル定数
+  const inputStyle = {
+    background:'#FFFFFF', border:'1.5px solid #D8E4D8',
+    borderRadius:'7px', padding:'7px 10px', fontSize:'13px',
+    color:'#111827', outline:'none', width:'100%'
+  }
+  const labelStyle = { fontSize:'10px', fontWeight:700, color:'#6B7280',
+    letterSpacing:'.05em', textTransform:'uppercase', marginBottom:'4px', display:'block' }
+
+  return React.createElement('div', { className:'card', style:{ padding:'0', overflow:'hidden' } },
+
+    // ヘッダー
+    React.createElement('div', {
+      style:{
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        padding:'14px 18px 10px',
+        borderBottom:'1px solid #E8EEE8',
+        background:'#F8FAF8'
+      }
+    },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+        React.createElement('span', { style:{ fontSize:'16px' } }, '📋'),
+        React.createElement('span', {
+          style:{ fontSize:'14px', fontWeight:700, color:'#111827', letterSpacing:'.01em' }
+        }, '今日の作業配置'),
+        React.createElement('span', {
+          style:{
+            fontSize:'10px', fontWeight:600, padding:'2px 8px', borderRadius:'20px',
+            background: doneCount === tasks.length ? '#D1FAE5' : '#FEF3C7',
+            color:      doneCount === tasks.length ? '#065F46' : '#92400E',
+            border:     '1px solid ' + (doneCount === tasks.length ? '#A7F3D0' : '#FDE68A')
+          }
+        }, doneCount + '/' + tasks.length + ' 完了')
+      ),
+      // ヘッダー右側：日付 + タスク追加ボタン（モーダル起動）
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+        React.createElement('span', { style:{ fontSize:'12px', color:'#94A3B8' } },
+          '本日 ' + new Date().toLocaleDateString('ja-JP', { month:'long', day:'numeric' })
+        ),
+        React.createElement('button', {
+          onClick: () => setShowForm(true),
+          style:{
+            display:'flex', alignItems:'center', gap:'5px',
+            fontSize:'12px', fontWeight:600, padding:'5px 12px',
+            borderRadius:'7px', cursor:'pointer', border:'none',
+            background:'#0A6B52', color:'#FFFFFF',
+            boxShadow:'0 1px 4px rgba(10,107,82,.25)',
+            transition:'all .15s'
+          }
+        },
+          React.createElement('i', { className:'ti ti-plus', 'aria-hidden':'true', style:{ fontSize:'14px' } }),
+          'タスク追加'
+        )
+      )
+    ),
+
+    // タスク追加モーダル
+    showForm && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:3100, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setShowForm(false)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'28px', width:'480px', maxWidth:'95vw', boxShadow:'0 20px 60px rgba(0,0,0,.22)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        // モーダルヘッダー
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px' } },
+          React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '+ タスクを追加'),
+          React.createElement('button', {
+            onClick: () => setShowForm(false),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+        // フォーム内容
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'14px' } },
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '圃場'),
+            React.createElement(FieldSearchSelect, { fields, value: formField, onChange: setFormField })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '作業種別'),
+            React.createElement('select', { value: formWork, onChange: e => setFormWork(e.target.value), style: inputStyle },
+              Object.keys(WORK_ICON_MAP).map(w => React.createElement('option', { key:w, value:w }, w))
+            )
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '開始時刻'),
+            React.createElement('input', { type:'time', value:formTime, onChange: e => setFormTime(e.target.value), style: inputStyle })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '担当者'),
+            React.createElement('select', { value: formWorker, onChange: e => setFormWorker(e.target.value), style: inputStyle },
+              (staff || []).map(s => React.createElement('option', { key:s.id, value:s.name }, s.name))
+            )
+          )
+        ),
+        // 優先度
+        React.createElement('div', { style:{ marginBottom:'20px' } },
+          React.createElement('label', { style: labelStyle }, '優先度'),
+          React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+            [['high','重要','#DC2626','#FEF2F2'],['medium','通常','#B45309','#FFFBEB'],['low','低','#0369A1','#F0F9FF']].map(([val, lbl, clr, bg]) =>
+              React.createElement('button', {
+                key: val, onClick: () => setFormPrio(val),
+                style:{
+                  flex:1, padding:'8px 0', borderRadius:'7px', cursor:'pointer', border:'1.5px solid',
+                  fontSize:'12px', fontWeight:600,
+                  borderColor: formPrio === val ? clr : '#E2E8F0',
+                  background:  formPrio === val ? bg  : '#FFFFFF',
+                  color:       formPrio === val ? clr : '#94A3B8',
+                  transition:  'all .12s'
+                }
+              }, lbl)
+            )
+          )
+        ),
+        // ボタン群
+        React.createElement('div', { style:{ display:'flex', gap:'10px' } },
+          React.createElement('button', {
+            onClick: () => setShowForm(false),
+            style:{ flex:1, padding:'10px', borderRadius:'8px', border:'1px solid #D1D5DB', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+          }, 'キャンセル'),
+          React.createElement('button', {
+            onClick: handleAdd,
+            disabled: !formField || !formWork || !formTime || !formWorker,
+            style:{
+              flex:2, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px',
+              fontSize:'13px', fontWeight:700, padding:'10px',
+              borderRadius:'8px', cursor:'pointer', border:'none',
+              background: (!formField || !formWork || !formTime || !formWorker) ? '#D1D5DB' : '#0A6B52',
+              color:'#FFFFFF', boxShadow:'0 2px 6px rgba(10,107,82,.25)', transition:'opacity .12s'
+            }
+          },
+            React.createElement('i', { className:'ti ti-check', style:{ fontSize:'15px' } }),
+            'タスクを追加'
+          )
+        )
+      )
+    ),
+
+    // タスク一覧
+    React.createElement('div', { style:{ padding:'8px 0' } },
+      sorted.map((task, idx) => {
+        const field    = fields.find(f => f.id === task.field_id)
+        const prio     = TASK_PRIORITY_MAP[task.priority] || TASK_PRIORITY_MAP.medium
+        const cfg      = WORK_ICON_MAP[task.work_type] || WORK_ICON_MAP['その他']
+        const isLast   = idx === sorted.length - 1
+
+        return React.createElement('div', {
+          key: task.id,
+          style:{
+            display:'flex', alignItems:'center', gap:'12px',
+            padding:'10px 18px',
+            borderBottom: isLast ? 'none' : '1px solid #F0F4F0',
+            background: task.done ? '#F9FBF9' : '#FFFFFF',
+            opacity: task.done ? 0.7 : 1,
+            transition:'background .15s, opacity .15s',
+            position:'relative',
+          }
+        },
+          // 時刻バッジ
+          React.createElement('div', {
+            style:{
+              fontSize:'11px', fontWeight:700, color:'#374151',
+              background:'#F1F5F9', border:'1px solid #E2E8F0',
+              borderRadius:'6px', padding:'3px 7px',
+              minWidth:'46px', textAlign:'center', flexShrink:0
+            }
+          }, task.time),
+
+          // 優先度ドット
+          React.createElement('div', {
+            style:{
+              width:'8px', height:'8px', borderRadius:'50%',
+              background: prio.dot, flexShrink:0,
+              boxShadow: '0 0 0 3px ' + prio.dot + '30'
+            }
+          }),
+
+          // 作業アイコン + 内容（クリックで日報入力モーダル）
+          React.createElement('div', {
+            onClick: () => !task.done && onOpenRecord && onOpenRecord(task),
+            style:{
+              flex:1, minWidth:0,
+              cursor: task.done ? 'default' : 'pointer',
+            }
+          },
+            React.createElement('div', {
+              style:{
+                display:'flex', alignItems:'center', gap:'6px',
+                fontSize:'14px', fontWeight: task.done ? 400 : 600,
+                color: task.done ? '#94A3B8' : '#111827',
+                textDecoration: task.done ? 'line-through' : 'none'
+              }
+            },
+              React.createElement('div', {
+                style:{ width:24, height:24, borderRadius:'50%', background:cfg.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }
+              },
+                React.createElement('i', { className:'ti ti-'+cfg.icon, 'aria-hidden':'true', style:{ fontSize:'14px', color:'#FFFFFF' } })
+              ),
+              React.createElement('span', null, task.work_type),
+              !task.done && React.createElement('span', {
+                style:{ fontSize:'10px', color:'#0A6B52', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'4px', padding:'1px 6px', fontWeight:600, marginLeft:'2px' }
+              }, '日報入力 →')
+            ),
+            React.createElement('div', {
+              style:{ fontSize:'12px', color:'#64748B', marginTop:'2px', display:'flex', alignItems:'center', gap:'8px' }
+            },
+              field && React.createElement('span', {
+                style:{
+                  display:'inline-flex', alignItems:'center', gap:'3px',
+                  background: (field.color || CONFIG.COLOR.primary) + '18',
+                  color:       field.color || CONFIG.COLOR.primary,
+                  border:     '1px solid ' + (field.color || CONFIG.COLOR.primary) + '40',
+                  borderRadius:'4px', padding:'1px 6px', fontSize:'10px', fontWeight:600
+                }
+              }, '📍 ' + field.name),
+              React.createElement('span', { style:{ color:'#94A3B8' } }, '👤 ' + task.worker)
+            )
+          ),
+
+          // 完了チェック（単独クリック可）
+          React.createElement('div', {
+            onClick: e => { e.stopPropagation(); onToggle(task.id) },
+            style:{
+              width:'22px', height:'22px', borderRadius:'50%', flexShrink:0,
+              border: task.done ? 'none' : '2px solid #D1D5DB',
+              background: task.done ? CONFIG.COLOR.primary : 'transparent',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              transition:'all .2s', cursor:'pointer',
+            }
+          }, task.done && React.createElement('span', { style:{ color:'#fff', fontSize:'12px', fontWeight:700 } }, '✓'))
+        )
+      })
+    ),
+
+    // フッター（全完了時メッセージ）
+    doneCount === tasks.length && tasks.length > 0 && React.createElement('div', {
+      style:{
+        padding:'10px 18px', borderTop:'1px solid #D1FAE5',
+        background:'#ECFDF5', fontSize:'12px', color:'#065F46',
+        fontWeight:500, textAlign:'center'
+      }
+    }, '🎉 本日の作業配置がすべて完了しました！')
+  )
+}
+
+// ダッシュボード本体
+function Dashboard({ fields, records, staff, gap, todayTasks, onToggleTodayTask, onAddTodayTask, cropPlans, pesticides, pesticideStock, fertilizers, fertilizerStock, onNavigate, onSaveRecord, onUpdateRecord, onDeleteRecord }) {
+  // --- 集計 ---
+  const gapPct     = gap.length > 0 ? Math.round(gap.filter(c => c.is_cleared).length / gap.length * 100) : 0
+  const harvestRisks = calcHarvestRisk(records, cropPlans || [], pesticides || [], fields)
+  const totalArea  = fields.reduce((a, f) => a + f.area_are, 0)
+  const activeF    = fields.filter(f => f.status === '栽培中').length
+  const recent     = [...records].reverse().slice(0, 5)
+  const today      = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric', weekday:'short' })
+
+  // タスクから日報入力モーダルを開くための state
+  const [activeTask, setActiveTask] = React.useState(null)
+  // 作業記録詳細モーダル用 state
+  const [selectedRecord, setSelectedRecord] = React.useState(null)
+
+  // --- 先月比計算ヘルパー ---
+  const now = new Date()
+  const thisMonthKey = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const lastMonthKey  = lastMonthDate.getFullYear() + '-' + String(lastMonthDate.getMonth() + 1).padStart(2, '0')
+  const thisMonthRecords = records.filter(r => (r.date || '').slice(0, 7) === thisMonthKey)
+  const lastMonthRecords = records.filter(r => (r.date || '').slice(0, 7) === lastMonthKey)
+  // 作業記録件数の先月比
+  const recordsDiff = records.length > 0
+    ? thisMonthRecords.length - lastMonthRecords.length
+    : null
+
+  // ── 圃場が1件もない場合はオンボーディング画面を表示 ──
+  if (fields.length === 0) {
+    const steps = [
+      { icon:'plant-2', title:'作物カテゴリを確認・設定', desc:'葉物野菜・とうもろこし・水稲など、農場で扱う作物の種類と管理方式を設定します。', page:'crop_categories', btn:'カテゴリ管理へ' },
+      { icon:'map-pin',  title:'圃場を登録する',           desc:'管理する圃場を1筆ずつ登録します。地図上でピンを立てると面積・位置情報も記録できます。', page:'fields',          btn:'圃場一覧へ'   },
+      { icon:'clipboard-text', title:'作業記録を入力する', desc:'農薬散布・施肥・収穫などの日次作業を記録します。記録が積み上がるとダッシュボードに集計されます。', page:'daily_work', btn:'作業入力へ' },
+      { icon:'chart-bar', title:'収穫実績を確認する',      desc:'収穫記録が入力されると、反収・前年比などのKPIが自動集計されます。', page:'field_performance', btn:'実績ページへ' },
+    ]
+    return React.createElement('div', { className:'page' },
+      React.createElement('div', { className:'eyebrow' }, 'FARM OVERVIEW'),
+      React.createElement('div', { className:'page-title' }, 'ダッシュボード'),
+      React.createElement('div', { className:'page-sub' }, today),
+
+      // ウェルカムヒーロー
+      React.createElement('div', { style:{
+        background:'linear-gradient(135deg, #F0FDF4 0%, #ECFDF5 100%)',
+        border:'1.5px solid #A7F3D0', borderRadius:14, padding:'32px 36px', marginBottom:28,
+        display:'flex', alignItems:'center', gap:24,
+      } },
+        React.createElement('div', { style:{ fontSize:52, lineHeight:1 } }, '🌱'),
+        React.createElement('div', null,
+          React.createElement('div', { style:{ fontSize:20, fontWeight:800, color:'#065F46', marginBottom:6 } }, 'ようこそ！農場管理を始めましょう'),
+          React.createElement('div', { style:{ fontSize:14, color:'#047857', lineHeight:1.7 } },
+            '圃場の登録から始めると、作業記録・農薬管理・収穫実績の自動集計まで一元管理できます。',
+            React.createElement('br', null),
+            '下のステップを順番に進めてください。'
+          )
+        )
+      ),
+
+      // ステップカード
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(240px, 1fr))', gap:14 } },
+        steps.map((s, i) => React.createElement('div', {
+          key: s.page,
+          style:{ background:'#fff', border:'1.5px solid #E2E8E2', borderRadius:10, padding:20, display:'flex', flexDirection:'column', gap:12 }
+        },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10 } },
+            React.createElement('div', { style:{
+              width:36, height:36, borderRadius:'50%', background:'#F0F8F4',
+              display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0
+            } },
+              React.createElement('i', { className:'ti ti-' + s.icon, style:{ fontSize:18, color:'#0A6B52' } })
+            ),
+            React.createElement('div', { style:{ fontSize:11, fontWeight:700, color:'#6B7280', letterSpacing:'.08em' } }, 'STEP ' + (i+1))
+          ),
+          React.createElement('div', { style:{ fontWeight:700, fontSize:14, color:'#111827' } }, s.title),
+          React.createElement('div', { style:{ fontSize:12, color:'#6B7280', lineHeight:1.6, flex:1 } }, s.desc),
+          React.createElement('button', {
+            onClick: () => onNavigate && onNavigate(s.page),
+            style:{
+              padding:'7px 0', background:'#0A6B52', color:'#fff', border:'none',
+              borderRadius:6, fontSize:12, fontWeight:600, cursor:'pointer', display:'flex',
+              alignItems:'center', justifyContent:'center', gap:4,
+            }
+          },
+            s.btn,
+            React.createElement('i', { className:'ti ti-arrow-right', style:{ fontSize:12 } })
+          )
+        ))
+      )
+    )
+  }
+
+  return React.createElement('div', { className:'page' },
+
+    // --- ページヘッダー ---
+    React.createElement('div', { style:{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:'20px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'eyebrow' }, 'FARM OVERVIEW'),
+        React.createElement('div', { className:'page-title' }, 'ダッシュボード'),
+        React.createElement('div', { className:'page-sub', style:{ marginBottom:0 } }, today)
+      ),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', background:'#F8FAFF', border:'1px solid #E5E9F0', borderRadius:'6px', padding:'6px 10px' } },
+        '🌱 農場名 管理システム'
+      )
+    ),
+
+    // --- 統計カード 4枚（先月比付き） ---
+    React.createElement('div', { className:'stat-grid' },
+      React.createElement('div', { className:'stat-card green' },
+        React.createElement('div', { className:'stat-n' }, activeF),
+        React.createElement('div', { className:'stat-l' }, '稼働中圃場')
+      ),
+      React.createElement('div', { className:'stat-card blue' },
+        React.createElement('div', { className:'stat-n' }, totalArea + 'a'),
+        React.createElement('div', { className:'stat-l' }, '総管理面積')
+      ),
+      React.createElement('div', { className:'stat-card amber' },
+        React.createElement('div', { className:'stat-n' }, records.length),
+        React.createElement('div', { className:'stat-l' }, '作業記録件数'),
+        recordsDiff !== null && React.createElement('div', {
+          style:{
+            display:'flex', alignItems:'center', gap:'3px',
+            marginTop:'6px', fontSize:'11px', fontWeight:600,
+            color: recordsDiff > 0 ? '#0A6B52' : recordsDiff < 0 ? '#94A3B8' : '#94A3B8',
+          }
+        },
+          React.createElement('i', {
+            className: recordsDiff > 0 ? 'ti ti-arrow-up' : recordsDiff < 0 ? 'ti ti-arrow-down' : 'ti ti-minus',
+            style:{ fontSize:'11px' }
+          }),
+          recordsDiff === 0 ? '先月と同じ' : '先月比 '+(recordsDiff > 0 ? '+' : '')+recordsDiff+'件'
+        )
+      ),
+      React.createElement('div', { className:'stat-card red' },
+        React.createElement('div', { className:'stat-n' }, harvestRisks.length),
+        React.createElement('div', { className:'stat-l' }, '収穫前日数アラート')
+      )
+    ),
+
+    // --- 在庫アラート3列グリッド（農薬・肥料・GAP） ---
+    React.createElement('div', {
+      style:{
+        display:'grid',
+        gridTemplateColumns:'1fr 1fr 1fr',
+        gap:'16px',
+        marginBottom:'20px',
+        alignItems:'stretch',
+      }
+    },
+      React.createElement(PesticideStockWidget, {
+        pesticides:    pesticides    || [],
+        pesticideStock: pesticideStock || [],
+        onNavigate,
+        _inGrid: true,
+      }),
+      React.createElement(FertilizerStockWidget, {
+        fertilizers:    fertilizers    || [],
+        fertilizerStock: fertilizerStock || [],
+        onNavigate,
+        _inGrid: true,
+      }),
+      React.createElement(GapProgressBarDashboard, { pct: gapPct, _inGrid: true }),
+    ),
+
+    // --- アラートカード（収穫前日数 / 農薬残留リスク） ---
+    React.createElement('div', { style:{ marginBottom:'4px' } },
+      React.createElement(SectionTitle, { icon:'alert-triangle' }, '収穫前日数アラート'),
+      harvestRisks.length === 0
+        ? React.createElement(HarvestRiskClearBadge)
+        : harvestRisks.map(r => React.createElement(HarvestRiskAlertCard, { key:r.id, risk:r }))
+    ),
+
+    // --- アラートカード（ビザ期限）---【削除済み】ビザ管理機能はスコープ外
+
+    // --- 今日やることリスト + 最近の作業記録（横並び2カラム） ---
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr auto', gap:'16px', marginBottom:'24px', alignItems:'start' } },
+
+      // 左: 今日の作業配置
+      React.createElement(TodayTaskList, {
+        tasks: todayTasks,
+        fields,
+        staff,
+        onToggle: onToggleTodayTask,
+        onAdd:    onAddTodayTask,
+        onOpenRecord: task => setActiveTask(task),
+      }),
+
+      // 右: 最近の作業記録（折りたたみ付き）
+      React.createElement(RecentRecordsPanel, { records, fields, onSelectRecord: r => setSelectedRecord(r) }),
+    ),
+
+    // ── タスク日報入力モーダル ──
+    activeTask && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.5)', zIndex:3000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setActiveTask(null)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'28px', width:'640px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.25)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+          React.createElement('div', null,
+            React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '日報入力'),
+            React.createElement('div', { style:{ fontSize:'12px', color:'#64748B', marginTop:'2px' } },
+              activeTask.work_type + ' — ' + (fields.find(f=>f.id===activeTask.field_id)?.name || '') + '　' + activeTask.time + '〜'
+            )
+          ),
+          React.createElement('button', {
+            onClick: () => setActiveTask(null),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+        React.createElement(RecordForm, {
+          fields: fields.filter(f => f.id === activeTask.field_id),
+          pesticides: pesticides || [],
+          records: records || [],
+          inModal: true,
+          onSave: r => {
+            if (onSaveRecord) onSaveRecord({ ...r, field_id: activeTask.field_id })
+            onToggleTodayTask(activeTask.id)
+            setActiveTask(null)
+          }
+        })
+      )
+    ),
+
+    // ── 作業記録詳細モーダル（最近の作業記録パネルから起動） ──
+    selectedRecord && React.createElement(RecordDetailModal, {
+      record: selectedRecord,
+      fields,
+      pesticides: pesticides || [],
+      onClose: () => setSelectedRecord(null),
+      onUpdate: onUpdateRecord ? r => { onUpdateRecord(r); setSelectedRecord(null) } : null,
+      onDelete: onDeleteRecord ? id => { onDeleteRecord(id); setSelectedRecord(null) } : null,
+    }),
+
+    // --- UX-11: 月次作業サマリーグラフ（今月ミニサマリー統合済み）---
+    React.createElement(MonthlySummaryChart, { records }),
+
+    // --- 最下部: 来年の作付提案 + 圃場サマリー（全幅） ---
+    React.createElement('div', { className:'page-grow' },
+      React.createElement('div', { className:'section-title' }, '来年の作付提案'),
+      React.createElement(CropSuggestionCard, { fields, cropPlans: cropPlans || [] }),
+      React.createElement(FieldSummaryTabPanel, { fields, records })
+    )
+  )
+}
+
+// =====================================================
+// B-3: 農薬散布スライダーUI + バリデーション（独立コンポーネント）
+// 農薬選択 → スライダーで希釈倍率・散布量入力
+// 同圃場・同農薬の年間使用回数をrecordsから集計して上限チェック
+// 超過時は赤バナー + 保存ブロック
+// =====================================================
+function PesticideInput({ pesticides, records, fieldId, pesticideId, crop, fieldArea, onUpdate }) {
+  // 【フェーズ2】作物に応じた使用可能農薬リスト（CROP_PESTICIDE_MAP）
+  const cropMap = crop ? CROP_PESTICIDE_MAP[crop] : null
+  const availablePesticides = cropMap
+    ? pesticides.filter(p => cropMap.some(c => c.pesticide_id === p.id))
+    : pesticides
+  // 作物に紐づく農薬が1種類だけなら自動セット（手入力不要）
+  const autoSelectId = cropMap && availablePesticides.length === 1 ? availablePesticides[0].id : null
+
+  const [selectedId, setSelectedId] = React.useState(pesticideId ? Number(pesticideId) : autoSelectId)
+  // 【新規】散布液量（L/10a）をスライダーで管理
+  const [sprayLiquidPerTenare, setSprayLiquidPerTenare] = React.useState(500)
+
+  const selected   = pesticides.find(p => p.id === selectedId)
+  // 作物マップに登録された標準希釈倍率（自動セット）。なければ農薬自体の標準倍率を使用
+  const mapEntry   = cropMap && selected ? cropMap.find(c => c.pesticide_id === selected.id) : null
+  const dilution   = mapEntry ? mapEntry.dilution : (selected ? selected.dilution : 1000)
+  const usedTimes  = countPesticideUse(records, fieldId, selectedId)
+  const isOver     = isPesticideOverLimit(records, fieldId, selected)
+  const remaining  = selected ? selected.max_times - usedTimes : null
+
+  // 【新規】計算ロジック
+  // 面積がない場合は計算できない
+  const hasFieldArea = fieldArea && fieldArea > 0
+  // 実際の散布液量（L） = 散布液量（L/10a） × 面積（are） / 10
+  const actualSprayLiquid = hasFieldArea ? (sprayLiquidPerTenare * fieldArea) / 10 : 0
+  // 原液使用量（mL） = 散布液量（L） / 希釈倍率 × 1000
+  const concentrateAmount = actualSprayLiquid > 0 ? (actualSprayLiquid / dilution) * 1000 : 0
+
+  // 作物選択時点で農薬が1種類に決まる場合は自動セット
+  React.useEffect(() => {
+    if (autoSelectId && selectedId !== autoSelectId) setSelectedId(autoSelectId)
+  }, [autoSelectId])
+
+  // 親コンポーネントへ値を通知
+  // 【変更】amount（原液mL）と spray_liquid_L を両方通知
+  React.useEffect(() => {
+    onUpdate({
+      pesticide_id: selectedId,
+      dilution,
+      amount: Math.round((concentrateAmount / 1000) * 100) / 100,  // 原液使用量（L）【単位統一】
+      spray_liquid_L: Math.round(actualSprayLiquid * 100) / 100,  // 散布液量（L）
+      isOver
+    })
+  }, [selectedId, dilution, sprayLiquidPerTenare, fieldArea, onUpdate])
+
+  return React.createElement('div', null,
+
+    // --- 農薬選択カード一覧（作物が決まっている場合は使用可能な農薬のみ表示） ---
+    React.createElement('div', { className:'form-group' },
+      React.createElement('label', { className:'form-label' },
+        '農薬を選択',
+        cropMap && React.createElement('span', { style:{ fontSize:'11px', color:'#0D9972', fontWeight:400, marginLeft:'6px' } },
+          '（' + crop + 'で使用可能な農薬のみ表示・倍率は自動セット）'
+        )
+      ),
+      React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'6px' } },
+        ...availablePesticides.map(p => {
+          const used = countPesticideUse(records, fieldId, p.id)
+          const over = used >= p.max_times
+          const sel  = selectedId === p.id
+          const pDilution = cropMap ? (cropMap.find(c => c.pesticide_id === p.id) || {}).dilution || p.dilution : p.dilution
+          return React.createElement('button', {
+            key: p.id,
+            onClick: () => { if (!over) setSelectedId(p.id) },
+            style:{
+              display:'flex', alignItems:'center', justifyContent:'space-between',
+              padding:'12px 14px', borderRadius:'8px', cursor: over ? 'not-allowed' : 'pointer',
+              border:'1px solid', textAlign:'left', opacity: over ? .55 : 1,
+              borderColor: sel ? CONFIG.COLOR.primary : over ? '#FECACA' : '#DDE2EC',
+              background:  sel ? '#ECFDF5' : over ? '#FFF1F2' : '#F8FAFC',
+            }
+          },
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'14px', fontWeight:600, color: sel ? CONFIG.COLOR.primary : '#374151' } }, p.name),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } },
+                '登録番号 '+p.reg_no+' ／ 収穫前 '+p.preharvest_days+'日 ／ 希釈 '+pDilution+'倍'
+              )
+            ),
+            React.createElement('div', { style:{ textAlign:'right', flexShrink:0 } },
+              React.createElement('span', {
+                className:'badge '+(over ? 'badge-red' : used > 0 ? 'badge-amber' : 'badge-green')
+              }, used+'/'+p.max_times+'回'),
+              over && React.createElement('div', { style:{ fontSize:'10px', color:'#DC2626', marginTop:'3px' } }, '使用不可')
+            )
+          )
+        })
+      )
+    ),
+
+    // --- 超過バナー ---
+    isOver && React.createElement('div', {
+      style:{
+        background:'#FEF2F2', border:'1px solid #F87171',
+        borderRadius:'8px', padding:'12px 16px', marginBottom:'14px',
+        display:'flex', alignItems:'flex-start', gap:'10px'
+      }
+    },
+      React.createElement('span', { style:{ fontSize:'18px', flexShrink:0 } }, '🚫'),
+      React.createElement('div', null,
+        React.createElement('div', { style:{ fontSize:'14px', fontWeight:600, color:'#DC2626', marginBottom:'3px' } },
+          '年間使用回数の上限（'+selected.max_times+'回）を超えています'
+        ),
+        React.createElement('div', { style:{ fontSize:'12px', color:'#991B1B' } },
+          'この農薬はこの圃場では使用できません。別の農薬を選択してください。'
+        )
+      )
+    ),
+
+    // --- 【新規】3段構成の散布量計算セクション ---
+    selected && !isOver && React.createElement('div', {
+      style:{ background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'10px', padding:'16px', marginBottom:'14px' }
+    },
+      // 残回数サマリー
+      React.createElement('div', {
+        style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' }
+      },
+        React.createElement('div', { style:{ fontSize:'14px', color:'#0D9972', fontWeight:600 } }, '✓ '+selected.name),
+        React.createElement('span', { className:'badge badge-green' }, '残'+remaining+'回使用可')
+      ),
+
+      // 希釈倍率（自動セット・読み取り専用表示）
+      React.createElement('div', { className:'form-group', style:{ marginBottom:'14px' } },
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'6px' }
+        },
+          React.createElement('label', { className:'form-label', style:{ marginBottom:0 } },
+            '希釈倍率',
+            React.createElement('span', { style:{ fontSize:'11px', color:'#94A3B8', fontWeight:400, marginLeft:'6px' } }, '（自動セット・入力不要）')
+          ),
+          React.createElement('span', {
+            style:{
+              fontSize:'18px', fontWeight:700, color:'#0D9972',
+              background:'#0D9972', padding:'2px 12px', borderRadius:'6px'
+            }
+          }, dilution+'倍')
+        ),
+        React.createElement('div', {
+          style:{
+            display:'flex', alignItems:'center', gap:'8px', padding:'10px 12px',
+            background:'#F0FDF9', border:'1px solid #A7F3D055', borderRadius:'8px',
+            fontSize:'12px', color:'#0D9972'
+          }
+        },
+          React.createElement('i', { className:'ti ti-lock', 'aria-hidden':'true', style:{ fontSize:'14px' } }),
+          crop + 'の散布基準として ' + dilution + '倍 が自動セットされています'
+        )
+      ),
+
+      // 【段階1】散布液量（L/10a）スライダー
+      React.createElement('div', { className:'form-group', style:{ marginBottom:'14px' } },
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'6px' }
+        },
+          React.createElement('label', { className:'form-label', style:{ marginBottom:0 } },
+            '① 散布液量（標準量を調整）',
+            React.createElement('span', { style:{ fontSize:'11px', color:'#94A3B8', fontWeight:400, marginLeft:'6px' } }, 'L/10a')
+          ),
+          React.createElement('span', {
+            style:{
+              fontSize:'18px', fontWeight:700, color:'#2563EB',
+              background:'#EFF6FF', padding:'2px 12px', borderRadius:'6px'
+            }
+          }, sprayLiquidPerTenare+'L/10a')
+        ),
+        React.createElement('input', {
+          type:'range', min:100, max:1000, step:50, value:sprayLiquidPerTenare,
+          onChange: e => setSprayLiquidPerTenare(Number(e.target.value)),
+          style:{ width:'100%', accentColor:'#2563EB', cursor:'pointer' }
+        }),
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', fontSize:'10px', color:'#6B7280', marginTop:'3px' }
+        },
+          React.createElement('span', null, '100'),
+          React.createElement('span', null, '1000L/10a')
+        )
+      ),
+
+      // 【段階2】面積から計算された散布液量
+      !hasFieldArea && React.createElement('div', {
+        style:{
+          background:'#FEF3C7', border:'1px solid #FCD34D',
+          borderRadius:'8px', padding:'12px', marginBottom:'14px',
+          fontSize:'12px', color:'#92400E'
+        }
+      },
+        '📍 圃場の面積が設定されていません。面積を設定すると自動計算されます。'
+      ),
+
+      hasFieldArea && React.createElement('div', { className:'form-group', style:{ marginBottom:'14px', background:'#F0FDF9', padding:'12px', borderRadius:'8px' } },
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'6px' }
+        },
+          React.createElement('label', { className:'form-label', style:{ marginBottom:0, color:'#0D9972' } },
+            '② 実散布量（面積から自動計算）',
+            React.createElement('span', { style:{ fontSize:'11px', color:'#0D9972', fontWeight:400, marginLeft:'6px' } }, 'L')
+          ),
+          React.createElement('span', {
+            style:{
+              fontSize:'18px', fontWeight:700, color:'#0D9972',
+              background:'#ECFDF5', padding:'2px 12px', borderRadius:'6px'
+            }
+          }, actualSprayLiquid.toFixed(2)+'L')
+        ),
+        React.createElement('div', { style:{ fontSize:'11px', color:'#0D9972', marginTop:'6px', lineHeight:'1.5' } },
+          '計算式: '+sprayLiquidPerTenare+'L/10a × '+fieldArea+'are ÷ 10 = '+actualSprayLiquid.toFixed(2)+'L'
+        )
+      ),
+
+      // 【段階3】原液使用量
+      hasFieldArea && React.createElement('div', { className:'form-group', style:{ marginBottom:0, background:'#FEF3C7', padding:'12px', borderRadius:'8px' } },
+        React.createElement('div', {
+          style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'6px' }
+        },
+          React.createElement('label', { className:'form-label', style:{ marginBottom:0, color:'#92400E', fontWeight:600 } },
+            '③ 原液使用量（実申告量）',
+            React.createElement('span', { style:{ fontSize:'11px', color:'#92400E', fontWeight:400, marginLeft:'6px' } }, 'L')
+          ),
+          React.createElement('span', {
+            style:{
+              fontSize:'20px', fontWeight:700, color:'#DC2626',
+              background:'#FEF2F2', padding:'4px 14px', borderRadius:'6px'
+            }
+          }, (concentrateAmount / 1000).toFixed(2)+'L')
+        ),
+        React.createElement('div', { style:{ fontSize:'11px', color:'#92400E', marginTop:'6px', lineHeight:'1.5' } },
+          '計算式: '+actualSprayLiquid.toFixed(2)+'L ÷ '+dilution+'倍 = '+(concentrateAmount / 1000).toFixed(2)+'L'
+        )
+      )
+    ),
+
+    // --- 選択なし時のプレースホルダー ---
+    !selected && React.createElement('div', {
+      style:{ background:'#F8FAFF', border:'1.5px dashed #C8D0DC', borderRadius:'8px', padding:'16px', textAlign:'center', color:'#6B7280', fontSize:'14px' }
+    }, '↑ 上から農薬を選択してください')
+  )
+}
+
+// =====================================================
+// B-2: 日々の記録フォーム（CAT-05-2対応: コンポーネント分割）
+// StepBar / Step1〜Step4 / RecordTable を外部コンポーネントに切り出し
+// RecordForm  : フォーム専用ページ（旧 hideList:true）
+// RecordTablePage: 一覧専用ページ（旧 hideForm:true）
+// =====================================================
+
+// =====================================================
+// 【実装手順書 Step1】備考欄の拡張（チェック欄・ヒヤリハット）
+// 紙日報にある転記済みチェック欄（□管理表／□肥料在庫表／□農薬・肥料管理／
+// □レタス管理表／□SA）と、自由記述の備考・ヒヤリハットメモを各日報入力フォームの
+// 末尾に追加する共通コンポーネント。
+// - チェックは必須化しない（紙の運用でも空欄のまま運用されているため、未チェック＝エラーにしない）
+// - 自由記述欄は折りたたみ式にし、通常時は画面を圧迫しないようにする
+// - 一覧画面では NoteChecklistField とセットの TranscribeStatusBadge で
+//   転記状況をアイコン／バッジ表示し、未転記が一目でわかるようにする
+// =====================================================
+const TRANSCRIBE_CHECK_OPTIONS = [
+  { key:'mgmt_table',     label:'管理表へ転記済み' },
+  { key:'fert_stock',     label:'肥料在庫表へ転記済み' },
+  { key:'pesticide_fert', label:'農薬/肥料管理へ転記済み' },
+  { key:'lettuce_table',  label:'レタス管理表へ転記済み' },
+  { key:'sa',             label:'SA確認済み' },
+]
+
+// 【実装手順書 C】担当者IDの配列を名前の文字列に変換する共通ヘルパー
+// （農薬散布・追肥・収穫の詳細モーダルで共通利用）
+function staffNames(staff, staffIds) {
+  if (!staffIds || staffIds.length === 0) return '—'
+  return staffIds
+    .map(id => { const s = (staff || []).find(x => x.id === id); return s ? s.name : null })
+    .filter(Boolean)
+    .join('、') || '—'
+}
+// 詳細モーダルの情報行共通スタイル（日報記録の詳細モーダルと統一）
+const rowStyle2 = { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #F1F5F9', fontSize:'13px' }
+
+// 【実装手順書 C】担当者選択 共通コンポーネント
+// 農薬散布・追肥記録フォームで共通利用する担当者トグルボタン
+function StaffPicker({ staff, staffIds, onChange }) {
+  if (!staff || staff.length === 0) {
+    return React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('label', {
+        style:{ fontSize:'10px', fontWeight:700, color:'#6B7280', textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:'6px' }
+      }, '担当者（複数選択可）'),
+      React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', padding:'6px 0' } },
+        'スタッフ管理ページでスタッフを登録すると、ここで担当者を選択できます'
+      )
+    )
+  }
+  return React.createElement('div', { style:{ marginBottom:'14px' } },
+    React.createElement('label', {
+      style:{ fontSize:'10px', fontWeight:700, color:'#6B7280', textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:'6px' }
+    }, '担当者（複数選択可）'),
+    React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'6px' } },
+      ...staff.map(s =>
+        React.createElement('button', {
+          key: s.id,
+          type: 'button',
+          onClick: () => {
+            const ids = staffIds || []
+            onChange(ids.includes(s.id) ? ids.filter(id => id !== s.id) : [...ids, s.id])
+          },
+          style:{
+            padding:'5px 12px', borderRadius:'20px', border:'1.5px solid',
+            fontSize:'12px', fontWeight:600, cursor:'pointer', transition:'all .15s',
+            borderColor: (staffIds||[]).includes(s.id) ? '#0A6B52' : '#D8E4D8',
+            background:  (staffIds||[]).includes(s.id) ? '#0A6B52' : '#fff',
+            color:       (staffIds||[]).includes(s.id) ? '#fff'    : '#6B7280',
+          }
+        }, s.avatar ? `${s.avatar} ${s.name}` : s.name)
+      )
+    )
+  )
+}
+
+// 各日報フォームの末尾に置く、折りたたみ式の「備考・メモ ／ 転記チェック」欄。
+// checkKeys を渡すと、その様式に合ったチェック項目だけを表示する（省略時は全項目）。
+function NoteChecklistField({ note, onNoteChange, checks, onChecksChange, checkKeys, defaultOpen=false }) {
+  const [open, setOpen] = React.useState(defaultOpen)
+  const options = TRANSCRIBE_CHECK_OPTIONS.filter(o => !checkKeys || checkKeys.includes(o.key))
+  const checkedCount = options.filter(o => checks && checks[o.key]).length
+  const toggleCheck = (key) => onChecksChange({ ...(checks || {}), [key]: !(checks && checks[key]) })
+
+  return React.createElement('div', { style:{ marginTop:'14px', marginBottom:'4px', border:'1px solid #E2E8E2', borderRadius:'8px', overflow:'hidden' } },
+    React.createElement('button', {
+      type:'button',
+      onClick: () => setOpen(o => !o),
+      style:{
+        width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
+        padding:'9px 12px', background:'#F8FAF8', border:'none', cursor:'pointer'
+      }
+    },
+      React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'7px', fontSize:'12px', fontWeight:700, color:'#374151' } },
+        React.createElement('i', { className:'ti ti-notes', style:{ fontSize:'14px', color:'#7C3AED' } }),
+        '備考・メモ／転記チェック',
+        React.createElement('span', { style:{ fontSize:'11px', color:'#94A3B8', fontWeight:400 } }, '（任意）')
+      ),
+      React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+        !open && (note || checkedCount > 0) && React.createElement('span', {
+          style:{ fontSize:'10px', fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #6EE7B7', borderRadius:'10px', padding:'1px 8px' }
+        }, (note ? '📝 ' : '') + (checkedCount > 0 ? checkedCount + '/' + options.length + '転記' : '')),
+        React.createElement('i', { className:'ti ti-chevron-' + (open ? 'up' : 'down'), style:{ fontSize:'13px', color:'#9CA3AF' } })
+      )
+    ),
+    React.createElement('div', { className: 'smooth-collapse-wrap' + (open ? ' open' : '') },
+      React.createElement('div', { className: 'smooth-collapse-inner' },
+        React.createElement('div', { style:{ padding:'12px', background:'#FFFFFF' } },
+      React.createElement('textarea', {
+        value: note || '',
+        onChange: e => onNoteChange(e.target.value),
+        placeholder: '備考・ヒヤリハットなど自由に記入してください（任意）',
+        rows: 3,
+        style:{ width:'100%', boxSizing:'border-box', border:'1.5px solid #D8E4D8', borderRadius:'7px', padding:'8px 10px', fontSize:'13px', fontFamily:'inherit', resize:'vertical', marginBottom:'10px', outline:'none' }
+      }),
+      React.createElement('div', { style:{ fontSize:'10px', fontWeight:700, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:'6px' } },
+        '転記チェック（紙日報の入力チェック欄に対応・チェックなしでも保存できます）'
+      ),
+      React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'8px' } },
+        ...options.map(o =>
+          React.createElement('label', {
+            key: o.key,
+            style:{
+              display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', color:'#374151',
+              padding:'5px 10px', borderRadius:'6px', cursor:'pointer',
+              border: '1px solid ' + ((checks && checks[o.key]) ? '#6EE7B7' : '#E2E8E2'),
+              background: (checks && checks[o.key]) ? '#F0FDF4' : '#FAFBFA'
+            }
+          },
+            React.createElement('input', {
+              type:'checkbox', checked: !!(checks && checks[o.key]),
+              onChange: () => toggleCheck(o.key),
+              style:{ accentColor:'#0A6B52', width:'14px', height:'14px', cursor:'pointer' }
+            }),
+            o.label
+          )
+        )
+      )
+      ) // end inner padding div
+      ) // end smooth-collapse-inner
+    ) // end smooth-collapse-wrap
+  )
+}
+
+// 一覧画面で「転記済みかどうか」が一目でわかるバッジ。
+// 紙日報のチェック欄が空欄でも運用上はエラーではないため、強い色は使わず控えめな配色にする。
+function TranscribeStatusBadge({ checks, checkKeys, style }) {
+  const options = TRANSCRIBE_CHECK_OPTIONS.filter(o => !checkKeys || checkKeys.includes(o.key))
+  const checkedCount = options.filter(o => checks && checks[o.key]).length
+  if (checkedCount === 0) {
+    return React.createElement('span', {
+      title: '転記チェック未登録（未入力なだけで、エラーではありません）',
+      style:{ fontSize:'10px', fontWeight:700, color:'#92400E', background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'10px', padding:'1px 8px', display:'inline-flex', alignItems:'center', gap:'4px', whiteSpace:'nowrap', ...style }
+    },
+      React.createElement('i', { className:'ti ti-list-check', style:{ fontSize:'10px' } }),
+      '未転記'
+    )
+  }
+  const allChecked = checkedCount === options.length
+  return React.createElement('span', {
+    title: options.filter(o => checks[o.key]).map(o => o.label).join('\n'),
+    style:{
+      fontSize:'10px', fontWeight:700, whiteSpace:'nowrap',
+      color: allChecked ? '#065F46' : '#1D4ED8',
+      background: allChecked ? '#ECFDF5' : '#EFF6FF',
+      border: '1px solid ' + (allChecked ? '#6EE7B7' : '#BFDBFE'),
+      borderRadius:'10px', padding:'1px 8px', display:'inline-flex', alignItems:'center', gap:'4px',
+      ...style
+    }
+  },
+    React.createElement('i', { className:'ti ti-' + (allChecked ? 'check' : 'list-check'), style:{ fontSize:'10px' } }),
+    checkedCount + '/' + options.length + ' 転記'
+  )
+}
+
+// ── ステップインジケーター ──────────────────────────
+function StepBar({ step, steps }) {
+  return React.createElement('div', {
+    style:{ display:'flex', alignItems:'center', marginBottom:'24px' }
+  },
+    ...steps.map((s, i) => [
+      React.createElement('div', { key:'dot'+i, style:{ display:'flex', flexDirection:'column', alignItems:'center', gap:'4px' } },
+        React.createElement('div', {
+          style:{
+            width:30, height:30, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:'12px', fontWeight:600, flexShrink:0,
+            background: i+1 < step ? CONFIG.COLOR.primary : i+1 === step ? '#FFFFFF' : '#F1F5F9',
+            color:       i+1 < step ? '#FFFFFF' : i+1 === step ? CONFIG.COLOR.primary : '#CBD5E1',
+            border:      i+1 <= step ? '2px solid '+CONFIG.COLOR.primary : '1px solid #DDE2EC',
+          }
+        }, i+1 < step ? '✓' : i+1),
+        React.createElement('div', { style:{ fontSize:'10px', color: i+1===step?CONFIG.COLOR.primary:'#94A3B8', whiteSpace:'nowrap' } }, s)
+      ),
+      i < steps.length-1 && React.createElement('div', { key:'line'+i, style:{ flex:1, height:'1px', background: i+1 < step ? CONFIG.COLOR.primary : '#E2E8F0', margin:'0 6px', marginBottom:'18px' } })
+    ]).flat().filter(Boolean)
+  )
+}
+
+// ── ステップ1: 日付・圃場・天気・作業者 ────────────
+function RecordStep1({ form, fields, up, onNext, isFieldPreset }) {
+  const WEATHERS = [{ v:'晴', icon:'☀️' }, { v:'曇', icon:'🌤' }, { v:'雨', icon:'🌧' }, { v:'強風', icon:'💨' }]
+
+  // 所要時間（分）を開始・終了・休憩から自動計算
+  const calcRequired = () => {
+    if (!form.start_time || !form.end_time) return null
+    const [sh, sm] = form.start_time.split(':').map(Number)
+    const [eh, em] = form.end_time.split(':').map(Number)
+    const total = (eh * 60 + em) - (sh * 60 + sm)
+    const work  = total - (Number(form.break_minutes) || 0)
+    if (total < 0 || work < 0) return null
+    const wh = Math.floor(work / 60), wm = work % 60
+    return wh > 0 ? wh + '時間' + (wm > 0 ? wm + '分' : '') : wm + '分'
+  }
+  const workTimeLabel = calcRequired()
+
+  return React.createElement('div', null,
+    React.createElement(SectionTitle, { icon:'calendar-event' }, '日付・圃場・作業者'),
+    // ── 作業日 + 作業者 ──
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px' } },
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '作業日'),
+        React.createElement('input', { type:'date', className:'form-input', value:form.date, onChange:e=>up('date',e.target.value) })
+      ),
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '作業者'),
+        React.createElement('input', { type:'text', className:'form-input', value:form.worker, onChange:e=>up('worker',e.target.value), placeholder:'例: 田中 太郎' })
+      )
+    ),
+
+    // ── 圃場選択 or プリセット表示 ──
+    isFieldPreset
+      ? React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '圃場'),
+          React.createElement('div', {
+            style:{
+              display:'flex', alignItems:'center', gap:'10px',
+              padding:'10px 14px', borderRadius:'8px',
+              background: fields[0].color + '12',
+              border:'1px solid ' + fields[0].color + '55',
+            }
+          },
+            React.createElement('div', { style:{ width:10, height:10, borderRadius:'50%', background:fields[0].color, flexShrink:0 } }),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'14px', color:'#374151', fontWeight:600 } }, fields[0].name),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, fields[0].crop + ' / ' + fields[0].area_are + 'a')
+            ),
+            React.createElement('span', { style:{ marginLeft:'auto', fontSize:'11px', color:'#0A6B52', fontWeight:600, background:'#ECFDF5', padding:'2px 8px', borderRadius:'4px' } }, '選択済み')
+          )
+        )
+      : React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '圃場を選択'),
+          React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' } },
+            ...fields.map(f =>
+              React.createElement('button', {
+                key: f.id,
+                onClick: () => up('field_id', String(f.id)),
+                style:{
+                  display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px',
+                  borderRadius:'8px', cursor:'pointer', border:'1px solid',
+                  borderColor: form.field_id === String(f.id) ? f.color : '#DDE2EC',
+                  background:  form.field_id === String(f.id) ? f.color+'15' : '#F8FAFC',
+                  textAlign:'left'
+                }
+              },
+                React.createElement('div', { style:{ width:10, height:10, borderRadius:'50%', background:f.color, flexShrink:0 } }),
+                React.createElement('div', null,
+                  React.createElement('div', { style:{ fontSize:'14px', color:'#374151', fontWeight:600 } }, f.name),
+                  React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, f.crop + ' / ' + f.area_are + 'a')
+                )
+              )
+            )
+          )
+        ),
+
+    // ── 開始・終了・所要・休憩（常時表示） ──
+    React.createElement('div', { className:'form-group' },
+      React.createElement('label', { className:'form-label' }, '作業時間'),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 1fr', gap:'10px' } },
+        // 開始時刻
+        React.createElement('div', null,
+          React.createElement('label', { style:{ fontSize:'11px', fontWeight:600, color:'#64748B', display:'block', marginBottom:'4px' } }, '開始時刻'),
+          React.createElement('input', {
+            type:'time', className:'form-input', value:form.start_time,
+            onChange:e=>up('start_time',e.target.value)
+          })
+        ),
+        // 終了時刻
+        React.createElement('div', null,
+          React.createElement('label', { style:{ fontSize:'11px', fontWeight:600, color:'#64748B', display:'block', marginBottom:'4px' } }, '終了時刻'),
+          React.createElement('input', {
+            type:'time', className:'form-input', value:form.end_time,
+            onChange:e=>up('end_time',e.target.value)
+          })
+        ),
+        // 所要時間（自動計算・読み取り専用）
+        React.createElement('div', null,
+          React.createElement('label', { style:{ fontSize:'11px', fontWeight:600, color:'#64748B', display:'block', marginBottom:'4px' } }, '所要時間'),
+          React.createElement('div', {
+            style:{
+              height:'38px', display:'flex', alignItems:'center', justifyContent:'center',
+              background:'#F0F8F4', border:'1px solid #D1FAE5', borderRadius:'6px',
+              fontSize:'13px', fontWeight:700, color:'#0A6B52',
+            }
+          }, workTimeLabel || '—')
+        ),
+        // 休憩時間
+        React.createElement('div', null,
+          React.createElement('label', { style:{ fontSize:'11px', fontWeight:600, color:'#64748B', display:'block', marginBottom:'4px' } }, '休憩（分）'),
+          React.createElement('input', {
+            type:'number', className:'form-input', value:form.break_minutes,
+            min:0, step:15, style:{ textAlign:'center' },
+            onChange:e=>up('break_minutes',Number(e.target.value))
+          })
+        ),
+      )
+    ),
+
+    // ── 天気 ──
+    React.createElement('div', { className:'form-group' },
+      React.createElement('label', { className:'form-label' }, '天気'),
+      React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+        ...WEATHERS.map(w =>
+          React.createElement('button', {
+            key: w.v,
+            onClick: () => up('weather', w.v),
+            style:{
+              padding:'8px 16px', borderRadius:'8px', cursor:'pointer', fontSize:'14px', border:'1px solid',
+              borderColor: form.weather === w.v ? CONFIG.COLOR.primary : '#DDE2EC',
+              background:  form.weather === w.v ? '#ECFDF5' : '#F8FAFC',
+              color:       form.weather === w.v ? CONFIG.COLOR.primary : '#64748B',
+            }
+          }, w.icon + ' ' + w.v)
+        )
+      )
+    ),
+    React.createElement('div', { style:{ display:'flex', justifyContent:'flex-end' } },
+      React.createElement('button', { className:'btn btn-primary', disabled:!form.field_id, onClick:onNext }, '次へ →')
+    )
+  )
+}
+
+// ── ステップ2: 作業内容（大ボタン選択）──────────────
+function RecordStep2({ form, up, onPrev, onNext }) {
+  return React.createElement('div', null,
+    React.createElement(SectionTitle, { icon:'settings' }, '作業内容を選択'),
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'10px', marginBottom:'20px' } },
+      ...WORK_TYPES.map(w => {
+        const cfg = WORK_ICON_MAP[w.v]
+        return React.createElement('button', {
+          key: w.v,
+          onClick: () => up('work_type', w.v),
+          style:{
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            gap:'8px', padding:'18px 12px', borderRadius:'10px', cursor:'pointer', border:'1px solid',
+            borderColor: form.work_type === w.v ? w.color : '#DDE2EC',
+            background:  form.work_type === w.v ? w.color+'18' : '#F8FAFC',
+          }
+        },
+          React.createElement('div', {
+            style:{ width:40, height:40, borderRadius:'50%', background:cfg.color, display:'flex', alignItems:'center', justifyContent:'center' }
+          },
+            React.createElement('i', { className:'ti ti-'+cfg.icon, 'aria-hidden':'true', style:{ fontSize:'20px', color:'#FFFFFF' } })
+          ),
+          React.createElement('span', { style:{ fontSize:'12px', fontWeight:500, color: form.work_type===w.v ? w.color : '#64748B' } }, w.v)
+        )
+      })
+    ),
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
+      React.createElement('button', { className:'btn btn-ghost', onClick:onPrev }, '← 戻る'),
+      React.createElement('button', { className:'btn btn-primary', disabled:!form.work_type, onClick:onNext }, '次へ →')
+    )
+  )
+}
+
+// ── ステップ3: 農薬/施肥 詳細入力 ──────────────────
+function RecordStep3({ form, up, pesticides, records, isOver, selField, handlePesticideUpdate, onPrev, onNext }) {
+  return React.createElement('div', null,
+    React.createElement('div', { className:'section-title' }, form.work_type === '農薬散布' ? '🧴 農薬情報' : '📊 作業量を入力'),
+    // 【フェーズ2】農薬散布時: 圃場の作物（selField.crop）と面積（selField.area_are）を渡し、農薬・希釈倍率を自動セット。
+    // スタッフが入力するのは「使用した農薬名（選択）」と「散布液量」の1項目のみ
+    form.work_type === '農薬散布' && React.createElement(PesticideInput, {
+      pesticides, records,
+      fieldId:     form.field_id,
+      pesticideId: form.pesticide_id,
+      crop:        selField ? selField.crop : null,
+      fieldArea:   selField ? selField.area_are : null,  // 【新規】圃場面積（are）を渡す
+      onUpdate: handlePesticideUpdate
+    }),
+    // 農薬散布以外の作業種では「使用量 / 作業量」を入力
+    form.work_type !== '農薬散布' && React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px' } },
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '使用量 / 作業量'),
+        React.createElement('input', { type:'number', className:'form-input', value:form.amount, onChange:e=>up('amount',e.target.value), placeholder:'例: 50' })
+      ),
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '単位'),
+        React.createElement('select', { className:'form-select' },
+          React.createElement('option', null, 'L'),
+          React.createElement('option', null, 'kg'),
+          React.createElement('option', null, 'm²'),
+        )
+      )
+    ),
+    // 【実装手順書 Step1】備考・メモ＋転記チェック（紙日報の□管理表／□肥料在庫表／
+    // □農薬・肥料管理／□レタス管理表／□SAに対応）。以前は農薬散布以外でのみ表示していたが、
+    // 農薬散布の日報にも備考を残せるよう全作業種で表示するように変更。
+
+    // ── 農薬散布専用: 使用方法・使用機械・散布液量管理 ──
+    form.work_type === '農薬散布' && React.createElement('div', {
+      style:{ background:'#F8FAFF', border:'1px solid #E0E8F8', borderRadius:'10px', padding:'16px', marginBottom:'14px' }
+    },
+      React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color:'#1D4ED8', marginBottom:'12px', display:'flex', alignItems:'center', gap:'6px' } },
+        React.createElement('i', { className:'ti ti-clipboard-list', style:{ fontSize:'14px' } }),
+        '散布作業の詳細'
+      ),
+      // 使用方法（ボタン選択）
+      React.createElement('div', { className:'form-group', style:{ marginBottom:'12px' } },
+        React.createElement('label', { className:'form-label' }, '使用方法'),
+        React.createElement('div', { style:{ display:'flex', gap:'8px', flexWrap:'wrap' } },
+          ['散布', '株元散布', '土壌混和', '灌注'].map(method =>
+            React.createElement('button', {
+              key: method,
+              onClick: () => up('spray_method', form.spray_method === method ? '' : method),
+              style:{
+                padding:'6px 14px', borderRadius:'20px', fontSize:'12px', fontWeight:600,
+                cursor:'pointer', border:'1.5px solid', transition:'all .12s',
+                borderColor: form.spray_method === method ? '#1D4ED8' : '#DDE2EC',
+                background:  form.spray_method === method ? '#EFF6FF' : '#F8FAFC',
+                color:       form.spray_method === method ? '#1D4ED8' : '#64748B',
+              }
+            }, method)
+          )
+        )
+      ),
+      // 使用機械No.
+      React.createElement('div', { className:'form-group', style:{ marginBottom:'12px' } },
+        React.createElement('label', { className:'form-label' }, '使用機械No.　'),
+        React.createElement('input', {
+          type: 'text', className: 'form-input',
+          value: form.machine_no, placeholder: '例: 散布機-01',
+          onChange: e => up('machine_no', e.target.value),
+          style:{ maxWidth:'240px' }
+        })
+      ),
+      // 作った散布液量 / 廃棄した散布液量
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' } },
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, '作った散布液量'),
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px' } },
+            React.createElement('input', {
+              type:'number', className:'form-input', min:0, step:0.1,
+              value: form.spray_made_L, placeholder:'例: 100',
+              onChange: e => up('spray_made_L', e.target.value),
+            }),
+            React.createElement('span', { style:{ fontSize:'13px', color:'#64748B', fontWeight:600, flexShrink:0 } }, 'L')
+          )
+        ),
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, '廃棄した散布液量'),
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px' } },
+            React.createElement('input', {
+              type:'number', className:'form-input', min:0, step:0.1,
+              value: form.spray_discarded_L, placeholder:'例: 5',
+              onChange: e => up('spray_discarded_L', e.target.value),
+            }),
+            React.createElement('span', { style:{ fontSize:'13px', color:'#64748B', fontWeight:600, flexShrink:0 } }, 'L')
+          )
+        )
+      )
+    ),
+    React.createElement(NoteChecklistField, {
+      note: form.note,
+      onNoteChange: v => up('note', v),
+      checks: form.checks,
+      onChecksChange: v => up('checks', v),
+      checkKeys: ['mgmt_table', 'pesticide_fert', 'lettuce_table', 'sa'],
+    }),
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
+      React.createElement('button', { className:'btn btn-ghost', onClick:onPrev }, '← 戻る'),
+      React.createElement('button', { className:'btn btn-primary', disabled:form.work_type==='農薬散布'&&isOver, onClick:onNext }, '確認 →')
+    )
+  )
+}
+
+// ── ステップ4: 確認プレビュー → 保存 ──────────────
+function RecordStep4({ form, dilution, selField, selP, isOver, onPrev, onSave, showContinueButton, onContinue }) {
+  const workCfg = WORK_ICON_MAP[form.work_type] || WORK_ICON_MAP['その他']
+  const fieldColor = selField ? selField.color : '#64748B'
+  const rows = [
+    ['calendar', '作業日',   form.date,                                       '#64748B'],
+    ['user',     '作業者',   form.worker || '—',                               '#64748B'],
+    ['plant-2',  '圃場',     selField ? selField.name + '（' + selField.crop + '）' : '—', fieldColor],
+    [workCfg.icon, '作業内容', form.work_type,                                 workCfg.color],
+    ['cloud',    '天気',     form.weather,                                     '#64748B'],
+    ...(form.work_type === '農薬散布' && selP ? [
+      ['spray',    '農薬',     selP.name,                                       '#DC2626'],
+      ['droplet',  '希釈倍率', dilution + '倍',                                 '#2563EB'],
+    ] : []),
+    ['chart-bar', '使用量',  form.amount ? form.amount + ' L/kg' : '—',       '#64748B'],
+    ...(form.note ? [['notes', '備考', form.note, '#7C3AED']] : []),
+  ]
+  // 【実装手順書 Step1】転記チェックの状況（チェックが1つも無くてもエラーではない）
+  const checkedTranscribe = Object.values(form.checks || {}).filter(Boolean).length
+  return React.createElement('div', null,
+    React.createElement(SectionTitle, { icon:'checklist' }, '内容を確認して保存'),
+    React.createElement('div', {
+      style:{ background:'#F8FAFF', borderRadius:'10px', overflow:'hidden', marginBottom:'16px', boxShadow:'none', border:'1px solid #D8E0DA' }
+    },
+      ...rows.map(([icon, label, v, iconColor], i) =>
+        React.createElement('div', {
+          key: label,
+          style:{ display:'flex', alignItems:'center', padding:'11px 16px', borderBottom: i < rows.length-1 ? '1px solid #F1F5F9' : 'none', fontSize:'14px' }
+        },
+          React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'6px', color:'#6B7280', width:'120px', flexShrink:0 } },
+            React.createElement('i', { className:'ti ti-'+icon, 'aria-hidden':'true', style:{ fontSize:'14px', color: iconColor || '#64748B', flexShrink:0 } }),
+            label
+          ),
+          React.createElement('span', { style:{ color:'#1A1F2E', fontWeight:600 } }, v)
+        )
+      )
+    ),
+    checkedTranscribe > 0 && React.createElement('div', { style:{ marginBottom:'16px' } },
+      React.createElement(TranscribeStatusBadge, {
+        checks: form.checks,
+        checkKeys: ['mgmt_table', 'pesticide_fert', 'lettuce_table', 'sa'],
+      })
+    ),
+    selField && React.createElement('div', {
+      style:{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 14px', background:selField.color+'12', border:'1px solid '+selField.color+'40', borderRadius:'8px', marginBottom:'16px', fontSize:'12px', color:'#374151' }
+    },
+      React.createElement('div', { style:{ width:8, height:8, borderRadius:'50%', background:selField.color } }),
+      '保存すると ' + selField.name + ' の記録に追加されます'
+    ),
+    // UX-10: 保存後に「続けて入力」ボタンを表示（3秒で自動非表示）
+    showContinueButton && React.createElement('div', {
+      style:{ 
+        display:'flex', alignItems:'center', gap:'12px', padding:'12px 14px', 
+        background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'8px', 
+        marginBottom:'16px', fontSize:'13px', color:'#065F46', animation:'slideDown .3s ease-out'
+      }
+    },
+      React.createElement('i', { className:'ti ti-check', 'aria-hidden':'true', style:{ fontSize:'16px', color:'#059669' } }),
+      React.createElement('span', { style:{ flex:1 } }, '✓ 保存しました。'),
+      React.createElement('button', {
+        className:'btn',
+        onClick: onContinue,
+        style:{ 
+          background:'#10B981', color:'#FFFFFF', padding:'6px 12px', fontSize:'12px',
+          border:'none', borderRadius:'6px', cursor:'pointer', fontWeight:600,
+          transition:'opacity .15s'
+        }
+      }, '続けて入力 →')
+    ),
+    // 【フェーズ2】散布記録サマリーカード — 農薬散布の保存完了後、印刷/PDF出力ボタンを表示
+    showContinueButton && form.work_type === '農薬散布' && selP && React.createElement('div', {
+      style:{
+        border:'1px solid #DDE2EC', borderRadius:'8px', padding:'14px 16px',
+        marginBottom:'16px', background:'#F8FAFC', animation:'slideDown .3s ease-out'
+      }
+    },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'10px' } },
+        React.createElement('i', { className:'ti ti-file-text', 'aria-hidden':'true', style:{ fontSize:'16px', color:'#0D9972' } }),
+        React.createElement('span', { style:{ fontSize:'13px', fontWeight:600, color:'#374151' } }, '散布記録サマリー')
+      ),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginBottom:'10px', lineHeight:1.7 } },
+        form.date + ' ／ ' + (selField ? selField.name : '—') + ' ／ ' + selP.name + '（' + dilution + '倍）／ 使用量 ' + (form.amount || '—') + 'L'
+      ),
+      React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+        React.createElement('button', {
+          className:'btn btn-ghost',
+          onClick: () => printSingleSprayRecord({ ...form, id: form.id || Date.now(), dilution, field_id: Number(form.field_id), pesticide_id: selP.id }, [selField], [selP]),
+          style:{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', padding:'6px 14px' }
+        },
+          React.createElement('i', { className:'ti ti-printer', 'aria-hidden':'true' }),
+          '印刷'
+        ),
+        React.createElement('button', {
+          className:'btn btn-ghost',
+          onClick: () => exportSingleSprayRecordPDF({ ...form, id: form.id || Date.now(), dilution, field_id: Number(form.field_id), pesticide_id: selP.id }, [selField], [selP]),
+          style:{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', padding:'6px 14px' }
+        },
+          React.createElement('i', { className:'ti ti-file-download', 'aria-hidden':'true' }),
+          'PDF出力'
+        )
+      )
+    ),
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
+      React.createElement('button', { className:'btn btn-ghost', onClick:onPrev }, '← 戻る'),
+      React.createElement('button', {
+        className:'btn btn-primary',
+        disabled: isOver,
+        onClick: onSave,
+        style:{ padding:'10px 28px', fontSize:'14px' }
+      }, '✓ 保存する')
+    )
+  )
+}
+
+// ── RecordDetailModal: 詳細モーダル（表示・編集・削除）────────────────
+function RecordDetailModal({ record, fields, pesticides, onClose, onUpdate, onDelete }) {
+  const [isEditing, setIsEditing] = React.useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
+  const [form, setForm] = React.useState({ ...record })
+  const f = fields.find(x => x.id === record.field_id)
+  const p = pesticides ? pesticides.find(x => x.id === record.pesticide_id) : null
+  const cfg = WORK_ICON_MAP[record.work_type] || WORK_ICON_MAP['その他']
+  const uf = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
+
+  const handleUpdate = () => {
+    if (onUpdate) onUpdate({ ...form, field_id: Number(form.field_id) })
+    setIsEditing(false)
+    onClose()
+  }
+  const handleDelete = () => {
+    if (onDelete) onDelete(record.id)
+    onClose()
+  }
+
+  const labelStyle = { fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'5px' }
+  const rowStyle   = { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #F1F5F9', fontSize:'13px' }
+
+  return React.createElement('div', {
+    style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+    onClick: onClose
+  },
+    React.createElement('div', {
+      style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'480px', maxWidth:'95vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+      onClick: e => e.stopPropagation()
+    },
+      // ヘッダー
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+          React.createElement('div', { style:{ width:36, height:36, borderRadius:'50%', background:cfg.color, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+            React.createElement('i', { className:'ti ti-'+cfg.icon, style:{ fontSize:'18px', color:'#FFFFFF' } })
+          ),
+          React.createElement('div', null,
+            React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, record.work_type),
+            React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, record.date + (f ? '　' + f.name : ''))
+          )
+        ),
+        React.createElement('button', {
+          onClick: onClose,
+          style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+        }, '✕')
+      ),
+
+      // --- 表示モード ---
+      !isEditing && React.createElement('div', null,
+        React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'8px', padding:'4px 12px', marginBottom:'16px' } },
+          React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '日付'),
+            React.createElement('span', { style:{ fontWeight:600 } }, record.date)
+          ),
+          React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '圃場'),
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px', fontWeight:600 } },
+              f && React.createElement('div', { style:{ width:8, height:8, borderRadius:'50%', background:f.color } }),
+              f ? f.name : '—'
+            )
+          ),
+          React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '作業種'),
+            React.createElement('span', { style:{ fontWeight:600 } }, record.work_type)
+          ),
+          React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '天気'),
+            React.createElement('span', null, record.weather || '—')
+          ),
+          React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '作業者'),
+            React.createElement('span', null, record.worker || '—')
+          ),
+          record.work_type === '農薬散布' && React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '使用農薬'),
+            React.createElement('span', { style:{ fontWeight:600, color:'#B45309' } }, p ? p.name : '—')
+          ),
+          record.work_type === '農薬散布' && React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '希釈倍率'),
+            React.createElement('span', null, record.dilution ? record.dilution + '倍' : '—')
+          ),
+          record.work_type === '農薬散布' && React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '散布量'),
+            React.createElement('span', null, record.amount ? record.amount + ' L/10a' : '—')
+          ),
+          record.work_type === '農薬散布' && React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '使用方法'),
+            React.createElement('span', { style:{ fontWeight:600 } }, record.spray_method || '—')
+          ),
+          record.work_type === '農薬散布' && React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '使用機械No.'),
+            React.createElement('span', null, record.machine_no || '—')
+          ),
+          record.work_type === '農薬散布' && React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '作った散布液量'),
+            React.createElement('span', null, record.spray_made_L ? record.spray_made_L + ' L' : '—')
+          ),
+          record.work_type === '農薬散布' && React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '廃棄した散布液量'),
+            React.createElement('span', null, record.spray_discarded_L ? record.spray_discarded_L + ' L' : '—')
+          ),
+          // 開始・終了・所要時間
+          (record.start_time || record.end_time) && React.createElement('div', { style:rowStyle },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '作業時間'),
+            React.createElement('span', null,
+              (record.start_time || '—') + ' 〜 ' + (record.end_time || '—') +
+              (record.break_minutes ? '　休憩 ' + record.break_minutes + '分' : '')
+            )
+          ),
+          React.createElement('div', { style:{ ...rowStyle, borderBottom:'none' } },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '備考'),
+            React.createElement('span', { style:{ color: record.note ? '#374151' : '#9CA3AF' } }, record.note || 'なし')
+          )
+        ),
+        // 【実装手順書 Step1】転記チェック状況
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px' } },
+          React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280' } }, '転記チェック'),
+          React.createElement(TranscribeStatusBadge, {
+            checks: record.checks,
+            checkKeys: ['mgmt_table', 'pesticide_fert', 'lettuce_table', 'sa'],
+          })
+        ),
+        // ボタン群（表示モード）
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          onUpdate && React.createElement('button', {
+            className:'btn btn-ghost',
+            style:{ flex:1, justifyContent:'center', gap:'6px' },
+            onClick: () => setIsEditing(true)
+          },
+            React.createElement('i', { className:'ti ti-pencil', style:{ fontSize:'14px' } }),
+            '編集'
+          ),
+          onDelete && !showDeleteConfirm && React.createElement('button', {
+            onClick: () => setShowDeleteConfirm(true),
+            style:{
+              flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px',
+              padding:'9px 18px', borderRadius:'4px', fontSize:'14px', fontWeight:600,
+              cursor:'pointer', border:'1.5px solid #FCA5A5', background:'#FEF2F2', color:'#DC2626'
+            }
+          },
+            React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'14px' } }),
+            '削除'
+          ),
+          showDeleteConfirm && React.createElement('div', { style:{ flex:1, display:'flex', gap:'6px' } },
+            React.createElement('button', {
+              onClick: handleDelete,
+              style:{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'4px', padding:'9px', borderRadius:'4px', fontSize:'13px', fontWeight:700, cursor:'pointer', border:'none', background:'#DC2626', color:'#fff' }
+            }, '本当に削除する'),
+            React.createElement('button', {
+              onClick: () => setShowDeleteConfirm(false),
+              style:{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'9px', borderRadius:'4px', fontSize:'13px', fontWeight:600, cursor:'pointer', border:'1px solid #D8E4D8', background:'#fff', color:'#374151' }
+            }, 'キャンセル')
+          )
+        )
+      ),
+
+      // --- 編集モード ---
+      isEditing && React.createElement('div', null,
+        React.createElement('div', { style:{ marginBottom:'12px' } },
+          React.createElement('label', { style:labelStyle }, '日付'),
+          React.createElement('input', { type:'date', value:form.date, onChange:e=>uf('date',e.target.value), className:'form-input' })
+        ),
+        React.createElement('div', { style:{ marginBottom:'12px' } },
+          React.createElement('label', { style:labelStyle }, '圃場'),
+          React.createElement('select', { value:String(form.field_id), onChange:e=>uf('field_id',e.target.value), className:'form-select' },
+            ...fields.map(x => React.createElement('option', { key:x.id, value:String(x.id) }, x.name))
+          )
+        ),
+        React.createElement('div', { style:{ marginBottom:'12px' } },
+          React.createElement('label', { style:labelStyle }, '作業種'),
+          React.createElement('select', { value:form.work_type, onChange:e=>uf('work_type',e.target.value), className:'form-select' },
+            ...Object.keys(WORK_ICON_MAP).map(w => React.createElement('option', { key:w, value:w }, w))
+          )
+        ),
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'12px' } },
+          React.createElement('div', null,
+            React.createElement('label', { style:labelStyle }, '天気'),
+            React.createElement('select', { value:form.weather||'晴', onChange:e=>uf('weather',e.target.value), className:'form-select' },
+              ...['晴','曇','雨','雪'].map(w => React.createElement('option', { key:w, value:w }, w))
+            )
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style:labelStyle }, '作業者'),
+            React.createElement('input', { type:'text', value:form.worker||'', onChange:e=>uf('worker',e.target.value), placeholder:'作業者名', className:'form-input' })
+          )
+        ),
+        form.work_type === '農薬散布' && pesticides && React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px', marginBottom:'12px' } },
+          React.createElement('div', null,
+            React.createElement('label', { style:labelStyle }, '農薬'),
+            React.createElement('select', { value:String(form.pesticide_id||''), onChange:e=>uf('pesticide_id',Number(e.target.value)), className:'form-select' },
+              React.createElement('option', { value:'' }, '—'),
+              ...pesticides.map(x => React.createElement('option', { key:x.id, value:String(x.id) }, x.name))
+            )
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style:labelStyle }, '希釈倍率'),
+            React.createElement('input', { type:'number', value:form.dilution||'', onChange:e=>uf('dilution',Number(e.target.value)), placeholder:'1000', className:'form-input' })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style:labelStyle }, '散布量(L)'),
+            React.createElement('input', { type:'number', value:form.amount||'', onChange:e=>uf('amount',Number(e.target.value)), placeholder:'50', className:'form-input' })
+          )
+        ),
+        // ── 農薬散布専用: 使用方法・機械・散布液量 ──
+        form.work_type === '農薬散布' && React.createElement('div', {
+          style:{ background:'#F8FAFF', border:'1px solid #E0E8F8', borderRadius:'8px', padding:'12px', marginBottom:'12px' }
+        },
+          React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:'#1D4ED8', marginBottom:'10px' } }, '散布作業の詳細'),
+          React.createElement('div', { style:{ marginBottom:'10px' } },
+            React.createElement('label', { style:labelStyle }, '使用方法'),
+            React.createElement('div', { style:{ display:'flex', gap:'6px', flexWrap:'wrap' } },
+              ['散布', '株元散布', '土壌混和', '灌注'].map(method =>
+                React.createElement('button', {
+                  key: method,
+                  onClick: () => uf('spray_method', form.spray_method === method ? '' : method),
+                  style:{
+                    padding:'4px 12px', borderRadius:'20px', fontSize:'11px', fontWeight:600,
+                    cursor:'pointer', border:'1.5px solid', transition:'all .12s',
+                    borderColor: form.spray_method === method ? '#1D4ED8' : '#DDE2EC',
+                    background:  form.spray_method === method ? '#EFF6FF' : '#F8FAFC',
+                    color:       form.spray_method === method ? '#1D4ED8' : '#64748B',
+                  }
+                }, method)
+              )
+            )
+          ),
+          React.createElement('div', { style:{ marginBottom:'10px' } },
+            React.createElement('label', { style:labelStyle }, '使用機械No.'),
+            React.createElement('input', { type:'text', value:form.machine_no||'', onChange:e=>uf('machine_no',e.target.value), placeholder:'例: 散布機-01', className:'form-input' })
+          ),
+          React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' } },
+            React.createElement('div', null,
+              React.createElement('label', { style:labelStyle }, '作った散布液量(L)'),
+              React.createElement('input', { type:'number', min:0, step:0.1, value:form.spray_made_L||'', onChange:e=>uf('spray_made_L',e.target.value), placeholder:'例: 100', className:'form-input' })
+            ),
+            React.createElement('div', null,
+              React.createElement('label', { style:labelStyle }, '廃棄した散布液量(L)'),
+              React.createElement('input', { type:'number', min:0, step:0.1, value:form.spray_discarded_L||'', onChange:e=>uf('spray_discarded_L',e.target.value), placeholder:'例: 5', className:'form-input' })
+            )
+          )
+        ),
+        // ── 作業時間 ──
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'12px' } },
+          React.createElement('div', null,
+            React.createElement('label', { style:labelStyle }, '開始時刻'),
+            React.createElement('input', { type:'time', value:form.start_time||'', onChange:e=>uf('start_time',e.target.value), className:'form-input' })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style:labelStyle }, '終了時刻'),
+            React.createElement('input', { type:'time', value:form.end_time||'', onChange:e=>uf('end_time',e.target.value), className:'form-input' })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style:labelStyle }, '休憩（分）'),
+            React.createElement('input', { type:'number', min:0, step:15, value:form.break_minutes||'', onChange:e=>uf('break_minutes',Number(e.target.value)), className:'form-input' })
+          )
+        ),
+        React.createElement(NoteChecklistField, {
+          note: form.note,
+          onNoteChange: v => uf('note', v),
+          checks: form.checks,
+          onChecksChange: v => uf('checks', v),
+          checkKeys: ['mgmt_table', 'pesticide_fert', 'lettuce_table', 'sa'],
+          defaultOpen: true,
+        }),
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('button', { className:'btn btn-primary', style:{ flex:1, justifyContent:'center' }, onClick:handleUpdate },
+            React.createElement('i', { className:'ti ti-check', style:{ fontSize:'14px' } }), '　保存する'
+          ),
+          React.createElement('button', { className:'btn btn-ghost', style:{ flex:1, justifyContent:'center' }, onClick:()=>{ setForm({...record}); setIsEditing(false) } }, 'キャンセル')
+        )
+      )
+    )
+  )
+}
+
+// ── UX-04: 記録一覧テーブル（検索・絞り込み対応）────────────────
+function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycles=[], onUpdateRecordCycle }) {
+  // UX-04: 検索・フィルター state
+  const [query,      setQuery]      = React.useState('')
+  const [filterWork, setFilterWork] = React.useState('all')
+  const [filterField,setFilterField]= React.useState('all')
+  const [dateFrom,   setDateFrom]   = React.useState('')
+  const [dateTo,     setDateTo]     = React.useState('')
+  const [expanded,   setExpanded]   = React.useState(false)
+  const [selectedRecord, setSelectedRecord] = React.useState(null)
+
+  // UX-04: フィルタリングロジック
+  const filtered = React.useMemo(() => {
+    return [...records].reverse().filter(r => {
+      const f = fields.find(x => x.id === r.field_id)
+      // キーワード検索（圃場名・圃場番号・元表記・作業種・作業者・備考）
+      // 【実装手順書 Step0】「9s」「3n」のような紙日報の元表記でも検索できるようにする
+      if (query.trim()) {
+        const q = query.trim().toLowerCase()
+        const haystack = [
+          f ? f.name : '',
+          f ? (f.field_no || '') : '',
+          f ? getFieldRawLabels(f).join(' ') : '',
+          r.work_type,
+          r.worker || '',
+          r.note || '',
+          r.date
+        ].join(' ').toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      // 作業種絞り込み
+      if (filterWork !== 'all' && r.work_type !== filterWork) return false
+      // 圃場絞り込み
+      if (filterField !== 'all' && String(r.field_id) !== filterField) return false
+      // 日付範囲
+      if (dateFrom && r.date < dateFrom) return false
+      if (dateTo   && r.date > dateTo)   return false
+      return true
+    })
+  }, [records, fields, query, filterWork, filterField, dateFrom, dateTo])
+
+  const hasFilter = query || filterWork !== 'all' || filterField !== 'all' || dateFrom || dateTo
+  const clearAll  = () => { setQuery(''); setFilterWork('all'); setFilterField('all'); setDateFrom(''); setDateTo('') }
+
+  // 作業種リスト（記録から動的生成）
+  const workTypes = React.useMemo(() => [...new Set(records.map(r => r.work_type))].sort(), [records])
+
+  return React.createElement('div', null,
+
+    // ── UX-04: 検索バー ──
+    React.createElement('div', {
+      style:{
+        background:'#fff', border:'1px solid #E2E8F0', borderRadius:'12px',
+        padding:'14px 16px', marginBottom:'12px',
+        boxShadow:'0 1px 4px rgba(0,0,0,.05)'
+      }
+    },
+      // 1行目: キーワード検索 + 絞り込みトグル
+      React.createElement('div', { style:{ display:'flex', gap:'8px', alignItems:'center' } },
+        React.createElement('div', {
+          style:{
+            flex:1, display:'flex', alignItems:'center', gap:'8px',
+            background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:'8px',
+            padding:'0 12px', height:'36px'
+          }
+        },
+          React.createElement('i', { className:'ti ti-search', style:{ color:'#94A3B8', fontSize:'15px', flexShrink:0 } }),
+          React.createElement('input', {
+            type:'text', value:query,
+            onChange: e => setQuery(e.target.value),
+            placeholder:'圃場名・作業種・作業者で検索…',
+            style:{
+              flex:1, border:'none', background:'transparent', outline:'none',
+              fontSize:'13px', color:'#374151'
+            }
+          }),
+          query && React.createElement('button', {
+            onClick: () => setQuery(''),
+            style:{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8', padding:'0', lineHeight:1, fontSize:'16px' }
+          }, '×')
+        ),
+        React.createElement('button', {
+          onClick: () => setExpanded(v => !v),
+          style:{
+            display:'flex', alignItems:'center', gap:'5px', height:'36px',
+            padding:'0 12px', borderRadius:'8px', fontSize:'12px', fontWeight:500,
+            cursor:'pointer', transition:'all .15s', whiteSpace:'nowrap',
+            background: expanded ? '#F0FDF9' : '#F8FAFC',
+            border: expanded ? '1px solid #0D997255' : '1px solid #E2E8F0',
+            color: expanded ? '#0D9972' : '#64748B'
+          }
+        },
+          React.createElement('i', { className:'ti ti-adjustments-horizontal', style:{ fontSize:'14px' } }),
+          '絞り込み',
+          hasFilter && React.createElement('span', {
+            style:{
+              background:'#DC2626', color:'#fff', borderRadius:'50%',
+              width:'16px', height:'16px', fontSize:'10px', fontWeight:700,
+              display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1
+            }
+          }, [filterWork !== 'all', filterField !== 'all', !!dateFrom || !!dateTo].filter(Boolean).length || '')
+        )
+      ),
+
+      // 2行目: 詳細フィルター（expanded 時のみ）
+      expanded && React.createElement('div', {
+        style:{
+          marginTop:'12px', paddingTop:'12px',
+          borderTop:'1px solid #F1F5F9',
+          display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px',
+          animation:'fadeInDown .18s ease'
+        }
+      },
+        // 作業種
+        React.createElement('div', null,
+          React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', fontWeight:600, marginBottom:'4px', letterSpacing:'.03em' } }, '作業種'),
+          React.createElement('select', {
+            value: filterWork,
+            onChange: e => setFilterWork(e.target.value),
+            className:'form-select',
+            style:{ fontSize:'12px', height:'32px', padding:'0 8px' }
+          },
+            React.createElement('option', { value:'all' }, 'すべて'),
+            ...workTypes.map(w => React.createElement('option', { key:w, value:w },
+              (WORK_ICON_MAP[w] ? WORK_ICON_MAP[w].emoji + ' ' : '') + w
+            ))
+          )
+        ),
+        // 圃場
+        React.createElement('div', null,
+          React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', fontWeight:600, marginBottom:'4px', letterSpacing:'.03em' } }, '圃場'),
+          React.createElement('select', {
+            value: filterField,
+            onChange: e => setFilterField(e.target.value),
+            className:'form-select',
+            style:{ fontSize:'12px', height:'32px', padding:'0 8px' }
+          },
+            React.createElement('option', { value:'all' }, 'すべて'),
+            ...fields.map(f => React.createElement('option', { key:f.id, value:String(f.id) }, f.name))
+          )
+        ),
+        // 日付範囲
+        React.createElement('div', null,
+          React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', fontWeight:600, marginBottom:'4px', letterSpacing:'.03em' } }, '期間'),
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'4px' } },
+            React.createElement('input', {
+              type:'date', value:dateFrom,
+              onChange: e => setDateFrom(e.target.value),
+              className:'form-input',
+              style:{ fontSize:'12px', height:'32px', padding:'0 6px', flex:1 }
+            }),
+            React.createElement('span', { style:{ color:'#94A3B8', fontSize:'12px', flexShrink:0 } }, '〜'),
+            React.createElement('input', {
+              type:'date', value:dateTo,
+              onChange: e => setDateTo(e.target.value),
+              className:'form-input',
+              style:{ fontSize:'12px', height:'32px', padding:'0 6px', flex:1 }
+            })
+          )
+        )
+      ),
+
+      // クリアボタン（フィルター適用中のみ）
+      hasFilter && React.createElement('div', {
+        style:{ marginTop:'10px', display:'flex', alignItems:'center', gap:'8px' }
+      },
+        React.createElement('span', { style:{ fontSize:'12px', color:'#64748B' } },
+          filtered.length + ' / ' + records.length + ' 件を表示中'
+        ),
+        React.createElement('button', {
+          onClick: clearAll,
+          style:{
+            fontSize:'11px', color:'#DC2626', background:'#FEF2F2',
+            border:'1px solid #FCA5A5', borderRadius:'6px',
+            padding:'2px 10px', cursor:'pointer', fontWeight:500
+          }
+        }, '✕ クリア')
+      )
+    ),
+
+    // ── テーブル本体 ──
+    React.createElement('div', { className:'card card-data' },
+      filtered.length === 0
+        ? React.createElement('div', {
+            style:{ padding:'36px 24px', color:'#6B7280', fontSize:'14px', textAlign:'center' }
+          },
+            React.createElement('div', { style:{ fontSize:'32px', marginBottom:'8px' } }, '🔍'),
+            hasFilter
+              ? React.createElement('div', null,
+                  React.createElement('div', { style:{ fontWeight:500, color:'#374151' } }, '該当する記録が見つかりません'),
+                  React.createElement('div', { style:{ fontSize:'12px', marginTop:'4px', color:'#94A3B8' } }, '検索条件を変えてみてください')
+                )
+              : React.createElement('div', null, '記録がまだありません')
+          )
+        : React.createElement('table', { className:'table' },
+            React.createElement('thead', null,
+              React.createElement('tr', null,
+                ...['', '日付', '圃場', '作業', '作付け', '天気', '作業者', '転記', ''].map(h => React.createElement('th', { key:h }, h))
+              )
+            ),
+            React.createElement('tbody', null,
+              ...filtered.map(r => {
+                const f = fields.find(x => x.id === r.field_id)
+                const cfg = WORK_ICON_MAP[r.work_type] || WORK_ICON_MAP['その他']
+                // キーワードハイライト用ヘルパー
+                const hl = (text) => {
+                  if (!query.trim() || !text) return text
+                  const q = query.trim()
+                  const idx = text.toLowerCase().indexOf(q.toLowerCase())
+                  if (idx < 0) return text
+                  return React.createElement('span', null,
+                    text.slice(0, idx),
+                    React.createElement('mark', {
+                      style:{ background:'#FEF08A', color:'#374151', borderRadius:'2px', padding:'0 1px' }
+                    }, text.slice(idx, idx + q.length)),
+                    text.slice(idx + q.length)
+                  )
+                }
+                return React.createElement('tr', { key:r.id, style:{ cursor:'pointer' }, onClick: () => setSelectedRecord(r) },
+                  React.createElement('td', { style:{ paddingRight:0 } },
+                    React.createElement('div', {
+                      style:{ width:24, height:24, borderRadius:'50%', background:cfg.color, display:'flex', alignItems:'center', justifyContent:'center' }
+                    },
+                      React.createElement('i', { className:'ti ti-'+cfg.icon, 'aria-hidden':'true', style:{ fontSize:'14px', color:'#FFFFFF' } })
+                    )
+                  ),
+                  React.createElement('td', null, hl(r.date)),
+                  React.createElement('td', null,
+                    f && React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'6px' } },
+                      React.createElement('div', { style:{ width:6, height:6, borderRadius:'50%', background:f.color } }),
+                      hl(f.name)
+                    )
+                  ),
+                  React.createElement('td', null, hl(r.work_type)),
+                  React.createElement('td', { onClick: e => e.stopPropagation() },
+                    onUpdateRecordCycle && React.createElement(CropCycleSelector, {
+                      record: r,
+                      cropCycles,
+                      onUpdate: onUpdateRecordCycle
+                    })
+                  ),
+                  React.createElement('td', { style:{ color:'#6B7280' } }, r.weather),
+                  React.createElement('td', { style:{ color:'#6B7280' } }, hl(r.worker || '—')),
+                  React.createElement('td', null,
+                    React.createElement(TranscribeStatusBadge, {
+                      checks: r.checks,
+                      checkKeys: ['mgmt_table', 'pesticide_fert', 'lettuce_table', 'sa'],
+                    })
+                  ),
+                  React.createElement('td', { style:{ paddingRight:'16px', textAlign:'right' }, onClick: e => e.stopPropagation() },
+                    React.createElement('button', {
+                      onClick: () => setSelectedRecord(r),
+                      style:{
+                        fontSize:'11px', fontWeight:600, color:'#0A6B52', background:'#F0FDF9',
+                        border:'1px solid #6EE7B7', borderRadius:'6px', padding:'3px 10px',
+                        cursor:'pointer', whiteSpace:'nowrap'
+                      }
+                    }, '詳細 / 編集')
+                  )
+                )
+              })
+            )
+          )
+    ),
+    // 詳細モーダル
+    selectedRecord && React.createElement(RecordDetailModal, {
+      record: selectedRecord,
+      fields,
+      pesticides,
+      onClose: () => setSelectedRecord(null),
+      onUpdate: onUpdate ? (updated) => { onUpdate(updated); setSelectedRecord(null) } : null,
+      onDelete: onDelete ? (id) => { onDelete(id); setSelectedRecord(null) } : null,
+    })
+  )
+}
+
+// ── RecordForm: フォーム専用ページ（旧 DailyRecord hideList:true）──
+function RecordForm({ fields, pesticides, records, onSave, inModal }) {
+  const STEPS = ['日付・圃場', '作業内容', '農薬/施肥', '確認・保存']
+  const [step, setStep]         = React.useState(1)
+  const [dilution, setDilution] = React.useState(1000)
+  // inModal かつ圃場が1件のとき、その圃場をプリセット
+  const isFieldPreset = inModal && fields.length === 1
+  const presetFieldId = isFieldPreset ? String(fields[0].id) : ''
+  const [form, setForm]         = React.useState({
+    date: new Date().toISOString().slice(0,10),
+    field_id: presetFieldId, work_type: '', pesticide_id: '',
+    amount: '', weather: '晴', worker: '', note: '', checks: {},
+    start_time: '08:00', end_time: '17:00', break_minutes: 60,
+    spray_method: '',       // 使用方法（散布・株元散布・土壌混和・灌注）
+    machine_no: '',         // 使用機械No.
+    spray_made_L: '',       // 作った散布液量（L）
+    spray_discarded_L: '',  // 廃棄した散布液量（L）
+  })
+  // UX-10: 保存後の「続けて入力」ボタン用 state
+  const [showContinueButton, setShowContinueButton] = React.useState(false)
+  
+  const updateField = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const selP    = pesticides.find(p => p.id === Number(form.pesticide_id))
+  const isOver  = isPesticideOverLimit(records, form.field_id, selP)
+  const selField = fields.find(f => f.id === Number(form.field_id))
+
+  // C04-1: onUpdate を useCallback でメモ化
+  const handlePesticideUpdate = React.useCallback(({ pesticide_id, dilution: d, amount: a, spray_liquid_L: v }) => {
+    if (pesticide_id) updateField('pesticide_id', String(pesticide_id))
+    setDilution(d)
+    updateField('amount', a)           // 原液使用量（L）
+    updateField('spray_volume_L', v)   // 散布液量（L）
+  }, [])
+
+  const handleSave = () => {
+    if (!form.field_id || !form.work_type) return
+    onSave({
+      ...form, id: Date.now(), dilution,
+      field_id: Number(form.field_id),
+      pesticide_id: form.pesticide_id ? Number(form.pesticide_id) : null
+    })
+    // UX-10: 保存完了後、「続けて入力」ボタンを3秒表示
+    setShowContinueButton(true)
+    setTimeout(() => setShowContinueButton(false), 3000)
+  }
+  
+  // UX-10: 「続けて入力」クリック時の処理
+  const handleContinueInput = () => {
+    // date, weather, work_type だけ引き継いで、field_id と others をリセット
+    setForm(f => ({
+      date: f.date,
+      weather: f.weather,
+      work_type: f.work_type,
+      field_id: '', pesticide_id: '', amount: '', worker: '', note: '', checks: {}
+    }))
+    setDilution(1000)
+    setShowContinueButton(false)
+    setStep(1) // ステップ1（圃場選択）から再開
+  }
+
+  // CAT-04-2: stepComponents を useMemo でメモ化
+  // → step/form/fields 等が変わった時だけ再生成され、無関係な再レンダーで再マウントされない
+  const stepComponents = React.useMemo(() => [null,
+    () => React.createElement(RecordStep1, { form, fields, up:updateField, onNext:()=>setStep(2), isFieldPreset }),
+    () => React.createElement(RecordStep2, { form, up:updateField, onPrev:()=>setStep(1), onNext:()=>setStep(3) }),
+    () => React.createElement(RecordStep3, { form, up:updateField, pesticides, records, isOver, selField, handlePesticideUpdate, onPrev:()=>setStep(2), onNext:()=>setStep(4) }),
+    () => React.createElement(RecordStep4, { form, dilution, selField, selP, isOver, onPrev:()=>setStep(3), onSave:handleSave, showContinueButton, onContinue:handleContinueInput }),
+  ], [step, form, fields, pesticides, records, isOver, dilution, selField, selP, handlePesticideUpdate, showContinueButton])
+
+  return React.createElement('div', { className: inModal ? '' : 'page' },
+    !inModal && React.createElement('div', { className:'eyebrow' }, 'DAILY WORK LOG'),
+    !inModal && React.createElement('div', { className:'page-title' }, '日次作業入力'),
+    !inModal && React.createElement('div', { className:'page-sub' }, '作業内容を記録してGAP書類を自動生成します'),
+    React.createElement('div', { className: inModal ? '' : 'card' },
+      React.createElement(StepBar, { step, steps:STEPS }),
+      stepComponents[step] && stepComponents[step]()
+    )
+  )
+}
+
+// ── RecordTablePage: 一覧専用ページ（旧 DailyRecord hideForm:true）──
+// UX-04: RecordTablePage — 検索・絞り込みバー付き記録一覧ページ
+function RecordTablePage({ records, fields, pesticides, onUpdate, onDelete, cropCycles=[], onUpdateRecordCycle }) {
+  return React.createElement('div', { className:'page' },
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'6px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'eyebrow' }, 'DAILY REPORT'),
+        React.createElement('div', { className:'page-title' }, '日報管理'),
+        React.createElement('div', { className:'page-sub' }, '全日報記録 ' + records.length + '件 — キーワード・作業種・圃場・期間で絞り込み可能')
+      )
+    ),
+    React.createElement(RecordTable, { records, fields, pesticides, onUpdate, onDelete, cropCycles, onUpdateRecordCycle })
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step1】RowMapView — 畝マップビュー（ロット単位）
+// 横長グリッドで「畝範囲（ロット）」を品種・ステータスごとに視覚化
+// 各ロットセルをクリック → onSelectRow でスライドインパネルを開く
+// ─────────────────────────────────────────────────────
+function RowMapView({ rows, selectedRowNo, onSelectRow }) {
+  return React.createElement('div', null,
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' } },
+      React.createElement('div', { className:'page-sub', style:{ marginBottom:0 } }, 'ロット（畝範囲）をクリックすると、播種〜収穫の詳細を確認できます'),
+      React.createElement('div', { style:{ display:'flex', gap:'12px', fontSize:'11px', color:'#6B7280' } },
+        ...Object.entries(ROW_STATUS_CONFIG).map(([key, cfg]) =>
+          React.createElement('div', { key, style:{ display:'flex', alignItems:'center', gap:'4px' } },
+            React.createElement('div', { style:{ width:10, height:10, borderRadius:'3px', background:cfg.color } }),
+            cfg.label
+          )
+        )
+      )
+    ),
+    React.createElement('div', {
+      style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(120px, 1fr))', gap:'8px' }
+    },
+      ...rows.map(lot => {
+        const cfg = ROW_STATUS_CONFIG[lot.status]
+        const isSelected = selectedRowNo === lot.id
+        return React.createElement('button', {
+          key: lot.id,
+          onClick: () => onSelectRow(lot.id),
+          style:{
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            gap:'4px', padding:'14px 10px', borderRadius:'8px', cursor:'pointer',
+            border: isSelected ? '2px solid '+cfg.color : '1px solid #DDE2EC',
+            background: cfg.bg,
+          }
+        },
+          React.createElement('div', { style:{ width:18, height:18, borderRadius:'4px', background:cfg.color } }),
+          React.createElement('div', { style:{ fontSize:'12px', fontWeight:600, color:'#374151' } }, lot.row_range+'畝'),
+          React.createElement('div', { style:{ fontSize:'11px', color:'#374151', fontWeight:500 } }, lot.variety),
+          React.createElement('div', { style:{ fontSize:'10px', color: cfg.color } }, cfg.label)
+        )
+      })
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step2】RowDetailPanel — ロット詳細スライドインパネル
+// 選択したロット（畝範囲）の播種〜収穫情報＋参考の日報・農薬履歴を表示
+// ─────────────────────────────────────────────────────
+function RowDetailPanel({ field, row, records, pesticides, onClose }) {
+  const lot = row
+  const cfg = ROW_STATUS_CONFIG[lot.status]
+  // 参考表示: 圃場の記録から代表的な日報・農薬履歴を表示（厳密な畝紐付けは行わない）
+  const fieldRecords     = records.filter(r => r.field_id === field.id)
+  const pesticideRecords = fieldRecords.filter(r => r.work_type === '農薬散布')
+
+  const InfoRow = ({ label, value }) =>
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', padding:'4px 0' } },
+      React.createElement('span', { style:{ color:'#6B7280' } }, label),
+      React.createElement('span', { style:{ fontWeight:600, textAlign:'right' } }, value || '—')
+    )
+
+  return React.createElement('div', {
+    style:{
+      position:'fixed', inset:0, background:'rgba(17,24,39,.35)',
+      display:'flex', justifyContent:'flex-end',
+      zIndex:1000
+    },
+    onClick: onClose
+  },
+    React.createElement('div', {
+      style:{
+        width:'360px', maxWidth:'100%', height:'100%', background:'#FFFFFF',
+        boxShadow:'-8px 0 32px rgba(17,24,39,.15)', padding:'20px',
+        overflowY:'auto', animation:'slideInRight .2s ease-out'
+      },
+      onClick: e => e.stopPropagation()
+    },
+      // ヘッダー
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'4px' } },
+        React.createElement('div', { style:{ fontSize:'16px', fontWeight:600, color:'#1A1F2E' } }, field.name + ' ／ ' + lot.row_range + '畝'),
+        React.createElement('button', {
+          className:'btn btn-ghost', style:{ padding:'4px 8px', fontSize:'16px', lineHeight:1 },
+          onClick: onClose
+        }, '✕')
+      ),
+      React.createElement('div', { style:{ marginBottom:'16px', display:'flex', alignItems:'center', gap:'8px' } },
+        React.createElement('span', {
+          style:{ display:'inline-flex', alignItems:'center', gap:'6px', fontSize:'12px', fontWeight:600, color:cfg.color, background:cfg.bg, border:'1px solid '+cfg.color+'40', borderRadius:'6px', padding:'4px 10px' }
+        },
+          React.createElement('div', { style:{ width:8, height:8, borderRadius:'2px', background:cfg.color } }),
+          cfg.label
+        ),
+        React.createElement('span', { style:{ fontSize:'13px', fontWeight:600, color:'#111827' } }, lot.variety)
+      ),
+
+      // 播種〜定植
+      React.createElement(SectionTitle, { icon:'seeding', style:{ marginBottom:'8px' } }, '播種・育苗・定植'),
+      React.createElement('div', { style:{ background:'#F8FAFC', borderRadius:'8px', padding:'12px 14px', marginBottom:'16px', fontSize:'13px', color:'#374151' } },
+        React.createElement(InfoRow, { label:'品種',         value:lot.variety }),
+        React.createElement(InfoRow, { label:'播種日',       value:lot.seed_date }),
+        React.createElement(InfoRow, { label:'種苗ロット',   value:lot.seed_lot_no }),
+        React.createElement(InfoRow, { label:'苗種類',       value:lot.seedling_type }),
+        React.createElement(InfoRow, { label:'定植日',       value:lot.transplant_date }),
+        React.createElement(InfoRow, { label:'定植方法',     value:lot.transplant_method }),
+        React.createElement(InfoRow, { label:'育苗期間',     value: lot.seedling_period_days != null ? lot.seedling_period_days + '日' : null }),
+        React.createElement(InfoRow, { label:'定植枚数',     value: lot.transplant_count != null ? lot.transplant_count + '枚' : null }),
+        React.createElement(InfoRow, { label:'1畝苗箱数',   value: lot.trays_per_row != null ? lot.trays_per_row : null }),
+      ),
+
+      // 定植前農薬
+      React.createElement(SectionTitle, { icon:'spray', style:{ marginBottom:'8px' } }, '定植前農薬'),
+      (!lot.pretransplant_pesticides || lot.pretransplant_pesticides.length === 0)
+        ? React.createElement('div', { style:{ fontSize:'12px', color:'#94A3B8', marginBottom:'16px' } }, '記録がありません')
+        : React.createElement('div', { style:{ marginBottom:'16px', display:'flex', flexDirection:'column', gap:'6px' } },
+            ...lot.pretransplant_pesticides.map((p, i) =>
+              React.createElement('div', { key:i, style:{ fontSize:'12px', color:'#374151', display:'flex', justifyContent:'space-between', borderBottom:'1px solid #F1F5F9', padding:'4px 0' } },
+                React.createElement('span', null, p.name),
+                React.createElement('span', null, p.amount)
+              )
+            )
+          ),
+
+      // 収穫
+      React.createElement(SectionTitle, { icon:'basket', style:{ marginBottom:'8px' } }, '収穫'),
+      React.createElement('div', { style:{ background:'#F8FAFC', borderRadius:'8px', padding:'12px 14px', marginBottom:'16px', fontSize:'13px', color:'#374151' } },
+        React.createElement(InfoRow, { label:'収穫開始日', value:lot.harvest_start }),
+        React.createElement(InfoRow, { label:'収穫終了日', value:lot.harvest_end }),
+        React.createElement(InfoRow, { label:'播種からの日数', value: lot.days_from_seed != null ? lot.days_from_seed + '日' : null }),
+        React.createElement(InfoRow, { label:'定植からの日数', value: lot.days_from_transplant != null ? lot.days_from_transplant + '日' : null }),
+      ),
+
+      // 日報（参考表示）
+      React.createElement(SectionTitle, { icon:'notebook', style:{ marginBottom:'8px' } }, 'この圃場の日報（参考）'),
+      fieldRecords.length === 0
+        ? React.createElement('div', { style:{ fontSize:'12px', color:'#94A3B8', marginBottom:'16px' } }, '記録がありません')
+        : React.createElement('div', { style:{ marginBottom:'16px', display:'flex', flexDirection:'column', gap:'6px' } },
+            ...fieldRecords.slice(-3).reverse().map(r =>
+              React.createElement('div', { key:r.id, style:{ fontSize:'12px', color:'#374151', display:'flex', justifyContent:'space-between', borderBottom:'1px solid #F1F5F9', padding:'4px 0' } },
+                React.createElement('span', null, r.date),
+                React.createElement('span', null, r.work_type)
+              )
+            )
+          ),
+
+      // 農薬履歴（参考表示）
+      React.createElement(SectionTitle, { icon:'spray', style:{ marginBottom:'8px' } }, 'この圃場の農薬履歴（参考）'),
+      pesticideRecords.length === 0
+        ? React.createElement('div', { style:{ fontSize:'12px', color:'#94A3B8', marginBottom:'4px' } }, '農薬使用の記録はまだありません')
+        : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'6px' } },
+            ...pesticideRecords.slice(-3).reverse().map(r => {
+              const p = pesticides.find(x => x.id === r.pesticide_id)
+              return React.createElement('div', { key:r.id, style:{ fontSize:'12px', color:'#374151', display:'flex', justifyContent:'space-between', borderBottom:'1px solid #F1F5F9', padding:'4px 0' } },
+                React.createElement('span', null, r.date),
+                React.createElement('span', null, (p ? p.name : '—') + (r.dilution ? '（'+r.dilution+'倍）' : ''))
+              )
+            })
+          ),
+
+      React.createElement('div', { style:{ fontSize:'11px', color:'#94A3B8', marginTop:'16px', lineHeight:1.6 } },
+        '※ 日報・農薬履歴は圃場単位の参考表示です。ロットとの厳密な紐付けは今後対応予定です。'
+      )
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step3】LotRiskAlertCard / LotRiskClearBadge
+// 圃場ダッシュボードの「要防除アラート」表示用（HarvestRiskAlertCardのロット版）
+// ─────────────────────────────────────────────────────
+function LotRiskAlertCard({ risk }) {
+  const isUrgent = risk.daysToHarvest <= 7
+  return React.createElement('div', {
+    style:{
+      background: isUrgent ? '#FFF1F2' : '#FFFBEB',
+      border: '1px solid ' + (isUrgent ? '#FECACA' : '#FDE68A'),
+      borderRadius:'8px', padding:'12px 16px', marginBottom:'8px',
+      display:'flex', alignItems:'center', gap:'12px'
+    }
+  },
+    React.createElement('span', { style:{ fontSize:'18px' } }, isUrgent ? '🚨' : '⚠️'),
+    React.createElement('div', { style:{ flex:1 } },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' } },
+        React.createElement('span', { style:{ fontSize:'14px', color: isUrgent ? '#B91C1C' : '#92400E', fontWeight:500 } },
+          risk.rowRange + '畝（' + risk.variety + '）の収穫まで' + risk.daysToHarvest + '日'
+        ),
+        // 【Step6】判定の精度を明示するバッジ（畝単位の散布記録と突き合わせたか／圃場全体の参考値か）
+        risk.precise
+          ? React.createElement('span', {
+              title:'この畝に実際に散布された記録（畝マップ入力）と突き合わせた結果です',
+              style:{ fontSize:'10px', fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #6EE7B7', borderRadius:'10px', padding:'1px 8px' }
+            }, '畝単位で確認済み')
+          : React.createElement('span', {
+              title:'この畝専用の散布記録が無いため、圃場全体の日報から参考表示しています',
+              style:{ fontSize:'10px', fontWeight:700, color:'#9A6B00', background:'#FEF9E7', border:'1px solid #FDE68A', borderRadius:'10px', padding:'1px 8px' }
+            }, '圃場全体の参考値')
+      ),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } },
+        risk.pesticideName + 'の残留期間があと' + risk.daysRemaining + '日あります'
+        + (risk.harvestableDateLabel ? '（' + risk.harvestableDateLabel + '〜収穫可能）' : '')
+      )
+    ),
+    React.createElement('span', {
+      className:'badge ' + (isUrgent ? 'badge-red' : 'badge-amber')
+    }, '残留' + risk.daysRemaining + '日')
+  )
+}
+function LotRiskClearBadge() {
+  return React.createElement('div', {
+    style:{
+      background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'8px',
+      padding:'12px 16px', marginBottom:'8px',
+      display:'flex', alignItems:'center', gap:'12px'
+    }
+  },
+    React.createElement('span', { style:{ fontSize:'18px' } }, '🌱'),
+    React.createElement('div', { style:{ flex:1 } },
+      React.createElement('div', { style:{ fontSize:'14px', color:'#065F46', fontWeight:500 } }, '防除アラートはありません'),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } }, '進行中ロットの収穫予定に、残留農薬の懸念はありません')
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【畝マップ Step1】parseRowRange — 畝範囲文字列をSet<number>に変換するヘルパー
+// 対応形式: "1-6"（連続範囲） / "47"（単独番号）/ "1-6,8,10-12"（混在）
+// ─────────────────────────────────────────────────────
+function parseRowRange(rangeStr) {
+  const set = new Set()
+  if (!rangeStr) return set
+  const parts = String(rangeStr).split(',')
+  parts.forEach(part => {
+    const trimmed = part.trim()
+    if (trimmed.includes('-')) {
+      const [start, end] = trimmed.split('-').map(Number)
+      if (!isNaN(start) && !isNaN(end)) {
+        for (let i = start; i <= end; i++) set.add(i)
+      }
+    } else {
+      const n = Number(trimmed)
+      if (!isNaN(n) && trimmed !== '') set.add(n)
+    }
+  })
+  return set
+}
+
+// ─────────────────────────────────────────────────────
+// 【畝マップ Step4】selectedRowsToRange — Set<number> を row_range 文字列に変換するヘルパー
+// 例: Set{1,2,3,6,7,10} → "1-3,6-7,10"
+// 連続する番号は "start-end" に圧縮し、単独番号はそのまま残す。
+function selectedRowsToRange(set) {
+  if (!set || set.size === 0) return ''
+  const nums = [...set].map(Number).sort((a, b) => a - b)
+  const groups = []
+  let start = nums[0], end = nums[0]
+  for (let i = 1; i < nums.length; i++) {
+    if (nums[i] === end + 1) {
+      end = nums[i]
+    } else {
+      groups.push(start === end ? String(start) : start + '-' + end)
+      start = end = nums[i]
+    }
+  }
+  groups.push(start === end ? String(start) : start + '-' + end)
+  return groups.join(',')
+}
+
+// 【畝マップ Step1 / Step3更新 / 条(W/E)対応】RowMap — 畝番号カードのグリッド表示コンポーネント
+//
+// Props:
+//   lots             : LOTS[field.id] の配列（ロット情報）
+//   totalRows        : 畝の総本数（この数だけカードを表示する）
+//   selectable       : true=範囲選択モード / false=表示・ハイライトモード
+//   selectedRows     : Set<number> — 選択中の畝番号セット（selectable時）
+//   onSelectRows     : (newSet) => void（selectable時）
+//   highlightedLotId : number|null — クリックでハイライト中のロットID（表示モード時）
+//   onClickLot       : (lotId: number|null) => void — 畝クリック時に親へ通知（表示モード時）
+//   showSides        : true の場合、各畝番号カードをW（西）/E（東）の2段に分けて表示する。
+//                       とうもろこし圃場（条管理あり）向け。畝単位のロット色・選択状態はW/E共通
+//                       （現状のデータはまだ畝単位のため。条ごとの個別データ化は将来拡張）。
+// ─────────────────────────────────────────────────────
+function RowMap({ lots, totalRows, selectable, selectedRows, onSelectRows, highlightedLotId, onClickLot, showSides }) {
+  // 畝番号 → ロット の逆引きMap
+  const rowToLot = React.useMemo(() => {
+    const map = new Map()
+    ;(lots || []).forEach(lot => {
+      parseRowRange(lot.row_range).forEach(n => map.set(n, lot))
+    })
+    return map
+  }, [lots])
+
+  const [hoveredRow, setHoveredRow] = React.useState(null)
+
+  const handleClick = (rowNum) => {
+    const lot = rowToLot.get(rowNum)
+    if (selectable) {
+      // 範囲選択モード（Step4・5用）
+      if (!onSelectRows) return
+      const next = new Set(selectedRows || [])
+      next.has(rowNum) ? next.delete(rowNum) : next.add(rowNum)
+      onSelectRows(next)
+    } else {
+      // 表示モード: ロットIDをトグルして親に通知（Step3）
+      if (!onClickLot) return
+      const lotId = lot ? lot.id : null
+      onClickLot(highlightedLotId === lotId ? null : lotId)
+    }
+  }
+
+  if (!totalRows || totalRows < 1) return null
+
+  const rows = []
+  for (let i = 1; i <= totalRows; i++) {
+    const lot          = rowToLot.get(i)
+    const cfg          = lot ? ROW_STATUS_CONFIG[lot.status] : null
+    const isSelected   = selectable && selectedRows && selectedRows.has(i)
+    const isHighlighted = !selectable && lot && lot.id === highlightedLotId
+    const isHovered    = hoveredRow === i
+    // 別ロットがハイライト中のとき、それ以外は薄く表示
+    const isDimmed     = !selectable && highlightedLotId !== null && lot && lot.id !== highlightedLotId
+
+    let bg     = '#F1F5F1'
+    let color  = '#9CA3AF'
+    let border = '1.5px solid #DDE8DE'
+    let opacity = 1
+    let boxShadow = 'none'
+
+    if (cfg) {
+      bg     = cfg.bg
+      color  = cfg.color
+      border = '1.5px solid ' + cfg.color + '55'
+    }
+    // 範囲選択モードの選択済み
+    if (isSelected) {
+      bg        = '#0A6B52'
+      color     = '#FFFFFF'
+      border    = '1.5px solid #085A45'
+    }
+    // 表示モードのクリックハイライト
+    if (isHighlighted) {
+      bg        = cfg ? cfg.color : '#0A6B52'
+      color     = '#FFFFFF'
+      border    = '2px solid ' + (cfg ? cfg.color : '#0A6B52')
+      boxShadow = '0 0 0 2px ' + (cfg ? cfg.color + '55' : '#0A6B5255')
+    }
+    // ホバー（選択・ハイライトされていない場合のみ）
+    if (isHovered && !isSelected && !isHighlighted) {
+      bg     = cfg ? cfg.color + '33' : '#D1FAE5'
+      border = '1.5px solid ' + (cfg ? cfg.color : '#0A6B52')
+    }
+    // 別ロットハイライト中は薄く
+    if (isDimmed) {
+      opacity = 0.35
+    }
+    // ロット未設定かつ別ロットがハイライト中
+    if (!selectable && highlightedLotId !== null && !lot) {
+      opacity = 0.25
+    }
+
+    rows.push(
+      showSides
+        // 【条(W/E)対応】1畝＝縦2段（上:W／下:E）のカードとして表示
+        ? React.createElement('div', {
+            key: i,
+            title: lot
+              ? lot.variety + '（' + lot.row_range + '畝）\nは種: ' + lot.seed_date + '\n収穫予定: ' + (lot.harvest_start || '未定')
+              : 'ロット未設定',
+            style: {
+              width: '36px', display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0,
+            }
+          },
+            ['W', 'E'].map(side =>
+              React.createElement('div', {
+                key: side,
+                onClick: () => handleClick(i),
+                onMouseEnter: () => setHoveredRow(i),
+                onMouseLeave: () => setHoveredRow(null),
+                style: {
+                  width: '36px', height: '17px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px',
+                  borderRadius: '4px', fontSize: '9px', fontWeight: 700,
+                  background: bg, color, border, opacity, boxShadow,
+                  cursor: (selectable || onClickLot) ? 'pointer' : 'default',
+                  transition: 'all .15s',
+                  userSelect: 'none',
+                }
+              },
+                React.createElement('span', { style:{ opacity:0.7, fontSize:'8px' } }, side),
+                side === 'W' ? i : ''
+              )
+            )
+          )
+        // 通常表示（畝番号カード1枚）
+        // ── selectable=false（ダッシュボード表示モード）では縦長の畝帯として描画 ──
+        : selectable
+          ? React.createElement('div', {
+              key: i,
+              title: lot
+                ? lot.variety + '（' + lot.row_range + '畝）\nは種: ' + lot.seed_date + '\n収穫予定: ' + (lot.harvest_start || '未定')
+                : 'ロット未設定',
+              onClick: () => handleClick(i),
+              onMouseEnter: () => setHoveredRow(i),
+              onMouseLeave: () => setHoveredRow(null),
+              style: {
+                width: '36px', height: '36px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: '6px', fontSize: '11px', fontWeight: 700,
+                background: bg, color, border, opacity, boxShadow,
+                cursor: 'pointer',
+                transition: 'all .15s',
+                userSelect: 'none', flexShrink: 0,
+              }
+            }, i)
+          : React.createElement('div', {
+              key: i,
+              onClick: () => handleClick(i),
+              onMouseEnter: () => setHoveredRow(i),
+              onMouseLeave: () => setHoveredRow(null),
+              style: {
+                width: '22px',
+                height: '72px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingTop: '5px',
+                paddingBottom: '5px',
+                borderRadius: '4px',
+                fontSize: '9px',
+                fontWeight: 700,
+                background: bg,
+                color,
+                border,
+                opacity,
+                boxShadow: isHighlighted
+                  ? '0 0 0 2px ' + (cfg ? cfg.color : '#0A6B52') + ', 0 4px 12px ' + (cfg ? cfg.color + '44' : '#0A6B5244')
+                  : isHovered && !isHighlighted
+                    ? '0 2px 8px rgba(0,0,0,.12)'
+                    : 'none',
+                cursor: onClickLot ? 'pointer' : 'default',
+                transition: 'all .15s',
+                userSelect: 'none',
+                flexShrink: 0,
+                position: 'relative',
+                overflow: 'hidden',
+              }
+            },
+              // 畝番号（上部）
+              React.createElement('span', {
+                style: {
+                  fontSize: '8px',
+                  fontWeight: 800,
+                  color: isHighlighted ? '#fff' : (cfg ? cfg.color : '#9CA3AF'),
+                  lineHeight: 1,
+                  letterSpacing: '-.02em',
+                }
+              }, i),
+              // 品種名（縦書き風・中央）
+              lot ? React.createElement('span', {
+                style: {
+                  fontSize: '7px',
+                  fontWeight: 600,
+                  color: isHighlighted ? 'rgba(255,255,255,.85)' : (cfg ? cfg.color + 'CC' : '#9CA3AF'),
+                  writingMode: 'vertical-rl',
+                  textOrientation: 'mixed',
+                  letterSpacing: '.04em',
+                  lineHeight: 1,
+                  maxHeight: '42px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }
+              }, lot.variety) : null,
+              // 下部スペーサー（高さ揃え用）
+              React.createElement('span', { style:{ height:'8px' } })
+            )
+    )
+  }
+
+  // 表示モード: ホバー中ロット（ハイライト優先）
+  const displayLot = hoveredRow ? rowToLot.get(hoveredRow) : null
+
+  return React.createElement('div', null,
+    // 凡例
+    React.createElement('div', {
+      style: { display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px', alignItems: 'center' }
+    },
+      Object.entries(ROW_STATUS_CONFIG).map(([key, cfg]) =>
+        React.createElement('div', {
+          key,
+          style: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#6B7280', fontWeight: 500 }
+        },
+          selectable
+            ? React.createElement('div', { style: { width: 10, height: 10, borderRadius: '3px', background: cfg.bg, border: '1.5px solid ' + cfg.color + '88' } })
+            : React.createElement('div', { style: { width: 10, height: 22, borderRadius: '3px', background: cfg.bg, border: '1.5px solid ' + cfg.color + '88' } }),
+          cfg.label
+        )
+      ),
+      selectable && React.createElement('div', {
+        style: { display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: '#6B7280', fontWeight: 500 }
+      },
+        React.createElement('div', { style: { width: 10, height: 10, borderRadius: '3px', background: '#0A6B52' } }),
+        '選択中'
+      )
+    ),
+
+    // 畝グリッド
+    // ダッシュボード表示モード(selectable=false)では横スクロールの畝帯レイアウト
+    // 記録入力モーダル(selectable=true)では従来の折り返しグリッドを維持
+    React.createElement('div', {
+      style: selectable
+        ? { display: 'flex', flexWrap: 'wrap', gap: '4px' }
+        : {
+            display: 'flex',
+            flexWrap: 'nowrap',
+            gap: '3px',
+            overflowX: 'auto',
+            paddingBottom: '8px',
+            paddingTop: '4px',
+            // スクロールバーを細く
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#DDE8DE transparent',
+          }
+    }, ...rows),
+
+    // ホバー時プレビュー（表示モードかつハイライト未選択の場合のみ表示）
+    displayLot && !highlightedLotId
+      ? React.createElement('div', {
+          style: {
+            marginTop: '10px', padding: '10px 14px',
+            background: ROW_STATUS_CONFIG[displayLot.status]?.bg || '#F8FAFC',
+            border: '1px solid ' + (ROW_STATUS_CONFIG[displayLot.status]?.color || '#CBD5E1') + '44',
+            borderRadius: '8px', fontSize: '12px', color: '#374151',
+            display: 'flex', gap: '18px', flexWrap: 'wrap'
+          }
+        },
+          React.createElement('div', null,
+            React.createElement('span', { style:{ color:'#9CA3AF', marginRight:'4px' } }, '畝範囲'),
+            React.createElement('strong', null, displayLot.row_range + '畝')
+          ),
+          React.createElement('div', null,
+            React.createElement('span', { style:{ color:'#9CA3AF', marginRight:'4px' } }, '品種'),
+            React.createElement('strong', null, displayLot.variety)
+          ),
+          React.createElement('div', null,
+            React.createElement('span', { style:{ color:'#9CA3AF', marginRight:'4px' } }, '収穫予定'),
+            (displayLot.harvest_start || '未定') + (displayLot.harvest_end ? '〜' + displayLot.harvest_end : '')
+          ),
+          React.createElement('div', null,
+            React.createElement('span', {
+              style: {
+                fontSize:'11px', fontWeight:600, padding:'2px 8px', borderRadius:'6px',
+                color: ROW_STATUS_CONFIG[displayLot.status]?.color || '#6B7280',
+                background: 'white',
+                border: '1px solid ' + (ROW_STATUS_CONFIG[displayLot.status]?.color || '#CBD5E1') + '66'
+              }
+            }, ROW_STATUS_CONFIG[displayLot.status]?.label || displayLot.status)
+          )
+        )
+      : !highlightedLotId
+        ? React.createElement('div', {
+            style: { marginTop: '10px', fontSize: '12px', color: '#C4CABA', fontStyle: 'italic' }
+          }, selectable ? '畝をクリックして選択' : '畝をクリックするとロット詳細を固定表示します')
+        : null
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【水稲の代替UX】RiceStageTimeline — 圃場一枚＝1管理単位のステージ進捗バー
+// 畝マップが「畝ごとの色分けカード」で個体を識別するのに対し、水稲は畝という単位を持たないため、
+// 田植え→分げつ→出穂→刈取りという時間軸のステージ進捗を同じ位置（統計カードの下）に表示する。
+// field.rice_stage_dates が無い圃場（休閑中など）は「ステージ管理対象外」の旨を表示する。
+function RiceStageTimeline({ field }) {
+  const dates = field.rice_stage_dates
+  if (!dates) {
+    return React.createElement('div', {
+      style: { padding:'16px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' }
+    }, '現在、生育ステージの記録対象期間外です（休閑中）')
+  }
+
+  const STAGES = [
+    { key:'transplant', label:'田植え', icon:'🌱' },
+    { key:'tillering',  label:'分げつ', icon:'🌾' },
+    { key:'heading',    label:'出穂',   icon:'🌼' },
+    { key:'harvest',    label:'刈取り', icon:'🚜' },
+  ]
+  const today = new Date('2026-06-19') // システム上の「今日」固定値（他画面と統一）
+  // 今日時点で「実施済み」とみなせる最後のステージのindexを求める
+  let currentIdx = -1
+  STAGES.forEach((s, i) => {
+    const d = dates[s.key]
+    if (d && new Date(d) <= today) currentIdx = i
+  })
+
+  return React.createElement('div', null,
+    React.createElement('div', {
+      style: { display:'flex', alignItems:'center', position:'relative', padding:'8px 4px 0' }
+    },
+      STAGES.map((s, i) => {
+        const d = dates[s.key]
+        const isDone    = i <= currentIdx
+        const isCurrent = i === currentIdx
+        const isFuture  = i > currentIdx
+        return React.createElement(React.Fragment, { key:s.key },
+          // ステージ丸印 + ラベル
+          React.createElement('div', { style:{ display:'flex', flexDirection:'column', alignItems:'center', flex:'0 0 auto', width:'90px' } },
+            React.createElement('div', {
+              style: {
+                width:'34px', height:'34px', borderRadius:'50%',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:'15px',
+                background: isDone ? '#2563EB' : '#F1F5F1',
+                border: isCurrent ? '2.5px solid #1D4ED8' : '1.5px solid #DDE8DE',
+                boxShadow: isCurrent ? '0 0 0 3px #2563EB33' : 'none',
+                opacity: isFuture ? 0.5 : 1,
+              }
+            }, s.icon),
+            React.createElement('div', { style:{ marginTop:'6px', fontSize:'12px', fontWeight:700, color: isFuture ? '#9CA3AF' : '#111827' } }, s.label),
+            React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF', marginTop:'1px' } }, d || '未定')
+          ),
+          // 次のステージへの接続線（最後のステージ以外）
+          i < STAGES.length - 1
+            ? React.createElement('div', {
+                style: {
+                  flex: 1, height: '3px', marginTop: '-22px',
+                  background: i < currentIdx ? '#2563EB' : '#E5E7EB',
+                  borderRadius: '2px',
+                }
+              })
+            : null
+        )
+      })
+    ),
+    React.createElement('div', {
+      style: { marginTop:'14px', fontSize:'12px', color:'#374151', padding:'8px 12px', background:'#EFF6FF', borderRadius:'8px', border:'1px solid #DBEAFE' }
+    },
+      currentIdx === -1
+        ? '田植え前（準備中）'
+        : currentIdx === STAGES.length - 1
+          ? React.createElement('span', null, '刈取り完了予定: ', React.createElement('strong', null, dates.harvest))
+          : React.createElement('span', null, '現在のステージ: ', React.createElement('strong', null, STAGES[currentIdx].label), '　次は「', STAGES[currentIdx+1].label, '」（予定: ' + (dates[STAGES[currentIdx+1].key] || '未定') + '）')
+    )
+  )
+}
+
+// 【フェーズE・E-4 Step3】FieldDashboardSection — 圃場ダッシュボード
+// E-2「既存記録＋ロット概要を集約表示」の方針に基づき、
+// 「現在進行中のロット数」「直近の収穫予定」「要防除アラート」「最近の作業記録」を集約する。
+// FIELD_SUB_ITEMS の先頭タブ（dashboard）として表示される。
+// 【Step3追加】畝マップのクリックでロット詳細をハイライト表示する
+// ─────────────────────────────────────────────────────
+function FieldDashboardSection({ field, fieldRecords, fieldRows, pesticides, lotSprayRecords }) {
+  const lots          = fieldRows || []
+  const activeLots     = lots.filter(l => l.status === 'growing' || l.status === 'ready')
+  const harvestedLots  = lots.filter(l => l.status === 'harvested')
+  // 【Step6】このロットの圃場に紐づくlotSprayRecordsだけを渡し、畝単位で精密に判定する
+  const fieldLotSprayRecords = (lotSprayRecords || []).filter(r => r.field_id === field.id)
+  const lotRisks       = calcLotHarvestRisk(fieldRecords, lots, pesticides || [], fieldLotSprayRecords)
+
+  // 【Step3】畝マップでクリックされたロットのID（nullで未選択）
+  const [highlightedLotId, setHighlightedLotId] = React.useState(null)
+  const highlightedLot = highlightedLotId ? lots.find(l => l.id === highlightedLotId) : null
+
+  // 直近の収穫予定: 進行中ロットを収穫開始日が近い順に並べる
+  const upcomingHarvests = [...activeLots]
+    .filter(l => l.harvest_start)
+    .sort((a, b) => a.harvest_start.localeCompare(b.harvest_start))
+    .slice(0, 5)
+
+  const recentRecords = [...fieldRecords].reverse().slice(0, 5)
+
+  return React.createElement('div', null,
+
+    // --- 統計カード（ロット概要） ---
+    React.createElement('div', { className:'stat-grid' },
+      React.createElement('div', { className:'stat-card green' },
+        React.createElement('div', { className:'stat-n' }, activeLots.length),
+        React.createElement('div', { className:'stat-l' }, '進行中ロット')
+      ),
+      React.createElement('div', { className:'stat-card blue' },
+        React.createElement('div', { className:'stat-n' }, lots.length),
+        React.createElement('div', { className:'stat-l' }, '総ロット数')
+      ),
+      React.createElement('div', { className:'stat-card amber' },
+        React.createElement('div', { className:'stat-n' }, harvestedLots.length),
+        React.createElement('div', { className:'stat-l' }, '収穫済みロット')
+      ),
+      React.createElement('div', { className:'stat-card red' },
+        React.createElement('div', { className:'stat-n' }, lotRisks.length),
+        React.createElement('div', { className:'stat-l' }, '要防除アラート')
+      )
+    ),
+
+    // --- 🆕 畝マップ（Step3: クリックでロット詳細ハイライト） ---
+    // 【常時表示】開閉トグルは設けない。表示/非表示の唯一の条件は
+    // 「ロットデータがあり、かつ row_count（畝の総本数）が設定されている圃場か」のみ。
+    // 条件を満たす圃場では、ダッシュボードを開いた時点で常に畝マップが見える。
+    lots.length > 0 && field.row_count
+      ? React.createElement('div', { style:{ marginBottom:'24px' } },
+          React.createElement(SectionTitle, { icon:'layout-grid' }, '畝マップ'),
+          React.createElement('div', { className:'card' },
+            React.createElement(RowMap, {
+              lots,
+              totalRows: field.row_count,
+              selectable: false,
+              highlightedLotId,
+              onClickLot: setHighlightedLotId,
+              showSides: field.crop_category === 'corn',
+            }),
+
+            // ─ ハイライト中のロット詳細パネル ─
+            highlightedLot
+              ? React.createElement('div', {
+                  style: {
+                    marginTop: '16px',
+                    borderTop: '1px solid #E8F0E8',
+                    paddingTop: '16px',
+                  }
+                },
+                  // ヘッダー行（ロット名 + 閉じるボタン）
+                  React.createElement('div', {
+                    style: { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }
+                  },
+                    React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+                      React.createElement('div', {
+                        style: {
+                          width: 10, height: 10, borderRadius: '3px', flexShrink: 0,
+                          background: ROW_STATUS_CONFIG[highlightedLot.status]?.color || '#9CA3AF'
+                        }
+                      }),
+                      React.createElement('span', { style:{ fontSize:'14px', fontWeight:700, color:'#111827' } },
+                        highlightedLot.row_range + '畝　' + highlightedLot.variety
+                      ),
+                      React.createElement('span', {
+                        style: {
+                          fontSize:'11px', fontWeight:600, padding:'2px 8px', borderRadius:'6px',
+                          color: ROW_STATUS_CONFIG[highlightedLot.status]?.color || '#6B7280',
+                          background: ROW_STATUS_CONFIG[highlightedLot.status]?.bg || '#F8FAFC',
+                          border: '1px solid ' + (ROW_STATUS_CONFIG[highlightedLot.status]?.color || '#CBD5E1') + '55'
+                        }
+                      }, ROW_STATUS_CONFIG[highlightedLot.status]?.label || highlightedLot.status)
+                    ),
+                    React.createElement('button', {
+                      onClick: () => setHighlightedLotId(null),
+                      style: {
+                        border: 'none', background: 'none', cursor: 'pointer',
+                        color: '#9CA3AF', fontSize: '18px', lineHeight:1, padding:'2px 4px',
+                        borderRadius: '4px',
+                      },
+                      title: '閉じる'
+                    }, '×')
+                  ),
+                  // 詳細グリッド
+                  React.createElement('div', {
+                    style: { display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(160px, 1fr))', gap:'8px' }
+                  },
+                    [
+                      ['は種日',     highlightedLot.seed_date       || '—'],
+                      ['定植日',     highlightedLot.transplant_date || '—'],
+                      ['収穫予定開始', highlightedLot.harvest_start  || '—'],
+                      ['収穫予定終了', highlightedLot.harvest_end    || '—'],
+                      ['育苗期間',   highlightedLot.seedling_period_days ? highlightedLot.seedling_period_days + '日' : '—'],
+                      ['定植本数',   highlightedLot.transplant_count ? highlightedLot.transplant_count + '本' : '—'],
+                    ].map(([label, val]) =>
+                      React.createElement('div', {
+                        key: label,
+                        style: { background:'#F8FAF8', borderRadius:'6px', padding:'8px 12px' }
+                      },
+                        React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF', fontWeight:600, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:'3px' } }, label),
+                        React.createElement('div', { style:{ fontSize:'13px', color:'#111827', fontWeight:600 } }, val)
+                      )
+                    )
+                  ),
+                  // 定植前農薬
+                  highlightedLot.pretransplant_pesticides && highlightedLot.pretransplant_pesticides.length > 0
+                    ? React.createElement('div', { style:{ marginTop:'10px' } },
+                        React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF', fontWeight:600, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:'6px' } }, '定植前農薬'),
+                        React.createElement('div', { style:{ display:'flex', gap:'6px', flexWrap:'wrap' } },
+                          highlightedLot.pretransplant_pesticides.map((p, i) =>
+                            React.createElement('span', {
+                              key: i,
+                              style: { fontSize:'12px', background:'#FFF7ED', color:'#92400E', border:'1px solid #FDE68A', borderRadius:'6px', padding:'3px 9px', fontWeight:500 }
+                            }, p.name + '　' + p.amount)
+                          )
+                        )
+                      )
+                    : null
+                )
+              : null
+          )
+        )
+      : null,
+
+    // --- 🆕 生育ステージタイムライン（水稲の畝マップ代替） ---
+    // 水稲は畝という単位で管理しない（田植え/分げつ/出穂/刈取りという時間軸の管理）ため、
+    // 畝マップの代わりに圃場一枚＝1管理単位のステージ進捗バーを同じ位置に表示する。
+    field.crop_category === 'rice'
+      ? React.createElement('div', { style:{ marginBottom:'24px' } },
+          React.createElement(SectionTitle, { icon:'layout-grid' }, '生育ステージ'),
+          React.createElement('div', { className:'card' },
+            React.createElement(RiceStageTimeline, { field })
+          )
+        )
+      : null,
+
+    // --- 要防除アラート ---
+    React.createElement('div', { style:{ marginBottom:'20px' } },
+      React.createElement(SectionTitle, { icon:'alert-triangle' }, '要防除アラート'),
+      lotRisks.length === 0
+        ? React.createElement(LotRiskClearBadge)
+        : lotRisks.map(r => React.createElement(LotRiskAlertCard, { key:r.id, risk:r }))
+    ),
+
+    // --- 直近の収穫予定 ---
+    React.createElement('div', { style:{ marginBottom:'20px' } },
+      React.createElement(SectionTitle, { icon:'basket' }, '直近の収穫予定'),
+      React.createElement('div', { className:'card', style:{ padding: upcomingHarvests.length === 0 ? '24px' : '0 16px' } },
+        upcomingHarvests.length === 0
+          ? React.createElement('div', { style:{ textAlign:'center', color:'#94A3B8', fontSize:'13px' } }, '収穫予定の進行中ロットはありません')
+          : upcomingHarvests.map((lot, i) => {
+              const cfg = ROW_STATUS_CONFIG[lot.status]
+              return React.createElement('div', {
+                key: lot.id,
+                style:{
+                  display:'flex', alignItems:'center', gap:'12px', padding:'12px 0',
+                  borderBottom: i === upcomingHarvests.length - 1 ? 'none' : '1px solid #F1F5F9'
+                }
+              },
+                React.createElement('div', { style:{ width:8, height:8, borderRadius:'2px', background:cfg.color, flexShrink:0 } }),
+                React.createElement('div', { style:{ flex:1, minWidth:0 } },
+                  React.createElement('div', { style:{ fontSize:'14px', fontWeight:600, color:'#111827' } }, lot.row_range + '畝 ・ ' + lot.variety),
+                  React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'2px' } }, '収穫予定: ' + lot.harvest_start + '〜' + (lot.harvest_end || ''))
+                ),
+                React.createElement('span', {
+                  style:{ fontSize:'11px', fontWeight:600, color:cfg.color, background:cfg.bg, border:'1px solid '+cfg.color+'40', borderRadius:'6px', padding:'3px 8px', flexShrink:0 }
+                }, cfg.label)
+              )
+            })
+      )
+    ),
+
+    // --- 最近の作業記録（既存記録の集約表示） ---
+    React.createElement('div', null,
+      React.createElement(SectionTitle, { icon:'notebook' }, '最近の作業記録'),
+      React.createElement('div', { className:'card', style:{ padding: recentRecords.length === 0 ? '24px' : '0 16px' } },
+        recentRecords.length === 0
+          ? React.createElement('div', { style:{ textAlign:'center', color:'#94A3B8', fontSize:'13px' } }, 'この圃場の記録はまだありません')
+          : recentRecords.map(r => React.createElement(RecordLogRow, { key:r.id, record:r, fields:[field] }))
+      )
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step4】LotSprayRecordForm — 農薬散布記録（ロット単位）入力フォーム
+// 【Step4更新】畝範囲入力を RowMap（selectable:true）に置き換え。
+//   lots がある圃場 → 畝マップでクリック選択 → row_range 文字列に自動変換
+//   lots がない圃場 → 従来のテキスト入力のみ（フォールバック）
+//   両モード共存: 畝マップ下部に手動入力欄も常時表示（微調整用）
+// ─────────────────────────────────────────────────────
+function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }) {
+  const [date, setDate]               = React.useState(new Date().toISOString().slice(0, 10))
+  const [selectedRows, setSelectedRows] = React.useState(new Set())  // 畝マップ選択セット
+  const [rowRange, setRowRange]       = React.useState('')            // テキスト入力（フォールバック・手動調整用）
+  const [sprayVolume, setSprayVolume] = React.useState('')
+  const [staffIds, setStaffIds]       = React.useState([])  // 【実装手順書 C】担当者
+  const [items, setItems] = React.useState([
+    { pesticide_id: pesticides[0]?.id ?? '', dilution: pesticides[0]?.dilution ?? '', disposal_amount: '' }
+  ])
+  // 【実装手順書 Step1】備考・メモ＋転記チェック
+  const [note, setNote]     = React.useState('')
+  const [checks, setChecks] = React.useState({})
+
+  const hasMap = lots && lots.length > 0 && field.row_count
+
+  // 畝マップ選択が変わったら row_range テキストに自動反映
+  const handleSelectRows = (newSet) => {
+    setSelectedRows(newSet)
+    setRowRange(selectedRowsToRange(newSet))
+  }
+
+  // テキスト手動編集した場合は、マップ選択との同期を切る（テキスト優先）
+  const handleRowRangeText = (val) => {
+    setRowRange(val)
+    // 手動編集時はマップ選択をリセット（選択状態とテキストの乖離を防ぐ）
+    setSelectedRows(new Set())
+  }
+
+  const inputStyle = {
+    background:'#FFFFFF', border:'1.5px solid #D8E4D8',
+    borderRadius:'7px', padding:'7px 10px', fontSize:'13px',
+    color:'#111827', outline:'none', width:'100%', boxSizing:'border-box'
+  }
+  const labelStyle = {
+    fontSize:'10px', fontWeight:700, color:'#6B7280',
+    letterSpacing:'.05em', textTransform:'uppercase', marginBottom:'4px', display:'block'
+  }
+
+  const updateItem = (idx, patch) => setItems(prev => prev.map((it, i) => i === idx ? { ...it, ...patch } : it))
+  const addItem    = () => setItems(prev => [...prev, { pesticide_id: pesticides[0]?.id ?? '', dilution: pesticides[0]?.dilution ?? '', disposal_amount: '' }])
+  const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx))
+
+  const handlePesticideChange = (idx, id) => {
+    const p = pesticides.find(x => x.id === Number(id))
+    updateItem(idx, { pesticide_id: Number(id), dilution: p ? p.dilution : '' })
+  }
+
+  // rowRange（テキスト）が最終的な保存値。マップ選択→自動変換 or 手動入力どちらでも同じstateに入る。
+  const valid = !!date && rowRange.trim() !== '' && Number(sprayVolume) > 0 &&
+    items.length > 0 && items.every(it => it.pesticide_id && Number(it.dilution) > 0)
+
+  const handleSubmit = () => {
+    if (!valid) return
+    onSave({
+      field_id: field.id,
+      date,
+      row_range: rowRange.trim(),
+      pesticides: items.map(it => ({
+        pesticide_id: Number(it.pesticide_id),
+        dilution: Number(it.dilution),
+        disposal_amount: Number(it.disposal_amount) || 0,
+      })),
+      spray_volume_L: Number(sprayVolume),
+      note: note.trim(),
+      checks,
+      staff_ids: staffIds,
+    })
+  }
+
+  return React.createElement('div', null,
+
+    // ── 散布日（1行） ──
+    React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('label', { style:labelStyle }, '散布日'),
+      React.createElement('input', { type:'date', value:date, onChange:e=>setDate(e.target.value), style:inputStyle })
+    ),
+
+    // ── 畝範囲（畝マップ or テキスト入力） ──
+    React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'6px' } },
+        React.createElement('label', { style:{ ...labelStyle, marginBottom:0 } }, '畝範囲'),
+        // 選択済み件数バッジ
+        selectedRows.size > 0
+          ? React.createElement('span', {
+              style:{ fontSize:'11px', fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #6EE7B7', borderRadius:'12px', padding:'2px 9px' }
+            }, selectedRows.size + '畝 選択中')
+          : null
+      ),
+
+      // 畝マップ（lotsがある圃場のみ表示）
+      hasMap
+        ? React.createElement('div', {
+            style:{ border:'1.5px solid #D8E4D8', borderRadius:'8px', padding:'12px', background:'#FAFBFA', marginBottom:'8px' }
+          },
+            React.createElement(RowMap, {
+              lots,
+              totalRows: field.row_count,
+              selectable: true,
+              selectedRows,
+              onSelectRows: handleSelectRows,
+              showSides: field.crop_category === 'corn',
+            })
+          )
+        : null,
+
+      // テキスト入力（常時表示。畝マップありの場合は「手動調整用」として補助的に使う）
+      React.createElement('div', null,
+        hasMap
+          ? React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', marginBottom:'4px', fontStyle:'italic' } },
+              '↑ 畝をクリックして選択。または下記に直接入力（例: 1-40, 1-6,8）'
+            )
+          : null,
+        React.createElement('input', {
+          type:'text',
+          placeholder: hasMap ? '直接入力で上書き可（例: 1-40）' : '例: 1-40',
+          value: rowRange,
+          onChange: e => handleRowRangeText(e.target.value),
+          style: {
+            ...inputStyle,
+            borderColor: rowRange.trim() ? '#0A6B52' : '#D8E4D8',
+            background: rowRange.trim() ? '#F0FDF4' : '#FFFFFF',
+          }
+        })
+      )
+    ),
+
+    // ── 使用農薬 ──
+    React.createElement('label', { style:labelStyle }, '使用農薬'),
+    React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'8px', marginBottom:'4px' } },
+      ...items.map((it, idx) =>
+        React.createElement('div', {
+          key:idx,
+          style:{ display:'flex', flexDirection:'column', gap:'8px', padding:'10px', background:'#F8FAF8', border:'1px solid #E5ECE5', borderRadius:'8px' }
+        },
+          React.createElement('div', { style:{ display:'flex', gap:'8px', alignItems:'center' } },
+            React.createElement('select', {
+              value: it.pesticide_id,
+              onChange: e => handlePesticideChange(idx, e.target.value),
+              style: { ...inputStyle, flex:2, background:'#FFFFFF' }
+            },
+              pesticides.map(p => React.createElement('option', { key:p.id, value:p.id }, p.name))
+            ),
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'4px', flex:1 } },
+              React.createElement('input', {
+                type:'number', value:it.dilution,
+                onChange: e => updateItem(idx, { dilution: e.target.value }),
+                style: { ...inputStyle, background:'#FFFFFF' }
+              }),
+              React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280', flexShrink:0 } }, '倍')
+            ),
+            items.length > 1 && React.createElement('button', {
+              onClick: () => removeItem(idx), title:'この薬剤を削除',
+              style:{ background:'none', border:'none', color:'#94A3B8', cursor:'pointer', fontSize:'16px', padding:'4px', flexShrink:0 }
+            }, '✕')
+          ),
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px' } },
+            React.createElement('span', { style:{ fontSize:'11px', color:'#9CA3AF', fontWeight:600, flexShrink:0, whiteSpace:'nowrap' } },
+              React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'12px', verticalAlign:'-1px', marginRight:'3px', color:'#C2410C' } }),
+              '廃棄量'
+            ),
+            React.createElement('input', {
+              type:'number', step:'0.1', min:'0', placeholder:'0',
+              value: it.disposal_amount,
+              onChange: e => updateItem(idx, { disposal_amount: e.target.value }),
+              style: { ...inputStyle, background:'#FFFFFF', maxWidth:'110px' }
+            }),
+            React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280', flexShrink:0 } }, 'L（希釈後の使い切れず廃棄した量）')
+          )
+        )
+      ),
+      React.createElement('button', {
+        onClick: addItem,
+        style:{
+          display:'flex', alignItems:'center', gap:'5px', fontSize:'12px', fontWeight:600,
+          color:'#0A6B52', background:'none', border:'1.5px dashed #B8D4C0', borderRadius:'7px',
+          padding:'6px 10px', cursor:'pointer', alignSelf:'flex-start', marginTop:'2px'
+        }
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'13px' } }),
+        '農薬を追加'
+      )
+    ),
+
+    // ── 散布液量 ──
+    React.createElement('div', { style:{ margin:'14px 0 18px' } },
+      React.createElement('label', { style:labelStyle }, '散布液量（L）'),
+      React.createElement('input', { type:'number', placeholder:'例: 500', value:sprayVolume, onChange:e=>setSprayVolume(e.target.value), style:inputStyle })
+    ),
+
+    // 【実装手順書 C】担当者選択（収穫記録と同パターン）
+    React.createElement(StaffPicker, {
+      staff, staffIds, onChange: setStaffIds,
+    }),
+
+    // 【実装手順書 Step1】備考・メモ＋転記チェック
+    React.createElement(NoteChecklistField, {
+      note, onNoteChange: setNote,
+      checks, onChecksChange: setChecks,
+      checkKeys: ['pesticide_fert', 'mgmt_table', 'sa'],
+    }),
+
+    // ── ボタン ──
+    React.createElement('div', { style:{ display:'flex', gap:'10px', justifyContent:'flex-end', marginTop:'14px' } },
+      React.createElement('button', {
+        onClick: onCancel,
+        style:{ padding:'9px 18px', borderRadius:'8px', border:'1.5px solid #D8E4D8', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+      }, 'キャンセル'),
+      React.createElement('button', {
+        onClick: handleSubmit,
+        disabled: !valid,
+        style:{
+          padding:'9px 20px', borderRadius:'8px', border:'none',
+          cursor: valid ? 'pointer' : 'not-allowed',
+          background: valid ? '#0A6B52' : '#D1D5DB', color:'#fff', fontSize:'13px', fontWeight:700,
+          boxShadow: valid ? '0 2px 6px rgba(10,107,82,.25)' : 'none'
+        }
+      }, '記録する')
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step4】LotSprayRecordList — ロット単位の散布記録一覧
+// ─────────────────────────────────────────────────────
+function LotSprayRecordList({ records, pesticides, onDelete, field, staff }) {
+  // 【削除確認モーダル統一】どの削除ボタンも一旦ConfirmDeleteModalで確認を取る
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+  const [selectedRecord, setSelectedRecord] = React.useState(null)  // 詳細モーダル対象
+  if (records.length === 0) {
+    return React.createElement('div', { className:'card', style:{ padding:'32px', textAlign:'center', color:'#6B7280', fontSize:'14px' } },
+      React.createElement('i', { className:'ti ti-spray', style:{ fontSize:'28px', display:'block', marginBottom:'8px', color:'#CBD5E1' } }),
+      'この圃場のロット単位の散布記録はまだありません'
+    )
+  }
+  const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date))
+  return React.createElement(React.Fragment, null,
+  React.createElement('div', { className:'card', style:{ padding:'0' } },
+    sorted.map((r, idx) =>
+      React.createElement('div', {
+        key: r.id,
+        onClick: () => setSelectedRecord(r),
+        style:{
+          padding:'14px 18px',
+          borderBottom: idx === sorted.length - 1 ? 'none' : '1px solid #F1F5F9',
+          display:'flex', alignItems:'flex-start', gap:'14px',
+          cursor:'pointer', transition:'background .12s'
+        },
+        onMouseEnter: e => { e.currentTarget.style.background = '#F8FAF8' },
+        onMouseLeave: e => { e.currentTarget.style.background = 'transparent' },
+      },
+        React.createElement('div', {
+          style:{ width:32, height:32, borderRadius:'50%', background:'#0A6B52', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }
+        }, React.createElement('i', { className:'ti ti-spray', style:{ fontSize:'16px', color:'#FFFFFF' } })),
+        React.createElement('div', { style:{ flex:1, minWidth:0 } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'5px' } },
+            React.createElement('span', { style:{ fontSize:'14px', fontWeight:700, color:'#111827' } }, r.row_range + '畝'),
+            React.createElement('span', { style:{ fontSize:'12px', color:'#94A3B8' } }, r.date),
+            React.createElement(TranscribeStatusBadge, { checks: r.checks, checkKeys:['pesticide_fert','mgmt_table','sa'] })
+          ),
+          React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'6px' } },
+            ...(r.pesticides || []).map((p, i) => {
+              const pest = pesticides.find(x => x.id === p.pesticide_id)
+              const disposal = Number(p.disposal_amount) || 0
+              return React.createElement('span', {
+                key:i,
+                style:{ fontSize:'11px', fontWeight:600, color:'#0A6B52', background:'#F0FDF4', border:'1px solid #BBE5CF', borderRadius:'5px', padding:'2px 8px' }
+              },
+                (pest ? pest.name : '不明な農薬') + '（' + p.dilution + '倍）',
+                disposal > 0 && React.createElement('span', { style:{ color:'#C2410C', fontWeight:700, marginLeft:'5px' } }, '廃棄' + disposal + 'L')
+              )
+            })
+          ),
+          React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', display:'flex', gap:'14px' } },
+            React.createElement('span', null, '散布液量: ' + r.spray_volume_L + 'L'),
+            (() => {
+              const totalDisposal = (r.pesticides || []).reduce((sum, p) => sum + (Number(p.disposal_amount) || 0), 0)
+              return totalDisposal > 0
+                ? React.createElement('span', { style:{ color:'#C2410C', fontWeight:600 } },
+                    React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'12px', verticalAlign:'-1px', marginRight:'3px' } }),
+                    '廃棄量合計: ' + Math.round(totalDisposal * 100) / 100 + 'L'
+                  )
+                : null
+            })()
+          ),
+          r.note && React.createElement('div', { style:{ fontSize:'11px', color:'#7C3AED', marginTop:'4px', display:'flex', alignItems:'flex-start', gap:'4px' } },
+            React.createElement('i', { className:'ti ti-notes', style:{ fontSize:'11px', marginTop:'1px', flexShrink:0 } }),
+            React.createElement('span', null, r.note)
+          )
+        ),
+        React.createElement('button', {
+          onClick: e => { e.stopPropagation(); setDeleteTarget(r) }, title:'削除',
+          style:{ background:'none', border:'none', color:'#CBD5E1', cursor:'pointer', fontSize:'15px', padding:'4px', flexShrink:0 }
+        }, React.createElement('i', { className:'ti ti-trash' }))
+      )
+    )
+  ),
+
+    // ── 詳細モーダル（日報記録の詳細モーダルと同じ見た目に統一） ──
+    selectedRecord && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setSelectedRecord(null)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'480px', maxWidth:'95vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        // ヘッダー
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+            React.createElement('div', { style:{ width:36, height:36, borderRadius:'50%', background:'#DC2626', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+              React.createElement('i', { className:'ti ti-spray', style:{ fontSize:'18px', color:'#FFFFFF' } })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '農薬散布記録'),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, selectedRecord.date + (field ? '　' + field.name : ''))
+            )
+          ),
+          React.createElement('button', {
+            onClick: () => setSelectedRecord(null),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+
+        // 情報行
+        React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'8px', padding:'4px 12px', marginBottom:'16px' } },
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '日付'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.date)
+          ),
+          field && React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '圃場'),
+            React.createElement('span', { style:{ fontWeight:600 } }, field.name)
+          ),
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '畝範囲'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.row_range + '畝')
+          ),
+          React.createElement('div', { style:{ ...rowStyle2, alignItems:'flex-start' } },
+            React.createElement('span', { style:{ color:'#6B7280', flexShrink:0 } }, '使用農薬'),
+            React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'4px', alignItems:'flex-end' } },
+              ...(selectedRecord.pesticides || []).map((p, i) => {
+                const pest = pesticides.find(x => x.id === p.pesticide_id)
+                const disposal = Number(p.disposal_amount) || 0
+                return React.createElement('div', { key:i, style:{ fontWeight:600, color:'#B45309', textAlign:'right' } },
+                  (pest ? pest.name : '不明な農薬') + '（' + p.dilution + '倍）',
+                  disposal > 0 && React.createElement('span', { style:{ color:'#C2410C', marginLeft:'6px', fontWeight:700 } }, '廃棄' + disposal + 'L')
+                )
+              })
+            )
+          ),
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '散布液量'),
+            React.createElement('span', null, selectedRecord.spray_volume_L + ' L')
+          ),
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '担当者'),
+            React.createElement('span', null, staffNames(staff, selectedRecord.staff_ids))
+          ),
+          React.createElement('div', { style:{ ...rowStyle2, borderBottom:'none' } },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '備考'),
+            React.createElement('span', { style:{ color: selectedRecord.note ? '#374151' : '#9CA3AF' } }, selectedRecord.note || 'なし')
+          )
+        ),
+
+        // 転記チェック状況
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px' } },
+          React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280' } }, '転記チェック'),
+          React.createElement(TranscribeStatusBadge, { checks: selectedRecord.checks, checkKeys:['pesticide_fert','mgmt_table','sa'] })
+        ),
+
+        // ボタン群
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('button', {
+            onClick: () => { setDeleteTarget(selectedRecord); setSelectedRecord(null) },
+            style:{
+              flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px',
+              padding:'9px 18px', borderRadius:'4px', fontSize:'14px', fontWeight:600,
+              cursor:'pointer', border:'1.5px solid #FCA5A5', background:'#FEF2F2', color:'#DC2626'
+            }
+          },
+            React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'14px' } }),
+            '削除'
+          ),
+          React.createElement('button', {
+            onClick: () => setSelectedRecord(null),
+            style:{ flex:1, padding:'9px 18px', borderRadius:'4px', border:'none', background:'#0A6B52', color:'#fff', fontSize:'14px', fontWeight:700, cursor:'pointer' }
+          }, '閉じる')
+        )
+      )
+    ),
+
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '散布記録を削除しますか？',
+      targetName: deleteTarget.row_range + '畝　' + deleteTarget.date,
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+    })
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step4】LotSprayRecordSection — 「農薬散布記録」タブ本体
+// E-2の確定仕様「pesticide: ロット単位の散布記録一覧＋新規入力」に対応
+// ─────────────────────────────────────────────────────
+function LotSprayRecordSection({ field, lotSprayRecords, pesticides, onSave, onDelete, staff }) {
+  const [showAddModal, setShowAddModal] = React.useState(false)
+  const fieldSprayRecords = lotSprayRecords.filter(r => r.field_id === field.id)
+  const lots = LOTS[field.id] || []
+
+  return React.createElement('div', null,
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' } },
+      React.createElement(SectionTitle, { icon:'spray', style:{ marginBottom:0 } }, 'ロット単位の散布記録一覧'),
+      React.createElement('button', {
+        className:'btn btn-primary',
+        style:{ display:'flex', alignItems:'center', gap:'6px' },
+        onClick: () => setShowAddModal(true)
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'14px' } }),
+        '新規入力'
+      )
+    ),
+    React.createElement(LotSprayRecordList, { records: fieldSprayRecords, pesticides, onDelete, field, staff }),
+
+    // 新規入力モーダル
+    showAddModal && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setShowAddModal(false)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'520px', maxWidth:'95vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+          React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '農薬散布記録（ロット単位）の新規入力'),
+          React.createElement('button', {
+            onClick: () => setShowAddModal(false),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+        React.createElement(LotSprayRecordForm, {
+          field, pesticides, lots,
+          onSave: r => { onSave(r); setShowAddModal(false) },
+          onCancel: () => setShowAddModal(false),
+          staff
+        })
+      )
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【サンプル農園実データ統合 フェーズ4・Step4-1】TopDressingRecordForm — 追肥記録入力フォーム
+// LotSprayRecordForm（農薬散布記録フォーム）と同構造で新規作成。
+// 畝マップ（RowMap）をそのまま再利用する（畝マップ機能の汎用性がここで生きる）。
+// 入力項目: 日付・品目・追肥畝数（畝範囲から自動算出）・畝番号・肥料名・希釈倍率・
+//          散布液量(L)・散布量(kg)（「サンプル農園追肥」シートの列構成に準拠）
+// 実データでは「希釈倍率×散布液量」と「散布量(kg)直接入力」の両パターンが混在しているため、
+// 肥料1件ごとに希釈倍率 or 散布量(kg) のどちらか一方が入力されていればOKとする
+// （在庫減算側の優先ロジックは Step1-2 の onSaveTopDressingRecord 側で対応済み）。
+// ─────────────────────────────────────────────────────
+function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, staff }) {
+  const [date, setDate]                 = React.useState(new Date().toISOString().slice(0, 10))
+  const [item, setItem]                 = React.useState(lots[0]?.variety || '')   // 品目（作物・品種）
+  const [selectedRows, setSelectedRows] = React.useState(new Set())                // 畝マップ選択セット
+  const [rowRange, setRowRange]         = React.useState('')                       // テキスト入力（フォールバック・手動調整用）
+  const [sprayVolume, setSprayVolume]   = React.useState('')                       // 散布液量(L)（希釈倍率方式の場合のみ使用）
+  const [staffIds, setStaffIds]         = React.useState([])  // 【実装手順書 C】担当者
+  const [items, setItems] = React.useState([
+    { fertilizer_id: fertilizers[0]?.id ?? '', dilution: '', amount_kg: '' }
+  ])
+  // 【実装手順書 Step1】備考・メモ＋転記チェック
+  const [note, setNote]     = React.useState('')
+  const [checks, setChecks] = React.useState({})
+
+  const hasMap = lots && lots.length > 0 && field.row_count
+
+  // 畝マップ選択が変わったら row_range テキストに自動反映
+  const handleSelectRows = (newSet) => {
+    setSelectedRows(newSet)
+    setRowRange(selectedRowsToRange(newSet))
+  }
+
+  // テキスト手動編集した場合は、マップ選択との同期を切る（テキスト優先）
+  const handleRowRangeText = (val) => {
+    setRowRange(val)
+    setSelectedRows(new Set())
+  }
+
+  // 追肥畝数 = 畝範囲文字列から実際の畝本数を算出（"1-6,8" → 7）
+  const rowCount = parseRowRange(rowRange).size
+
+  const inputStyle = {
+    background:'#FFFFFF', border:'1.5px solid #D8E4D8',
+    borderRadius:'7px', padding:'7px 10px', fontSize:'13px',
+    color:'#111827', outline:'none', width:'100%', boxSizing:'border-box'
+  }
+  const labelStyle = {
+    fontSize:'10px', fontWeight:700, color:'#6B7280',
+    letterSpacing:'.05em', textTransform:'uppercase', marginBottom:'4px', display:'block'
+  }
+
+  const updateItem = (idx, patch) => setItems(prev => prev.map((it, i) => i === idx ? { ...it, ...patch } : it))
+  const addItem    = () => setItems(prev => {
+    const firstFert = fertilizers[0]
+    const suggested = getSuggestedFertilizerDilution(firstFert, item)
+    return [...prev, { fertilizer_id: firstFert?.id ?? '', dilution: suggested != null ? String(suggested) : '', amount_kg: '' }]
+  })
+  const removeItem = (idx) => setItems(prev => prev.filter((_, i) => i !== idx))
+
+  const handleFertilizerChange = (idx, id) => {
+    const fid = Number(id)
+    const fert = fertilizers.find(f => f.id === fid)
+    // 【肥料 希釈倍率 案③】肥料マスタに登録があれば、品目(作物)に応じた倍率を自動セット（編集は常に可能）
+    const suggested = getSuggestedFertilizerDilution(fert, item)
+    updateItem(idx, {
+      fertilizer_id: fid,
+      dilution: suggested != null ? String(suggested) : '',
+    })
+  }
+
+  // rowRange（テキスト）が最終的な保存値。マップ選択→自動変換 or 手動入力どちらでも同じstateに入る。
+  // 肥料の各行は「希釈倍率」か「散布量(kg)直接入力」のどちらか一方が入っていればOK（実データの両パターン対応）
+  const valid = !!date && rowRange.trim() !== '' &&
+    items.length > 0 && items.every(it => it.fertilizer_id && (Number(it.dilution) > 0 || Number(it.amount_kg) > 0))
+
+  const handleSubmit = () => {
+    if (!valid) return
+    onSave({
+      field_id: field.id,
+      date,
+      item: item.trim(),
+      row_range: rowRange.trim(),
+      row_count: rowCount,
+      fertilizers: items.map(it => ({
+        fertilizer_id: Number(it.fertilizer_id),
+        dilution: Number(it.dilution) || null,
+        amount_kg: Number(it.amount_kg) || null,
+      })),
+      spray_volume_L: Number(sprayVolume) || null,
+      note: note.trim(),
+      checks,
+      staff_ids: staffIds,
+    })
+  }
+
+  return React.createElement('div', null,
+
+    // ── 追肥日 ──
+    React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('label', { style:labelStyle }, '追肥日'),
+      React.createElement('input', { type:'date', value:date, onChange:e=>setDate(e.target.value), style:inputStyle })
+    ),
+
+    // ── 品目 ──
+    React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('label', { style:labelStyle }, '品目'),
+      React.createElement('input', {
+        type:'text', placeholder:'例: レタス、スイートコーン',
+        value:item, onChange:e=>setItem(e.target.value), style:inputStyle
+      })
+    ),
+
+    // ── 畝範囲（畝マップ or テキスト入力）＋ 追肥畝数の自動表示 ──
+    React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'6px' } },
+        React.createElement('label', { style:{ ...labelStyle, marginBottom:0 } }, '畝番号（追肥畝数は自動計算）'),
+        rowCount > 0
+          ? React.createElement('span', {
+              style:{ fontSize:'11px', fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #6EE7B7', borderRadius:'12px', padding:'2px 9px' }
+            }, rowCount + '畝 選択中')
+          : null
+      ),
+
+      // 畝マップ（lotsがある圃場のみ表示）
+      hasMap
+        ? React.createElement('div', {
+            style:{ border:'1.5px solid #D8E4D8', borderRadius:'8px', padding:'12px', background:'#FAFBFA', marginBottom:'8px' }
+          },
+            React.createElement(RowMap, {
+              lots,
+              totalRows: field.row_count,
+              selectable: true,
+              selectedRows,
+              onSelectRows: handleSelectRows,
+              showSides: field.crop_category === 'corn',
+            })
+          )
+        : null,
+
+      // テキスト入力（常時表示。畝マップありの場合は「手動調整用」として補助的に使う）
+      React.createElement('div', null,
+        hasMap
+          ? React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', marginBottom:'4px', fontStyle:'italic' } },
+              '↑ 畝をクリックして選択。または下記に直接入力（例: 1-40, 1-6,8）'
+            )
+          : null,
+        React.createElement('input', {
+          type:'text',
+          placeholder: hasMap ? '直接入力で上書き可（例: 1-40）' : '例: 1-40',
+          value: rowRange,
+          onChange: e => handleRowRangeText(e.target.value),
+          style: {
+            ...inputStyle,
+            borderColor: rowRange.trim() ? '#0A6B52' : '#D8E4D8',
+            background: rowRange.trim() ? '#F0FDF4' : '#FFFFFF',
+          }
+        })
+      )
+    ),
+
+    // ── 使用肥料 ──
+    React.createElement('label', { style:labelStyle }, '使用肥料'),
+    fertilizers.length === 0
+      ? React.createElement('div', {
+          style:{ fontSize:'12px', color:'#B45309', background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'7px', padding:'8px 10px', marginBottom:'8px' }
+        }, '⚠️ 肥料マスタが未登録です。先に「肥料マスタ管理」から肥料を登録してください。')
+      : null,
+    React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'8px', marginBottom:'4px' } },
+      ...items.map((it, idx) => {
+        // 【肥料 希釈倍率 案③】選択中の肥料に登録された倍率があるかどうかをヒント表示
+        const selectedFert  = fertilizers.find(f => f.id === it.fertilizer_id)
+        const suggestedDilu = getSuggestedFertilizerDilution(selectedFert, item)
+        const isAutoFilled   = suggestedDilu != null && Number(it.dilution) === Number(suggestedDilu)
+        return React.createElement('div', {
+          key:idx,
+          style:{ display:'flex', flexDirection:'column', gap:'8px', padding:'10px', background:'#F8FAF8', border:'1px solid #E5ECE5', borderRadius:'8px' }
+        },
+          React.createElement('div', { style:{ display:'flex', gap:'8px', alignItems:'center' } },
+            React.createElement('select', {
+              value: it.fertilizer_id,
+              onChange: e => handleFertilizerChange(idx, e.target.value),
+              style: { ...inputStyle, flex:2, background:'#FFFFFF' }
+            },
+              fertilizers.map(f => React.createElement('option', { key:f.id, value:f.id }, f.name))
+            ),
+            items.length > 1 && React.createElement('button', {
+              onClick: () => removeItem(idx), title:'この肥料を削除',
+              style:{ background:'none', border:'none', color:'#94A3B8', cursor:'pointer', fontSize:'16px', padding:'4px', flexShrink:0 }
+            }, '✕')
+          ),
+          // 希釈倍率 と 散布量(kg) — どちらか一方を入力（実データの両パターンに対応）
+          React.createElement('div', { style:{ display:'flex', gap:'10px', flexWrap:'wrap' } },
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'4px', flex:1, minWidth:'120px' } },
+              React.createElement('span', { style:{ fontSize:'11px', color:'#9CA3AF', fontWeight:600, flexShrink:0, whiteSpace:'nowrap' } }, '希釈倍率'),
+              React.createElement('input', {
+                type:'number', placeholder:'例: 500',
+                value:it.dilution,
+                onChange: e => updateItem(idx, { dilution: e.target.value }),
+                style: { ...inputStyle, background:'#FFFFFF' }
+              }),
+              React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280', flexShrink:0 } }, '倍')
+            ),
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'4px', flex:1, minWidth:'120px' } },
+              React.createElement('span', { style:{ fontSize:'11px', color:'#9CA3AF', fontWeight:600, flexShrink:0, whiteSpace:'nowrap' } }, '散布量'),
+              React.createElement('input', {
+                type:'number', step:'0.1', min:'0', placeholder:'例: 5',
+                value:it.amount_kg,
+                onChange: e => updateItem(idx, { amount_kg: e.target.value }),
+                style: { ...inputStyle, background:'#FFFFFF' }
+              }),
+              React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280', flexShrink:0 } }, 'kg')
+            )
+          ),
+          // 【肥料 希釈倍率 案③】肥料マスタに倍率が登録されている場合のヒント表示
+          suggestedDilu != null
+            ? React.createElement('div', { style:{ fontSize:'10px', color: isAutoFilled ? '#0A6B52' : '#9CA3AF', fontWeight: isAutoFilled ? 600 : 400 } },
+                isAutoFilled
+                  ? '✓ 肥料マスタの目安倍率(' + suggestedDilu + '倍)を自動入力しました（変更可）'
+                  : '肥料マスタの目安倍率: ' + suggestedDilu + '倍（手動で変更されています）'
+              )
+            : React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF' } },
+                '肥料マスタに倍率が未登録です（「肥料マスタ管理」から登録すると次回以降自動入力されます）'
+              ),
+          React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF', fontStyle:'italic' } },
+            '※ 希釈倍率・散布量(kg)のどちらか一方を入力してください（両方ある場合は散布量(kg)を優先して在庫から減算します）'
+          )
+        )
+      }),
+      React.createElement('button', {
+        onClick: addItem,
+        disabled: fertilizers.length === 0,
+        style:{
+          display:'flex', alignItems:'center', gap:'5px', fontSize:'12px', fontWeight:600,
+          color: fertilizers.length === 0 ? '#9CA3AF' : '#0A6B52',
+          background:'none', border:'1.5px dashed #B8D4C0', borderRadius:'7px',
+          padding:'6px 10px', cursor: fertilizers.length === 0 ? 'not-allowed' : 'pointer',
+          alignSelf:'flex-start', marginTop:'2px'
+        }
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'13px' } }),
+        '肥料を追加'
+      )
+    ),
+
+    // ── 散布液量（希釈倍率方式の場合のみ使用） ──
+    React.createElement('div', { style:{ margin:'14px 0 18px' } },
+      React.createElement('label', { style:labelStyle }, '散布液量（L）（希釈倍率方式の場合のみ入力）'),
+      React.createElement('input', { type:'number', placeholder:'例: 500', value:sprayVolume, onChange:e=>setSprayVolume(e.target.value), style:inputStyle })
+    ),
+
+    // 【実装手順書 C】担当者選択（収穫記録と同パターン）
+    React.createElement(StaffPicker, {
+      staff, staffIds, onChange: setStaffIds,
+    }),
+
+    // 【実装手順書 Step1】備考・メモ＋転記チェック
+    React.createElement(NoteChecklistField, {
+      note, onNoteChange: setNote,
+      checks, onChecksChange: setChecks,
+      checkKeys: ['fert_stock', 'pesticide_fert', 'mgmt_table'],
+    }),
+
+    // ── ボタン ──
+    React.createElement('div', { style:{ display:'flex', gap:'10px', justifyContent:'flex-end', marginTop:'14px' } },
+      React.createElement('button', {
+        onClick: onCancel,
+        style:{ padding:'9px 18px', borderRadius:'8px', border:'1.5px solid #D8E4D8', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+      }, 'キャンセル'),
+      React.createElement('button', {
+        onClick: handleSubmit,
+        disabled: !valid,
+        style:{
+          padding:'9px 20px', borderRadius:'8px', border:'none',
+          cursor: valid ? 'pointer' : 'not-allowed',
+          background: valid ? '#0A6B52' : '#D1D5DB', color:'#fff', fontSize:'13px', fontWeight:700,
+          boxShadow: valid ? '0 2px 6px rgba(10,107,82,.25)' : 'none'
+        }
+      }, '記録する')
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【サンプル農園実データ統合 フェーズ4・Step4-1】TopDressingRecordList — 追肥記録一覧
+// LotSprayRecordListと同構造（肥料名・希釈倍率 or 散布量(kg)を表示）
+// ─────────────────────────────────────────────────────
+function TopDressingRecordList({ records, fertilizers, onDelete, field, staff }) {
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+  const [selectedRecord, setSelectedRecord] = React.useState(null)  // 詳細モーダル対象
+  if (records.length === 0) {
+    return React.createElement('div', { className:'card', style:{ padding:'32px', textAlign:'center', color:'#6B7280', fontSize:'14px' } },
+      React.createElement('i', { className:'ti ti-droplet', style:{ fontSize:'28px', display:'block', marginBottom:'8px', color:'#CBD5E1' } }),
+      'この圃場の追肥記録はまだありません'
+    )
+  }
+  const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date))
+  return React.createElement(React.Fragment, null,
+  React.createElement('div', { className:'card', style:{ padding:'0' } },
+    sorted.map((r, idx) =>
+      React.createElement('div', {
+        key: r.id,
+        onClick: () => setSelectedRecord(r),
+        style:{
+          padding:'14px 18px',
+          borderBottom: idx === sorted.length - 1 ? 'none' : '1px solid #F1F5F9',
+          display:'flex', alignItems:'flex-start', gap:'14px',
+          cursor:'pointer', transition:'background .12s'
+        },
+        onMouseEnter: e => { e.currentTarget.style.background = '#F8FAF8' },
+        onMouseLeave: e => { e.currentTarget.style.background = 'transparent' },
+      },
+        React.createElement('div', {
+          style:{ width:32, height:32, borderRadius:'50%', background:'#0A6B52', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }
+        }, React.createElement('i', { className:'ti ti-droplet', style:{ fontSize:'16px', color:'#FFFFFF' } })),
+        React.createElement('div', { style:{ flex:1, minWidth:0 } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'5px', flexWrap:'wrap' } },
+            React.createElement('span', { style:{ fontSize:'14px', fontWeight:700, color:'#111827' } }, r.row_range + '畝'),
+            r.item && React.createElement('span', { style:{ fontSize:'12px', color:'#64748B' } }, r.item),
+            React.createElement('span', { style:{ fontSize:'12px', color:'#94A3B8' } }, r.date),
+            React.createElement(TranscribeStatusBadge, { checks: r.checks, checkKeys:['fert_stock','pesticide_fert','mgmt_table'] })
+          ),
+          React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'6px' } },
+            ...(r.fertilizers || []).map((f, i) => {
+              const fert = fertilizers.find(x => x.id === f.fertilizer_id)
+              const detail = Number(f.amount_kg) > 0
+                ? f.amount_kg + 'kg'
+                : Number(f.dilution) > 0 ? f.dilution + '倍' : '—'
+              return React.createElement('span', {
+                key:i,
+                style:{ fontSize:'11px', fontWeight:600, color:'#0A6B52', background:'#F0FDF4', border:'1px solid #BBE5CF', borderRadius:'5px', padding:'2px 8px' }
+              }, (fert ? fert.name : '不明な肥料') + '（' + detail + '）')
+            })
+          ),
+          r.spray_volume_L ? React.createElement('div', { style:{ fontSize:'11px', color:'#94A3B8' } }, '散布液量: ' + r.spray_volume_L + 'L') : null,
+          r.note && React.createElement('div', { style:{ fontSize:'11px', color:'#7C3AED', marginTop:'4px', display:'flex', alignItems:'flex-start', gap:'4px' } },
+            React.createElement('i', { className:'ti ti-notes', style:{ fontSize:'11px', marginTop:'1px', flexShrink:0 } }),
+            React.createElement('span', null, r.note)
+          )
+        ),
+        React.createElement('button', {
+          onClick: e => { e.stopPropagation(); setDeleteTarget(r) }, title:'削除',
+          style:{ background:'none', border:'none', color:'#CBD5E1', cursor:'pointer', fontSize:'15px', padding:'4px', flexShrink:0 }
+        }, React.createElement('i', { className:'ti ti-trash' }))
+      )
+    )
+  ),
+
+    // ── 詳細モーダル（日報記録の詳細モーダルと同じ見た目に統一） ──
+    selectedRecord && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setSelectedRecord(null)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'480px', maxWidth:'95vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        // ヘッダー
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+            React.createElement('div', { style:{ width:36, height:36, borderRadius:'50%', background:'#0D9972', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+              React.createElement('i', { className:'ti ti-droplet', style:{ fontSize:'18px', color:'#FFFFFF' } })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '追肥記録'),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, selectedRecord.date + (field ? '　' + field.name : ''))
+            )
+          ),
+          React.createElement('button', {
+            onClick: () => setSelectedRecord(null),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+
+        // 情報行
+        React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'8px', padding:'4px 12px', marginBottom:'16px' } },
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '日付'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.date)
+          ),
+          field && React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '圃場'),
+            React.createElement('span', { style:{ fontWeight:600 } }, field.name)
+          ),
+          selectedRecord.item && React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '品目'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.item)
+          ),
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '畝範囲'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.row_range + '畝')
+          ),
+          React.createElement('div', { style:{ ...rowStyle2, alignItems:'flex-start' } },
+            React.createElement('span', { style:{ color:'#6B7280', flexShrink:0 } }, '使用肥料'),
+            React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'4px', alignItems:'flex-end' } },
+              ...(selectedRecord.fertilizers || []).map((f, i) => {
+                const fert = fertilizers.find(x => x.id === f.fertilizer_id)
+                const detail = Number(f.amount_kg) > 0
+                  ? f.amount_kg + 'kg'
+                  : Number(f.dilution) > 0 ? f.dilution + '倍' : '—'
+                return React.createElement('div', { key:i, style:{ fontWeight:600, color:'#0A6B52' } },
+                  (fert ? fert.name : '不明な肥料') + '（' + detail + '）'
+                )
+              })
+            )
+          ),
+          selectedRecord.spray_volume_L ? React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '散布液量'),
+            React.createElement('span', null, selectedRecord.spray_volume_L + ' L')
+          ) : null,
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '担当者'),
+            React.createElement('span', null, staffNames(staff, selectedRecord.staff_ids))
+          ),
+          React.createElement('div', { style:{ ...rowStyle2, borderBottom:'none' } },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '備考'),
+            React.createElement('span', { style:{ color: selectedRecord.note ? '#374151' : '#9CA3AF' } }, selectedRecord.note || 'なし')
+          )
+        ),
+
+        // 転記チェック状況
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px' } },
+          React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280' } }, '転記チェック'),
+          React.createElement(TranscribeStatusBadge, { checks: selectedRecord.checks, checkKeys:['fert_stock','pesticide_fert','mgmt_table'] })
+        ),
+
+        // ボタン群
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('button', {
+            onClick: () => { setDeleteTarget(selectedRecord); setSelectedRecord(null) },
+            style:{
+              flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px',
+              padding:'9px 18px', borderRadius:'4px', fontSize:'14px', fontWeight:600,
+              cursor:'pointer', border:'1.5px solid #FCA5A5', background:'#FEF2F2', color:'#DC2626'
+            }
+          },
+            React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'14px' } }),
+            '削除'
+          ),
+          React.createElement('button', {
+            onClick: () => setSelectedRecord(null),
+            style:{ flex:1, padding:'9px 18px', borderRadius:'4px', border:'none', background:'#0A6B52', color:'#fff', fontSize:'14px', fontWeight:700, cursor:'pointer' }
+          }, '閉じる')
+        )
+      )
+    ),
+
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '追肥記録を削除しますか？',
+      targetName: deleteTarget.row_range + '畝　' + deleteTarget.date,
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+    })
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【サンプル農園実データ統合 フェーズ4・Step4-1】TopDressingRecordSection
+// LotSprayRecordSectionと同構造（一覧＋新規入力モーダル）
+// ─────────────────────────────────────────────────────
+function TopDressingRecordSection({ field, topDressingRecords, fertilizers, onSave, onDelete, staff }) {
+  const [showAddModal, setShowAddModal] = React.useState(false)
+  const fieldRecords = (topDressingRecords || []).filter(r => r.field_id === field.id)
+  const lots = LOTS[field.id] || []
+
+  return React.createElement('div', null,
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' } },
+      React.createElement(SectionTitle, { icon:'droplet', style:{ marginBottom:0 } }, '追肥記録一覧'),
+      React.createElement('button', {
+        className:'btn btn-primary',
+        style:{ display:'flex', alignItems:'center', gap:'6px' },
+        onClick: () => setShowAddModal(true)
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'14px' } }),
+        '新規入力'
+      )
+    ),
+    React.createElement(TopDressingRecordList, { records: fieldRecords, fertilizers, onDelete, field, staff }),
+
+    // 新規入力モーダル
+    showAddModal && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setShowAddModal(false)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'520px', maxWidth:'95vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+          React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '追肥記録の新規入力'),
+          React.createElement('button', {
+            onClick: () => setShowAddModal(false),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+        React.createElement(TopDressingRecordForm, {
+          field, fertilizers, lots,
+          onSave: r => { onSave(r); setShowAddModal(false) },
+          onCancel: () => setShowAddModal(false),
+          staff
+        })
+      )
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【実装手順書 Step2】ShipmentDestinationManageModal — 出荷先マスタ管理
+// 出荷先（JA・取引先A・取引先C・取引先B・直売・袋詰め等）をハードコードせず、
+// 後から追加・名称編集・削除できるようにする簡易マスタ管理モーダル。
+// 「よく使う出荷先」(frequent) フラグも切り替え可能（収穫記録フォームの初期表示行に反映）。
+// ─────────────────────────────────────────────────────
+function ShipmentDestinationManageModal({ destinations, onChange, onClose }) {
+  const [newLabel, setNewLabel] = React.useState('')
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+
+  const updateLabel = (key, label) => onChange(destinations.map(d => d.key === key ? { ...d, label } : d))
+  const toggleFrequent = (key) => onChange(destinations.map(d => d.key === key ? { ...d, frequent: !d.frequent } : d))
+  const removeDest = (key) => { onChange(destinations.filter(d => d.key !== key)); setDeleteTarget(null) }
+  const addDest = () => {
+    const label = newLabel.trim()
+    if (!label) return
+    const key = 'dest_' + Date.now()
+    onChange([...destinations, { key, label, frequent:false }])
+    setNewLabel('')
+  }
+
+  const rowStyle = { display:'flex', alignItems:'center', gap:'8px', padding:'7px 0', borderBottom:'1px solid #F1F5F9' }
+  const inputStyle = { flex:1, padding:'6px 9px', borderRadius:'6px', border:'1.5px solid #D8E4D8', fontSize:'13px', color:'#111827', outline:'none' }
+
+  return React.createElement('div', {
+    style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2100, display:'flex', alignItems:'center', justifyContent:'center' },
+    onClick: onClose
+  },
+    React.createElement('div', {
+      style:{ background:'#FFFFFF', borderRadius:'12px', padding:'22px', width:'460px', maxWidth:'95vw', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)' },
+      onClick: e => e.stopPropagation()
+    },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'4px' } },
+        React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '出荷先マスタ管理'),
+        React.createElement('button', {
+          onClick: onClose,
+          style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+        }, '✕')
+      ),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginBottom:'14px' } },
+        '名称の変更・削除や、新しい出荷先の追加ができます。「よく使う」をONにすると、収穫記録の新規入力時に最初から行として表示されます。'
+      ),
+      React.createElement('div', { style:{ marginBottom:'10px' } },
+        ...destinations.map(d =>
+          React.createElement('div', { key:d.key, style:rowStyle },
+            React.createElement('input', { type:'text', value:d.label, onChange:e=>updateLabel(d.key, e.target.value), style:inputStyle }),
+            React.createElement('label', {
+              title:'よく使う出荷先（収穫記録フォームの初期行に表示）',
+              style:{ display:'flex', alignItems:'center', gap:'4px', fontSize:'11px', color: d.frequent ? '#0A6B52' : '#9CA3AF', cursor:'pointer', whiteSpace:'nowrap' }
+            },
+              React.createElement('input', { type:'checkbox', checked:!!d.frequent, onChange:()=>toggleFrequent(d.key), style:{ accentColor:'#0A6B52', cursor:'pointer' } }),
+              'よく使う'
+            ),
+            deleteTarget === d.key
+              ? React.createElement('div', { style:{ display:'flex', gap:'4px' } },
+                  React.createElement('button', {
+                    onClick: () => removeDest(d.key),
+                    style:{ fontSize:'11px', fontWeight:700, color:'#fff', background:'#DC2626', border:'none', borderRadius:'5px', padding:'4px 8px', cursor:'pointer' }
+                  }, '削除する'),
+                  React.createElement('button', {
+                    onClick: () => setDeleteTarget(null),
+                    style:{ fontSize:'11px', color:'#374151', background:'#fff', border:'1px solid #D8E4D8', borderRadius:'5px', padding:'4px 8px', cursor:'pointer' }
+                  }, 'やめる')
+                )
+              : React.createElement('button', {
+                  onClick: () => setDeleteTarget(d.key), title:'削除',
+                  style:{ background:'none', border:'none', color:'#CBD5E1', cursor:'pointer', fontSize:'15px', padding:'4px', flexShrink:0 }
+                }, React.createElement('i', { className:'ti ti-trash' }))
+          )
+        )
+      ),
+      React.createElement('div', { style:{ display:'flex', gap:'8px', marginTop:'12px' } },
+        React.createElement('input', {
+          type:'text', value:newLabel, onChange:e=>setNewLabel(e.target.value),
+          placeholder:'新しい出荷先名（例: 道の駅）', style:inputStyle,
+          onKeyDown: e => { if (e.key === 'Enter') addDest() }
+        }),
+        React.createElement('button', {
+          onClick: addDest,
+          disabled: !newLabel.trim(),
+          style:{
+            padding:'7px 14px', borderRadius:'6px', border:'none', fontSize:'12px', fontWeight:700,
+            cursor: newLabel.trim() ? 'pointer' : 'not-allowed',
+            background: newLabel.trim() ? '#0A6B52' : '#D1D5DB', color:'#fff'
+          }
+        }, '+ 追加')
+      ),
+      React.createElement('div', { style:{ marginTop:'16px', textAlign:'right' } },
+        React.createElement('button', {
+          onClick: onClose,
+          style:{ padding:'8px 18px', borderRadius:'7px', border:'1.5px solid #D8E4D8', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+        }, '閉じる')
+      )
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step5】HarvestRecordForm — 収穫記録入力フォーム
+// 出荷先×サイズの組み合わせを動的行で追加できるフォーム
+// 【フェーズ5・Step5-2】出荷先マスタ(SHIPMENT_DESTINATIONS)・規格マスタ(getHarvestGrades)・
+// 単位マスタ(SHIPMENT_UNIT_TYPES)に接続。旧来のHARVEST_DEST_LIST/HARVEST_GRADE_LISTは廃止。
+// ─────────────────────────────────────────────────────
+
+function HarvestRecordForm({ field, lots, destinations, harvestRecords, onSave, onCancel, staff }) {
+  // 【実装手順書 Step2】出荷先マスタは固定リストではなくApp側で管理される
+  // destinations（後から追加・編集できる）を使う。万一空の場合はSHIPMENT_DESTINATIONSにフォールバック。
+  const destList = (destinations && destinations.length > 0) ? destinations : SHIPMENT_DESTINATIONS
+  const today = new Date().toISOString().slice(0, 10)
+  const [form, setForm] = React.useState({
+    date:      today,
+    variety:   lots.length > 0 ? lots[0].variety : '',
+    row_range: '',
+    lot_code:  '',
+    note:      '',
+    checks:    {},
+    staff_ids: [],  // 【実装手順書 C】担当者（複数選択可）
+  })
+  // 出荷明細行（出荷先・サイズ・単位・数量）
+  // 【フェーズ5・Step5-1】出荷先はSHIPMENT_DESTINATIONS（朝採りJA／取引先A／取引先A（午後）／
+  // 取引先B／取引先C／直売／B品袋詰め）から選択。
+  // 【フェーズ5・Step5-3】規格(grade)は作物ごとに表記が異なるため、
+  // field.cropに応じた規格リスト（getHarvestGrades）の先頭値を初期値にする。
+  // 【フェーズ5・Step5-2】unit_typeで「本数」「コンテナ数」を切り替え。
+  // ※ 数値を保持するフィールド名は既存データとの後方互換のため`cases`のまま変更しない。
+  const cropGrades = getHarvestGrades(field.crop)
+  // 【実装手順書 Step2】UX上の注意点: 出荷先の数が多い（紙日報で7種類前後）ため、
+  // デフォルトでは「よく使う出荷先」(frequent:true)のみ行を表示し、
+  // 残りは「+ 出荷先を追加」で必要な分だけ広げられるようにする。
+  const frequentDests = destList.filter(d => d.frequent)
+  const initialDests = frequentDests.length > 0 ? frequentDests : destList.slice(0, 1)
+  const makeRow = (dest) => ({ dest: dest.label, grade: cropGrades[0], unit_type: SHIPMENT_UNIT_TYPES[0].key, cases: '' })
+  const [shipments, setShipments] = React.useState(initialDests.map(makeRow))
+  const [saved, setSaved] = React.useState(false)
+
+  const uf = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // ─────────────────────────────────────────────────────
+  // 【Step5】畝マップ選択 ⇄ row_range / lot_code 連動
+  //   lotsがある圃場 → 畝マップでクリック選択 → row_range文字列に自動変換
+  //   lotsがない圃場 → 従来のテキスト入力のみ（フォールバック、Step4と同方式）
+  //   lot_codeは「圃場番号 + 日付(MMDD) + 畝範囲」から自動生成。
+  //   ユーザーが直接編集した場合は自動生成を止め、手入力を優先する。
+  // ─────────────────────────────────────────────────────
+  const hasMap = lots && lots.length > 0 && field.row_count
+  const [selectedRows, setSelectedRows] = React.useState(new Set())
+  const [lotCodeManual, setLotCodeManual] = React.useState(false)
+
+  const generateLotCode = (dateStr, rangeStr) => {
+    if (!dateStr || !rangeStr) return ''
+    return `(${field.id})${dateStr.replace(/-/g, '').slice(4)}${rangeStr.replace(/[-,]/g, '')}`
+  }
+
+  // 【実装手順書 Step3】ロット番号の重複チェック
+  // 過去の収穫記録（この圃場）の中に同じlot_codeが存在するか確認する。
+  // 編集中の入力値が変わるたびにリアルタイム判定し、バッジで通知する。
+  const isDuplicateLotCode = (code) => {
+    if (!code) return false
+    return (harvestRecords || []).some(r => r.field_id === field.id && r.lot_code === code)
+  }
+
+  // 畝マップでクリック選択 → row_rangeへ反映 → lot_codeも自動更新（手動編集していない場合）
+  const handleSelectRows = (newSet) => {
+    setSelectedRows(newSet)
+    const newRange = selectedRowsToRange(newSet)
+    uf('row_range', newRange)
+    if (!lotCodeManual) uf('lot_code', generateLotCode(form.date, newRange))
+  }
+
+  // 畝範囲を直接テキスト編集した場合（畝マップが無い圃場、または微調整）
+  const handleRowRangeText = (val) => {
+    uf('row_range', val)
+    setSelectedRows(new Set())
+    if (!lotCodeManual) uf('lot_code', generateLotCode(form.date, val))
+  }
+
+  // 収穫日変更時もlot_codeを再生成（手動編集していない場合）
+  const handleDateChange = (val) => {
+    uf('date', val)
+    if (!lotCodeManual) uf('lot_code', generateLotCode(val, form.row_range))
+  }
+
+  // 収穫ロット番号を直接編集した場合は、以後の自動生成を停止する
+  const handleLotCodeText = (val) => {
+    setLotCodeManual(true)
+    uf('lot_code', val)
+  }
+
+  // 行追加・変更・削除
+  // 【実装手順書 Step2】「+ 出荷先を追加」では、まだ行に出ていない出荷先（あれば残りのfrequent優先、
+  // 無ければマスタの先頭から）を自動選択する。出荷先名はdestList（編集可能マスタ）から取る。
+  const addRow = () => setShipments(s => {
+    const usedLabels = new Set(s.map(r => r.dest))
+    const next = destList.find(d => !usedLabels.has(d.label)) || destList[0]
+    return [...s, makeRow(next || { label: '' })]
+  })
+  const removeRow = (i) => setShipments(s => s.filter((_, idx) => idx !== i))
+  const updateRow = (i, k, v) => setShipments(s => s.map((r, idx) => idx === i ? { ...r, [k]: v } : r))
+
+  const totalCases = shipments.reduce((acc, r) => acc + (Number(r.cases) || 0), 0)
+  const canSave    = form.date && form.variety.trim() && form.row_range.trim()
+                    && shipments.length > 0 && shipments.some(r => Number(r.cases) > 0)
+
+  const handleSave = () => {
+    if (!canSave) return
+    const filledRows = shipments.filter(r => Number(r.cases) > 0)
+    onSave({
+      field_id:    field.id,
+      date:        form.date,
+      variety:     form.variety.trim(),
+      row_range:   form.row_range.trim(),
+      lot_code:    form.lot_code.trim() || generateLotCode(form.date, form.row_range),
+      shipments:   filledRows.map(r => ({ ...r, cases: Number(r.cases) })),
+      total_cases: totalCases,
+      note:        form.note.trim(),
+      checks:      form.checks,
+    })
+    setSaved(true)
+    setTimeout(() => { setSaved(false); onCancel() }, 1500)
+  }
+
+  const inp = (label, key, type='text', placeholder='', onChangeOverride=null) =>
+    React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'5px' } }, label),
+      React.createElement('input', {
+        type, value: form[key], placeholder,
+        onChange: e => (onChangeOverride ? onChangeOverride(e.target.value) : uf(key, e.target.value)),
+        style:{ width:'100%', padding:'9px 12px', borderRadius:'8px', border:'1.5px solid #D8E4D8', background:'#fff', fontSize:'13px', color:'#111827', outline:'none', boxSizing:'border-box' },
+        onFocus: e => { e.target.style.borderColor='#0A6B52'; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+        onBlur:  e => { e.target.style.borderColor='#D8E4D8'; e.target.style.boxShadow='none' },
+      })
+    )
+
+  if (saved) return React.createElement('div', { style:{ textAlign:'center', padding:'32px 0' } },
+    React.createElement('i', { className:'ti ti-circle-check', style:{ fontSize:'40px', color:'#0A6B52', display:'block', marginBottom:'10px' } }),
+    React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#0A6B52' } }, '収穫記録を保存しました'),
+    React.createElement('div', { style:{ fontSize:'13px', color:'#6B7280', marginTop:'6px' } }, '合計 ' + totalCases + ' 件（本数・コンテナ数混在の場合あり）')
+  )
+
+  return React.createElement('div', null,
+
+    // ── 基本情報ブロック ──
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'4px' } },
+      inp('収穫日 *', 'date', 'date', '', handleDateChange),
+      React.createElement('div', { style:{ marginBottom:'14px' } },
+        React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'5px' } }, '品種 *'),
+        React.createElement('select', {
+          value: form.variety,
+          onChange: e => uf('variety', e.target.value),
+          style:{ width:'100%', padding:'9px 12px', borderRadius:'8px', border:'1.5px solid #D8E4D8', background:'#fff', fontSize:'13px', color:'#111827', outline:'none' },
+          onFocus: e => { e.target.style.borderColor='#0A6B52' },
+          onBlur:  e => { e.target.style.borderColor='#D8E4D8' },
+        },
+          React.createElement('option', { value:'' }, '-- 選択 --'),
+          // LOTSから品種一覧を生成 + 手入力用「その他」
+          ...[...new Set(lots.map(l => l.variety)), 'その他'].map(v =>
+            React.createElement('option', { key:v, value:v }, v)
+          )
+        )
+      ),
+    ),
+
+    // ── 畝範囲（畝マップ or テキスト入力）【Step5】 ──
+    React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'6px' } },
+        React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em' } }, '畝範囲 *'),
+        // 選択済み件数バッジ
+        selectedRows.size > 0
+          ? React.createElement('span', {
+              style:{ fontSize:'11px', fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #6EE7B7', borderRadius:'12px', padding:'2px 9px' }
+            }, selectedRows.size + '畝 選択中')
+          : null
+      ),
+
+      // 畝マップ（lotsがある圃場のみ表示）
+      hasMap
+        ? React.createElement('div', {
+            style:{ border:'1.5px solid #D8E4D8', borderRadius:'8px', padding:'12px', background:'#FAFBFA', marginBottom:'8px' }
+          },
+            React.createElement(RowMap, {
+              lots,
+              totalRows: field.row_count,
+              selectable: true,
+              selectedRows,
+              onSelectRows: handleSelectRows,
+              showSides: field.crop_category === 'corn',
+            })
+          )
+        : null,
+
+      // テキスト入力（常時表示。畝マップありの場合は「手動調整用」として補助的に使う）
+      hasMap
+        ? React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', marginBottom:'4px', fontStyle:'italic' } },
+            '↑ 畝をクリックして選択。または下記に直接入力（例: 6-17）'
+          )
+        : null,
+      React.createElement('input', {
+        type:'text',
+        placeholder: hasMap ? '直接入力で上書き可（例: 6-17）' : '例: 6-17',
+        value: form.row_range,
+        onChange: e => handleRowRangeText(e.target.value),
+        style:{
+          width:'100%', padding:'9px 12px', borderRadius:'8px',
+          border: form.row_range.trim() ? '1.5px solid #0A6B52' : '1.5px solid #D8E4D8',
+          background: form.row_range.trim() ? '#F0FDF4' : '#FFFFFF',
+          fontSize:'13px', color:'#111827', outline:'none', boxSizing:'border-box'
+        },
+      })
+    ),
+
+    // ── 担当者選択 【実装手順書 C】──
+    React.createElement('div', { style:{ marginBottom:'14px' } },
+      React.createElement('label', {
+        style:{ fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'6px' }
+      }, '担当者（複数選択可）'),
+      (staff && staff.length > 0)
+        ? React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'6px' } },
+            ...(staff).map(s =>
+              React.createElement('button', {
+                key: s.id,
+                type: 'button',
+                onClick: () => {
+                  const ids = form.staff_ids || []
+                  uf('staff_ids', ids.includes(s.id)
+                    ? ids.filter(id => id !== s.id)
+                    : [...ids, s.id])
+                },
+                style:{
+                  padding:'5px 12px', borderRadius:'20px', border:'1.5px solid',
+                  fontSize:'12px', fontWeight:600, cursor:'pointer', transition:'all .15s',
+                  borderColor: (form.staff_ids||[]).includes(s.id) ? '#0A6B52' : '#D8E4D8',
+                  background:  (form.staff_ids||[]).includes(s.id) ? '#0A6B52' : '#fff',
+                  color:       (form.staff_ids||[]).includes(s.id) ? '#fff'    : '#6B7280',
+                }
+              },
+                s.avatar ? `${s.avatar} ${s.name}` : s.name
+              )
+            )
+          )
+        : React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', padding:'8px 0' } },
+            'スタッフ管理ページでスタッフを登録すると、ここで担当者を選択できます'
+          )
+    ),
+
+    // ── 収穫ロット番号（row_range・日付から自動生成）【Step5】 ──
+    // 【実装手順書 Step3】重複チェック結果をリアルタイムで表示
+    (() => {
+      const isDup = isDuplicateLotCode(form.lot_code)
+      const borderColor = isDup ? '#F59E0B' : '#D8E4D8'
+      return React.createElement('div', { style:{ marginBottom:'14px' } },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'5px' } },
+          React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em' } }, '収穫ロット番号'),
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px' } },
+            // 【Step3】重複バッジ
+            isDup
+              ? React.createElement('span', {
+                  style:{
+                    fontSize:'10px', fontWeight:700, color:'#92400E',
+                    background:'#FEF3C7', border:'1px solid #FDE68A',
+                    borderRadius:'4px', padding:'2px 7px',
+                    display:'inline-flex', alignItems:'center', gap:'3px'
+                  }
+                },
+                React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'11px' } }),
+                '同じロット番号が既に存在します'
+              )
+              : null,
+            // 自動生成バッジ
+            !lotCodeManual && form.lot_code && !isDup
+              ? React.createElement('span', { style:{ fontSize:'10px', color:'#0A6B52', fontWeight:600 } }, '自動生成')
+              : null,
+          )
+        ),
+        React.createElement('input', {
+          type:'text', value: form.lot_code, placeholder:'例: (49)11120617',
+          onChange: e => handleLotCodeText(e.target.value),
+          style:{
+            width:'100%', padding:'9px 12px', borderRadius:'8px',
+            border:`1.5px solid ${borderColor}`,
+            background: isDup ? '#FFFBEB' : '#fff',
+            fontSize:'13px', color:'#111827', outline:'none', boxSizing:'border-box',
+            transition:'border-color .15s, background .15s'
+          },
+          onFocus: e => {
+            e.target.style.borderColor = isDup ? '#F59E0B' : '#0A6B52'
+            e.target.style.boxShadow = isDup ? '0 0 0 3px rgba(245,158,11,.12)' : '0 0 0 3px rgba(10,107,82,.1)'
+          },
+          onBlur: e => {
+            e.target.style.borderColor = isDup ? '#F59E0B' : '#D8E4D8'
+            e.target.style.boxShadow = 'none'
+          },
+        }),
+        // ヘルプテキスト or 重複詳細メッセージ
+        isDup
+          ? React.createElement('div', {
+              style:{ fontSize:'11px', color:'#92400E', marginTop:'5px', display:'flex', alignItems:'flex-start', gap:'4px' }
+            },
+            React.createElement('i', { className:'ti ti-info-circle', style:{ fontSize:'12px', marginTop:'1px', flexShrink:0 } }),
+            'この圃場でこのロット番号はすでに使われています。内容が同一のロットでなければ、番号を変更してください。'
+          )
+          : React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', marginTop:'4px' } },
+              '圃場番号＋日付＋畝範囲から自動入力されます（直接編集も可能）'
+            )
+      )
+    })(),
+
+    // ── 出荷明細テーブル ──
+    React.createElement('div', { style:{ marginBottom:'16px' } },
+      React.createElement('div', { style:{ fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:'8px' } }, '出荷内訳（出荷先・サイズ・単位・数量）'),
+
+      // 行ヘッダー
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1.3fr 1fr 0.9fr 0.8fr auto', gap:'6px', marginBottom:'4px', padding:'0 4px' } },
+        React.createElement('span', { style:{ fontSize:'10px', color:'#94A3B8', fontWeight:700, letterSpacing:'.06em' } }, '出荷先'),
+        React.createElement('span', { style:{ fontSize:'10px', color:'#94A3B8', fontWeight:700, letterSpacing:'.06em' } }, 'サイズ / 規格'),
+        React.createElement('span', { style:{ fontSize:'10px', color:'#94A3B8', fontWeight:700, letterSpacing:'.06em' } }, '単位'),
+        React.createElement('span', { style:{ fontSize:'10px', color:'#94A3B8', fontWeight:700, letterSpacing:'.06em' } }, '数量'),
+        React.createElement('span', null),
+      ),
+
+      // 明細行
+      ...shipments.map((row, i) =>
+        React.createElement('div', {
+          key: i,
+          style:{ display:'grid', gridTemplateColumns:'1.3fr 1fr 0.9fr 0.8fr auto', gap:'6px', marginBottom:'6px', alignItems:'center' }
+        },
+          // 出荷先【フェーズ5・Step5-1】SHIPMENT_DESTINATIONSマスタから選択。
+          // 旧データ（生協コンテナ／JA出荷／直販／市場等）がマスタに無い場合はフォールバック表示。
+          React.createElement('select', {
+            value: row.dest,
+            onChange: e => updateRow(i, 'dest', e.target.value),
+            style:{ padding:'7px 10px', borderRadius:'7px', border:'1.5px solid #D8E4D8', background:'#fff', fontSize:'13px', color:'#111827', outline:'none' },
+          },
+            ...(destList.some(d => d.label === row.dest) ? [] : [React.createElement('option', { key:'__current_dest', value: row.dest }, row.dest + '（旧データ）')]),
+            ...destList.map(d => React.createElement('option', { key:d.key, value:d.label }, d.label))
+          ),
+
+          // サイズ／規格（作物ごとにcropGradesを切り替え。既存データに無い値はフォールバック表示）
+          React.createElement('select', {
+            value: row.grade,
+            onChange: e => updateRow(i, 'grade', e.target.value),
+            style:{ padding:'7px 10px', borderRadius:'7px', border:'1.5px solid #D8E4D8', background:'#fff', fontSize:'13px', color:'#111827', outline:'none' },
+          },
+            ...(cropGrades.includes(row.grade) ? [] : [React.createElement('option', { key:'__current', value: row.grade }, row.grade + '（旧データ）')]),
+            ...cropGrades.map(g => React.createElement('option', { key:g, value:g }, g))
+          ),
+
+          // 単位【フェーズ5・Step5-2】SHIPMENT_UNIT_TYPES（本数／コンテナ数）から選択。
+          // 旧データはunit_type未設定のため、選択中はSHIPMENT_UNIT_TYPES[0]（本数）にフォールバック表示。
+          React.createElement('select', {
+            value: row.unit_type || SHIPMENT_UNIT_TYPES[0].key,
+            onChange: e => updateRow(i, 'unit_type', e.target.value),
+            style:{ padding:'7px 10px', borderRadius:'7px', border:'1.5px solid #D8E4D8', background:'#fff', fontSize:'13px', color:'#111827', outline:'none' },
+          }, ...SHIPMENT_UNIT_TYPES.map(u => React.createElement('option', { key:u.key, value:u.key }, u.label))),
+
+          // 数量（既存の`cases`フィールドをそのまま使用。単位は左の選択に応じて変わる）
+          React.createElement('input', {
+            type:'number', min:'0', step:'1', placeholder:'0',
+            value: row.cases,
+            onChange: e => updateRow(i, 'cases', e.target.value),
+            style:{ width:'100%', padding:'7px 10px', borderRadius:'7px', border:'1.5px solid #D8E4D8', background:'#fff', fontSize:'13px', color:'#111827', outline:'none', textAlign:'right' },
+          }),
+
+          // 削除ボタン
+          React.createElement('button', {
+            onClick: () => removeRow(i),
+            disabled: shipments.length === 1,
+            style:{
+              background:'none', border:'none', cursor: shipments.length === 1 ? 'default' : 'pointer',
+              color: shipments.length === 1 ? '#CBD5E1' : '#94A3B8', fontSize:'16px', padding:'4px',
+            }
+          }, React.createElement('i', { className:'ti ti-x' }))
+        )
+      ),
+
+      // 行追加ボタン
+      React.createElement('button', {
+        onClick: addRow,
+        style:{
+          width:'100%', padding:'8px', borderRadius:'8px', border:'1.5px dashed #B8D4C0',
+          background:'transparent', cursor:'pointer', color:'#0A6B52', fontSize:'12px', fontWeight:600,
+          display:'flex', alignItems:'center', justifyContent:'center', gap:'5px', marginTop:'4px',
+        },
+        onMouseEnter: e => { e.currentTarget.style.background='#F0FDF4' },
+        onMouseLeave: e => { e.currentTarget.style.background='transparent' },
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'13px' } }),
+        '出荷行を追加'
+      ),
+    ),
+
+    // ── 合計バー ──
+    totalCases > 0 && React.createElement('div', {
+      style:{ background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:'10px', padding:'12px 16px', marginBottom:'16px', display:'flex', alignItems:'center', justifyContent:'space-between' }
+    },
+      React.createElement('span', { style:{ fontSize:'13px', color:'#374151', fontWeight:500 } }, '合計数量'),
+      React.createElement('span', { style:{ fontSize:'22px', fontWeight:700, color:'#0A6B52' } }, totalCases + ' 件')
+    ),
+
+    // 【実装手順書 Step1】備考・メモ＋転記チェック
+    React.createElement(NoteChecklistField, {
+      note: form.note, onNoteChange: v => uf('note', v),
+      checks: form.checks, onChecksChange: v => uf('checks', v),
+      checkKeys: ['mgmt_table', 'lettuce_table', 'sa'],
+    }),
+
+    // ── 保存・キャンセルボタン ──
+    React.createElement('div', { style:{ display:'flex', gap:'10px', marginTop:'14px' } },
+      React.createElement('button', {
+        onClick: onCancel,
+        style:{ flex:1, padding:'11px', borderRadius:'8px', border:'1.5px solid #D8E4D8', background:'#fff', color:'#64748B', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+      }, 'キャンセル'),
+      React.createElement('button', {
+        onClick: handleSave,
+        disabled: !canSave,
+        style:{
+          flex:2, padding:'11px', borderRadius:'8px', border:'none',
+          background: canSave ? '#0A6B52' : '#D1D5DB',
+          color:'#fff', fontSize:'13px', fontWeight:700, cursor: canSave ? 'pointer' : 'not-allowed',
+          display:'flex', alignItems:'center', justifyContent:'center', gap:'6px',
+        }
+      },
+        React.createElement('i', { className:'ti ti-basket', style:{ fontSize:'15px' } }),
+        '収穫記録を保存する'
+      )
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step5】HarvestRecordList — 収穫記録一覧
+// ─────────────────────────────────────────────────────
+function HarvestRecordList({ records, onDelete, field, staff }) {
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+  const [selectedRecord, setSelectedRecord] = React.useState(null)  // 詳細モーダル対象
+  if (records.length === 0) {
+    return React.createElement('div', { className:'card', style:{ padding:'32px', textAlign:'center', color:'#6B7280', fontSize:'14px' } },
+      React.createElement('i', { className:'ti ti-basket', style:{ fontSize:'28px', display:'block', marginBottom:'8px', color:'#CBD5E1' } }),
+      'この圃場の収穫記録はまだありません'
+    )
+  }
+  const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date))
+
+  return React.createElement(React.Fragment, null,
+  React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'12px' } },
+    ...sorted.map((r, idx) =>
+      React.createElement('div', {
+        key: r.id,
+        className: 'card',
+        onClick: () => setSelectedRecord(r),
+        style:{ padding:'16px 20px', cursor:'pointer', transition:'box-shadow .12s, border-color .12s' },
+        onMouseEnter: e => { e.currentTarget.style.borderColor = '#0A6B52'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(10,107,82,.1)' },
+        onMouseLeave: e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.boxShadow = '' },
+      },
+        // カードヘッダー行
+        React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'12px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+            React.createElement('div', {
+              style:{ width:34, height:34, borderRadius:'50%', background:'#0D9972', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }
+            }, React.createElement('i', { className:'ti ti-basket', style:{ fontSize:'16px', color:'#FFFFFF' } })),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:'#111827', display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap' } },
+                r.variety + '　' + r.row_range + '畝',
+                React.createElement(TranscribeStatusBadge, { checks: r.checks, checkKeys:['mgmt_table','lettuce_table','sa'] })
+              ),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#94A3B8', marginTop:'2px' } },
+                r.date + (r.lot_code ? '　ロット: ' + r.lot_code : '')
+              )
+            )
+          ),
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+            React.createElement('div', { style:{ textAlign:'right' } },
+              React.createElement('div', { style:{ fontSize:'22px', fontWeight:700, color:'#0A6B52', lineHeight:1 } }, r.total_cases),
+              React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', fontWeight:600, letterSpacing:'.04em' } }, 'ケース')
+            ),
+            React.createElement('button', {
+              onClick: e => { e.stopPropagation(); setDeleteTarget(r) }, title:'削除',
+              style:{ background:'none', border:'none', color:'#CBD5E1', cursor:'pointer', fontSize:'15px', padding:'4px', flexShrink:0 }
+            }, React.createElement('i', { className:'ti ti-trash' }))
+          )
+        ),
+
+        // 出荷内訳テーブル
+        React.createElement('div', { style:{ borderRadius:'8px', overflow:'hidden', border:'1px solid #E2E8E2' } },
+          // ヘッダー
+          React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', background:'#F8FAF8', padding:'7px 14px', borderBottom:'1px solid #E2E8E2' } },
+            React.createElement('span', { style:{ fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.06em' } }, '出荷先'),
+            React.createElement('span', { style:{ fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.06em' } }, 'サイズ'),
+            React.createElement('span', { style:{ fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.06em', textAlign:'right' } }, '数量'),
+          ),
+          // 明細行
+          // 【フェーズ5・Step5-2】unit_typeがあればその単位（本数／コンテナ数）で表示。
+          // unit_type未設定の旧データは従来通り「ケース」表記にフォールバックする。
+          ...(r.shipments || []).map((s, si) => {
+            const unitLabel = s.unit_type
+              ? (SHIPMENT_UNIT_TYPES.find(u => u.key === s.unit_type)?.label || 'ケース')
+              : 'ケース'
+            return React.createElement('div', {
+              key: si,
+              style:{
+                display:'grid', gridTemplateColumns:'2fr 1fr 1fr', padding:'8px 14px',
+                borderBottom: si < (r.shipments.length - 1) ? '1px solid #F1F5F1' : 'none',
+                background: si % 2 === 1 ? '#FAFBFA' : '#FFFFFF',
+              }
+            },
+              React.createElement('span', { style:{ fontSize:'13px', color:'#374151' } }, s.dest),
+              React.createElement('span', { style:{ fontSize:'13px', color:'#374151' } },
+                React.createElement('span', { className:'badge badge-blue', style:{ fontSize:'10px' } }, s.grade)
+              ),
+              React.createElement('span', { style:{ fontSize:'13px', fontWeight:600, color:'#111827', textAlign:'right' } }, s.cases + ' ' + unitLabel)
+            )
+          }),
+          // 合計行（単位が混在する場合があるため、合計は単位を付けない総数として表示）
+          React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', padding:'8px 14px', background:'#F0FDF4', borderTop:'2px solid #BBF7D0' } },
+            React.createElement('span', { style:{ fontSize:'12px', fontWeight:700, color:'#065F46' } }, '合計'),
+            React.createElement('span', null),
+            React.createElement('span', { style:{ fontSize:'14px', fontWeight:700, color:'#0A6B52', textAlign:'right' } }, r.total_cases + ' 件')
+          )
+        ),
+        r.note && React.createElement('div', { style:{ fontSize:'11px', color:'#7C3AED', marginTop:'8px', display:'flex', alignItems:'flex-start', gap:'4px' } },
+          React.createElement('i', { className:'ti ti-notes', style:{ fontSize:'11px', marginTop:'1px', flexShrink:0 } }),
+          React.createElement('span', null, r.note)
+        )
+      )
+    )
+  ),
+
+    // ── 詳細モーダル（日報記録の詳細モーダルと同じ見た目に統一） ──
+    selectedRecord && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setSelectedRecord(null)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'480px', maxWidth:'95vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        // ヘッダー
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+            React.createElement('div', { style:{ width:36, height:36, borderRadius:'50%', background:'#0D9972', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+              React.createElement('i', { className:'ti ti-basket', style:{ fontSize:'18px', color:'#FFFFFF' } })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '収穫記録'),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, selectedRecord.date + (field ? '　' + field.name : ''))
+            )
+          ),
+          React.createElement('button', {
+            onClick: () => setSelectedRecord(null),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+
+        // 情報行
+        React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'8px', padding:'4px 12px', marginBottom:'16px' } },
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '日付'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.date)
+          ),
+          field && React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '圃場'),
+            React.createElement('span', { style:{ fontWeight:600 } }, field.name)
+          ),
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '品種'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.variety)
+          ),
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '畝範囲'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.row_range + '畝')
+          ),
+          selectedRecord.lot_code && React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, 'ロット'),
+            React.createElement('span', null, selectedRecord.lot_code)
+          ),
+          React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '担当者'),
+            React.createElement('span', null, staffNames(staff, selectedRecord.staff_ids))
+          ),
+          React.createElement('div', { style:{ ...rowStyle2, borderBottom:'none' } },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '備考'),
+            React.createElement('span', { style:{ color: selectedRecord.note ? '#374151' : '#9CA3AF' } }, selectedRecord.note || 'なし')
+          )
+        ),
+
+        // 出荷内訳
+        React.createElement('div', { style:{ marginBottom:'16px' } },
+          React.createElement('div', { style:{ fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em', marginBottom:'6px' } }, '出荷内訳'),
+          React.createElement('div', { style:{ borderRadius:'8px', overflow:'hidden', border:'1px solid #E2E8E2' } },
+            React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', background:'#F8FAF8', padding:'7px 14px', borderBottom:'1px solid #E2E8E2' } },
+              React.createElement('span', { style:{ fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.06em' } }, '出荷先'),
+              React.createElement('span', { style:{ fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.06em' } }, 'サイズ'),
+              React.createElement('span', { style:{ fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.06em', textAlign:'right' } }, '数量'),
+            ),
+            ...(selectedRecord.shipments || []).map((s, si) => {
+              const unitLabel = s.unit_type
+                ? (SHIPMENT_UNIT_TYPES.find(u => u.key === s.unit_type)?.label || 'ケース')
+                : 'ケース'
+              return React.createElement('div', {
+                key: si,
+                style:{
+                  display:'grid', gridTemplateColumns:'2fr 1fr 1fr', padding:'8px 14px',
+                  borderBottom: si < (selectedRecord.shipments.length - 1) ? '1px solid #F1F5F1' : 'none',
+                  background: si % 2 === 1 ? '#FAFBFA' : '#FFFFFF',
+                }
+              },
+                React.createElement('span', { style:{ fontSize:'13px', color:'#374151' } }, s.dest),
+                React.createElement('span', { style:{ fontSize:'13px', color:'#374151' } },
+                  React.createElement('span', { className:'badge badge-blue', style:{ fontSize:'10px' } }, s.grade)
+                ),
+                React.createElement('span', { style:{ fontSize:'13px', fontWeight:600, color:'#111827', textAlign:'right' } }, s.cases + ' ' + unitLabel)
+              )
+            }),
+            React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr', padding:'8px 14px', background:'#F0FDF4', borderTop:'2px solid #BBF7D0' } },
+              React.createElement('span', { style:{ fontSize:'12px', fontWeight:700, color:'#065F46' } }, '合計'),
+              React.createElement('span', null),
+              React.createElement('span', { style:{ fontSize:'14px', fontWeight:700, color:'#0A6B52', textAlign:'right' } }, selectedRecord.total_cases + ' 件')
+            )
+          )
+        ),
+
+        // 転記チェック状況
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px' } },
+          React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280' } }, '転記チェック'),
+          React.createElement(TranscribeStatusBadge, { checks: selectedRecord.checks, checkKeys:['mgmt_table','lettuce_table','sa'] })
+        ),
+
+        // ボタン群
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('button', {
+            onClick: () => { setDeleteTarget(selectedRecord); setSelectedRecord(null) },
+            style:{
+              flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px',
+              padding:'9px 18px', borderRadius:'4px', fontSize:'14px', fontWeight:600,
+              cursor:'pointer', border:'1.5px solid #FCA5A5', background:'#FEF2F2', color:'#DC2626'
+            }
+          },
+            React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'14px' } }),
+            '削除'
+          ),
+          React.createElement('button', {
+            onClick: () => setSelectedRecord(null),
+            style:{ flex:1, padding:'9px 18px', borderRadius:'4px', border:'none', background:'#0A6B52', color:'#fff', fontSize:'14px', fontWeight:700, cursor:'pointer' }
+          }, '閉じる')
+        )
+      )
+    ),
+
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '収穫記録を削除しますか？',
+      targetName: deleteTarget.variety + '　' + deleteTarget.row_range + '畝　' + deleteTarget.date,
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+    })
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// 【フェーズE・E-4 Step5】HarvestRecordSection — 「収穫記録」タブ本体
+// E-2確定仕様「harvest: ロット単位の収穫記録一覧＋新規入力」に対応
+// ─────────────────────────────────────────────────────
+function HarvestRecordSection({ field, harvestRecords, lots, onSave, onDelete, destinations, onChangeDestinations, staff }) {
+  const [showAddModal, setShowAddModal] = React.useState(false)
+  const [showDestModal, setShowDestModal] = React.useState(false)
+  const fieldHarvestRecords = harvestRecords.filter(r => r.field_id === field.id)
+
+  // 合計集計
+  const totalCases  = fieldHarvestRecords.reduce((acc, r) => acc + (r.total_cases || 0), 0)
+  const totalByDest = {}
+  fieldHarvestRecords.forEach(r => (r.shipments || []).forEach(s => {
+    totalByDest[s.dest] = (totalByDest[s.dest] || 0) + s.cases
+  }))
+
+  return React.createElement('div', null,
+    // ── セクションヘッダー ──
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+      React.createElement(SectionTitle, { icon:'basket', style:{ marginBottom:0 } }, '収穫記録一覧'),
+      React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+        React.createElement('button', {
+          className:'btn btn-ghost',
+          style:{ display:'flex', alignItems:'center', gap:'6px', fontSize:'13px' },
+          onClick: () => setShowDestModal(true)
+        },
+          React.createElement('i', { className:'ti ti-settings', style:{ fontSize:'14px' } }),
+          '出荷先マスタ'
+        ),
+        React.createElement('button', {
+          className:'btn btn-primary',
+          style:{ display:'flex', alignItems:'center', gap:'6px' },
+          onClick: () => setShowAddModal(true)
+        },
+          React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'14px' } }),
+          '新規入力'
+        )
+      )
+    ),
+    // 【実装手順書 Step2】出荷先マスタ管理モーダル
+    showDestModal && React.createElement(ShipmentDestinationManageModal, {
+      destinations: destinations || SHIPMENT_DESTINATIONS,
+      onChange: onChangeDestinations || (() => {}),
+      onClose: () => setShowDestModal(false)
+    }),
+
+    // ── サマリーカード（記録がある場合のみ表示） ──
+    fieldHarvestRecords.length > 0 && React.createElement('div', {
+      style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(140px, 1fr))', gap:'10px', marginBottom:'20px' }
+    },
+      // 合計ケース数
+      React.createElement('div', { className:'stat-card green', style:{ padding:'14px 16px' } },
+        React.createElement('div', { style:{ fontSize:'10px', fontWeight:600, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'.06em' } }, '合計'),
+        React.createElement('div', { className:'stat-n', style:{ fontSize:'24px' } }, totalCases.toLocaleString()),
+        React.createElement('div', { className:'stat-l' }, 'ケース合計')
+      ),
+      // 収穫回数
+      React.createElement('div', { className:'stat-card', style:{ padding:'14px 16px' } },
+        React.createElement('div', { style:{ fontSize:'10px', fontWeight:600, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'.06em' } }, '収穫回数'),
+        React.createElement('div', { className:'stat-n', style:{ fontSize:'24px', color:'#1D4ED8' } }, fieldHarvestRecords.length),
+        React.createElement('div', { className:'stat-l' }, '記録件数')
+      ),
+      // 出荷先別（上位2件）
+      ...Object.entries(totalByDest).slice(0, 2).map(([dest, cnt]) =>
+        React.createElement('div', { key:dest, className:'stat-card', style:{ padding:'14px 16px' } },
+          React.createElement('div', { style:{ fontSize:'10px', fontWeight:600, color:'#94A3B8', textTransform:'uppercase', letterSpacing:'.06em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' } }, dest),
+          React.createElement('div', { className:'stat-n', style:{ fontSize:'22px', color:'#B45309' } }, cnt),
+          React.createElement('div', { className:'stat-l' }, 'ケース')
+        )
+      )
+    ),
+
+    // ── 記録一覧 ──
+    React.createElement(HarvestRecordList, { records: fieldHarvestRecords, onDelete }),
+
+    // ── 新規入力モーダル ──
+    showAddModal && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setShowAddModal(false)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'560px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px' } },
+          React.createElement('div', null,
+            React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '収穫記録の新規入力'),
+            React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'4px' } }, field.name + ' — 出荷先・サイズ・単位別の数量を記録します')
+          ),
+          React.createElement('button', {
+            onClick: () => setShowAddModal(false),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+        React.createElement(HarvestRecordForm, {
+          field,
+          lots,
+          destinations: destinations || SHIPMENT_DESTINATIONS,
+          harvestRecords,
+          staff,
+          onSave: r => { onSave(r); setShowAddModal(false) },
+          onCancel: () => setShowAddModal(false)
+        })
+      )
+    )
+  )
+}
+
+// ─────────────────────────────────────────────────────
+// FieldDetailPage — 圃場別・サブページ単一表示
+// sub='dashboard'|'rows'|'daily'|'pesticide'|'harvest' でコンテンツを切り替え
+// ─────────────────────────────────────────────────────
+// ── DailySection: 圃場別「日報」サブページ — 一覧メイン + 新規入力モーダル ──
+function DailySection({ field, fieldRecords, allRecords, pesticides, onSaveRecord, onUpdateRecord, onDeleteRecord }) {
+  const [showAddModal, setShowAddModal] = React.useState(false)
+  return React.createElement('div', null,
+    // ヘッダー行: タイトル + 新規入力ボタン
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' } },
+      React.createElement(SectionTitle, { icon:'notebook', style:{ marginBottom:0 } }, 'この圃場の日報一覧'),
+      React.createElement('button', {
+        className:'btn btn-primary',
+        style:{ display:'flex', alignItems:'center', gap:'6px' },
+        onClick: () => setShowAddModal(true)
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'14px' } }),
+        '新規入力'
+      )
+    ),
+    React.createElement(RecordTable, { records: fieldRecords, fields:[field], pesticides, onUpdate: onUpdateRecord, onDelete: onDeleteRecord }),
+
+    // 新規入力モーダル
+    showAddModal && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: () => setShowAddModal(false)
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'28px', width:'640px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+          React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '新規日報入力'),
+          React.createElement('button', {
+            onClick: () => setShowAddModal(false),
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+        React.createElement(RecordForm, { fields:[field], pesticides, records:allRecords, inModal:true, onSave: r => onSaveRecord({ ...r, field_id: field.id }) })
+      )
+    )
+  )
+}
+
+
+// =====================================================
+// 【実装手順書 3.2.2】作物別管理項目パネル
+// ─────────────────────────────────────────────────────
+// field.crop に応じて CROP_SPECIFIC_FIELD_DEFS から表示・入力項目を
+// 動的に切り替える。定義が無い作物（レタス・水稲・ターサイ等、既存の
+// 画面で十分な作物）では何も表示せず、既存画面に影響を与えない。
+// 圃場詳細画面（FieldDetailPageの全サブページ＝ダッシュボード／
+// 日報・作業入力／畝マップ／農薬散布／収穫記録）の先頭に共通表示することで、
+// 「圃場詳細画面」「作業記録画面」の両方で確認・入力できるようにしている。
+// =====================================================
+function CropSpecificDetailsPanel({ field, onUpdate }) {
+  const defs = CROP_SPECIFIC_FIELD_DEFS[field.crop]
+  const [editing, setEditing] = React.useState(false)
+  const [draft,   setDraft]   = React.useState(field.crop_specific_details || {})
+
+  // 表示中の圃場が切り替わったら編集状態・ドラフトをリセット
+  React.useEffect(() => {
+    setDraft(field.crop_specific_details || {})
+    setEditing(false)
+  }, [field.id])
+
+  // この作物には特有の管理項目定義が無い → パネル自体を表示しない
+  if (!defs || defs.length === 0) return null
+
+  const saved       = field.crop_specific_details || {}
+  const filledCount = defs.filter(d => saved[d.key]).length
+
+  const handleSave = () => {
+    if (onUpdate) onUpdate(field.id, draft)
+    setEditing(false)
+  }
+  const handleCancel = () => {
+    setDraft(saved)
+    setEditing(false)
+  }
+
+  return React.createElement('div', { className:'card', style:{ marginBottom:'20px' } },
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'14px', gap:'10px' } },
+      React.createElement('div', null,
+        React.createElement(SectionTitle, { icon:'plant-2', style:{ marginBottom:'4px' } }, field.crop + ' 専用の管理項目'),
+        React.createElement('div', { style:{ fontSize:'11px', color:'#94A3B8' } },
+          '記録済み ' + filledCount + ' / ' + defs.length + ' 項目　｜　作物に応じて自動で表示される専用項目です'
+        )
+      ),
+      editing
+        ? React.createElement('div', { style:{ display:'flex', gap:'8px', flexShrink:0 } },
+            React.createElement('button', {
+              className:'btn btn-ghost', style:{ padding:'6px 14px', fontSize:'12px' }, onClick:handleCancel
+            }, 'キャンセル'),
+            React.createElement('button', {
+              className:'btn btn-primary', style:{ padding:'6px 14px', fontSize:'12px' }, onClick:handleSave
+            }, '保存')
+          )
+        : React.createElement('button', {
+            className:'btn btn-ghost', style:{ padding:'6px 14px', fontSize:'12px', flexShrink:0 },
+            onClick: () => setEditing(true)
+          },
+            React.createElement('i', { className:'ti ti-pencil', style:{ fontSize:'13px', marginRight:'2px' } }),
+            '編集'
+          )
+    ),
+    React.createElement('div', {
+      style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:'14px 18px' }
+    },
+      defs.map(d => React.createElement('div', { key:d.key },
+        React.createElement('div', {
+          style:{ fontSize:'10px', fontWeight:700, color:'#94A3B8', letterSpacing:'.05em', textTransform:'uppercase', marginBottom:'5px' }
+        }, d.label),
+        editing
+          ? React.createElement('input', {
+              type: d.type, className:'form-input', style:{ fontSize:'13px', padding:'7px 10px' },
+              value: draft[d.key] || '',
+              onChange: e => setDraft(prev => ({ ...prev, [d.key]: e.target.value }))
+            })
+          : React.createElement('div', {
+              style:{ fontSize:'14px', fontWeight:600, color: saved[d.key] ? '#111827' : '#CBD5E1' }
+            }, saved[d.key] || '未記録')
+      ))
+    )
+  )
+}
+
+// ── 記録と作付けの紐付け修正用コンポーネント ──
+function CropCycleSelector({ record, cropCycles, onUpdate }) {
+  const [isEditing, setIsEditing] = React.useState(false)
+  const history = getCropCycleHistory(cropCycles, record.field_id)
+  const current = history.find(c => c.id === record.crop_cycle_id)
+
+  if (!isEditing) {
+    return React.createElement('div', {
+      onClick: () => setIsEditing(true),
+      style: {
+        fontSize: '10px', color: current ? '#0A6B52' : '#94A3B8',
+        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px',
+        padding: '2px 6px', borderRadius: '4px', background: current ? '#ECFDF5' : '#F1F5F1'
+      }
+    },
+      React.createElement('i', { className: 'ti ti-edit', style: { fontSize: '10px' } }),
+      current ? current.crop : '未紐付け'
+    )
+  }
+
+  return React.createElement('select', {
+    className: 'form-select',
+    style: { fontSize: '10px', padding: '2px 4px', width: 'auto', height: 'auto' },
+    value: record.crop_cycle_id || '',
+    onChange: (e) => {
+      onUpdate(record.id, e.target.value ? Number(e.target.value) : null)
+      setIsEditing(false)
+    },
+    onBlur: () => setIsEditing(false),
+    autoFocus: true
+  },
+    React.createElement('option', { value: '' }, '選択なし'),
+    history.map(c => React.createElement('option', { key: c.id, value: c.id },
+      `${c.crop} (${c.start_month}月〜${c.end_month}月)`
+    ))
+  )
+}
+
+function FieldDetailPage({ field, fields, records, pesticides, onSaveRecord, onUpdateRecord, onDeleteRecord, lotSprayRecords, onSaveLotSprayRecord, onDeleteLotSprayRecord, harvestRecords, onSaveHarvestRecord, onDeleteHarvestRecord, onUpdateFieldCropDetails, sub, cropCycles, onAddCropCycle, onUpdateCropCycle, onDeleteCropCycle, onCompleteCropCycle,
+  // 【サンプル農園実データ統合 フェーズ4・Step4-1(画面接続)】追肥記録を圃場詳細ページから使えるようにする
+  fertilizers, topDressingRecords, onSaveTopDressingRecord, onDeleteTopDressingRecord,
+  // 【実装手順書 Step2】出荷先マスタ
+  destinations, onChangeDestinations,
+  // 【実装手順書 C】担当者連携
+  staff }) {
+  const fieldRecords = records.filter(r => r.field_id === field.id)
+  const fieldRows    = LOTS[field.id] || []
+  const [selectedRowNo, setSelectedRowNo] = React.useState(null)
+
+  const statusClass = field.status === '栽培中' ? 'badge-green'
+    : field.status === '休閑'   ? 'badge-gray'
+    : field.status === '収穫期' ? 'badge-amber' : 'badge-blue'
+
+  // ── タブ定義（5タブ構成）──
+  const TABS = [
+    { id:'dashboard',    label:'圃場ダッシュボード', icon:'home'      },
+    { id:'crop_history', label:'作付け履歴',         icon:'history'   },
+    { id:'daily',        label:'日報入力',           icon:'notebook'  },
+    { id:'pesticide',    label:'農薬散布',           icon:'spray'     },
+    // 【サンプル農園実データ統合 フェーズ4・Step4-1(画面接続)】追肥記録タブ
+    { id:'topdressing',  label:'追肥記録',           icon:'droplet'   },
+    { id:'harvest',      label:'収穫・出荷',         icon:'basket'    },
+    { id:'field_eval',   label:'実績評価',           icon:'chart-bar' },
+  ]
+  const activeSub = TABS.some(t => t.id === sub) ? sub : 'dashboard'
+
+  // ── コンテンツ定義 ──
+  const content = {
+    dashboard: () => React.createElement(FieldDashboardSection, {
+      field, fieldRecords, fieldRows, pesticides, lotSprayRecords: lotSprayRecords || []
+    }),
+    crop_history: () => React.createElement(CropCycleHistorySection, {
+      field, cropCycles: cropCycles || [], onAdd: onAddCropCycle,
+      onUpdate: onUpdateCropCycle, onDelete: onDeleteCropCycle,
+      onComplete: onCompleteCropCycle,
+    }),
+    daily: () => React.createElement(DailySection, {
+      field, fieldRecords, allRecords:records, pesticides, onSaveRecord, onUpdateRecord, onDeleteRecord
+    }),
+    pesticide: () => React.createElement(LotSprayRecordSection, {
+      field,
+      lotSprayRecords: lotSprayRecords || [],
+      pesticides,
+      onSave: onSaveLotSprayRecord,
+      onDelete: onDeleteLotSprayRecord,
+      // 【実装手順書 C】担当者連携（収穫記録と同パターンで農薬散布にも対応）
+      staff
+    }),
+    // 【サンプル農園実データ統合 フェーズ4・Step4-1(画面接続)】追肥記録セクション
+    // TopDressingRecordSection自体はStep4-1で実装済みだったが、
+    // FieldDetailPageのタブ・contentマップに接続されていなかったため追加。
+    topdressing: () => React.createElement(TopDressingRecordSection, {
+      field,
+      topDressingRecords: topDressingRecords || [],
+      fertilizers: fertilizers || [],
+      onSave: onSaveTopDressingRecord,
+      onDelete: onDeleteTopDressingRecord,
+      // 【実装手順書 C】担当者連携（収穫記録と同パターンで追肥にも対応）
+      staff
+    }),
+    harvest: () => React.createElement(HarvestRecordSection, {
+      field,
+      harvestRecords: harvestRecords || [],
+      lots: fieldRows,
+      onSave: onSaveHarvestRecord,
+      onDelete: onDeleteHarvestRecord,
+      destinations: destinations,
+      onChangeDestinations: onChangeDestinations,
+      staff,
+    }),
+    field_eval: () => React.createElement(FieldEvalTab, { field, fieldRecords, harvestRecords: harvestRecords || [] }),
+  }
+
+  return React.createElement('div', { className:'page', style:{ padding:'0', display:'flex', flexDirection:'column', height:'100%' } },
+
+    // ── ① ヘッダーエリア（圃場名・作物・ステータス）──
+    React.createElement('div', {
+      style:{
+        padding:'20px 32px 0',
+        borderBottom:'1px solid #DDE8DE',
+        background:'#FFFFFF',
+        flexShrink:0,
+      }
+    },
+      // パンくず
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'6px' } },
+        React.createElement('i', { className:'ti ti-folder-open', style:{ fontSize:'14px', color:'#94A3B8' } }),
+        React.createElement('span', { style:{ fontSize:'12px', color:'#94A3B8', fontWeight:500 } }, '圃場別管理'),
+        React.createElement('span', { style:{ fontSize:'12px', color:'#CBD5E1' } }, '/'),
+        React.createElement('span', { style:{ fontSize:'12px', color:'#0A6B52', fontWeight:600 } }, field.name),
+      ),
+      // 圃場名・情報行
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'16px' } },
+        React.createElement('div', {
+          style:{
+            width:'36px', height:'36px', borderRadius:'8px',
+            background: field.color || '#0A6B52',
+            display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+          }
+        },
+          React.createElement('i', { className:'ti ti-plant-2', style:{ fontSize:'18px', color:'#fff' } })
+        ),
+        React.createElement('div', null,
+          React.createElement('div', { style:{ fontSize:'18px', fontWeight:700, color:'#111827', lineHeight:1.2 } }, field.name),
+          React.createElement('div', { style:{ fontSize:'12px', color:'#64748B', marginTop:'2px' } },
+            field.crop + '　·　' + field.area_are + 'a'
+          ),
+        ),
+        React.createElement('span', { className:'badge ' + statusClass, style:{ marginLeft:'4px' } }, field.status),
+      ),
+
+      // ── ② タブバー ──
+      React.createElement('div', { style:{ display:'flex', gap:'0', marginBottom:'-1px' } },
+        TABS.map(tab =>
+          React.createElement('button', {
+            key: tab.id,
+            onClick: () => {
+              // サイドバーのURLも連動させるためwindow経由でonChangeを呼ぶ
+              // FieldDetailPageはApp側から page state で制御されているので
+              // ここでは直接 window.__fieldTabChange を使う（App側で設定）
+              if (window.__fieldTabChange) window.__fieldTabChange('field:' + field.id + ':' + tab.id)
+            },
+            style:{
+              display:'flex', alignItems:'center', gap:'6px',
+              padding:'10px 18px',
+              border:'none', background:'none', cursor:'pointer',
+              fontSize:'13px', fontWeight: activeSub === tab.id ? 700 : 500,
+              color: activeSub === tab.id ? '#0A6B52' : '#64748B',
+              borderBottom: activeSub === tab.id ? '2px solid #0A6B52' : '2px solid transparent',
+              borderRadius:'0',
+              transition:'all .15s',
+              whiteSpace:'nowrap',
+            },
+            onMouseEnter: e => { if (activeSub !== tab.id) e.currentTarget.style.color = '#0A6B52' },
+            onMouseLeave: e => { if (activeSub !== tab.id) e.currentTarget.style.color = '#64748B' },
+          },
+            React.createElement('i', { className:'ti ti-' + tab.icon, style:{ fontSize:'15px' } }),
+            tab.label
+          )
+        )
+      )
+    ),
+
+    // ── ③ 作物別管理項目パネル（作物に応じて自動表示）──
+    React.createElement('div', { style:{ padding:'0 32px', flexShrink:0, marginTop:'20px' } },
+      React.createElement(CropSpecificDetailsPanel, { field, onUpdate: onUpdateFieldCropDetails })
+    ),
+
+    // ── ④ コンテンツエリア ──
+    React.createElement('div', { style:{ flex:1, overflowY:'auto', padding:'24px 32px' } },
+      (content[activeSub] || content.dashboard)()
+    )
+  )
+}
+
+// ── 圃場別「作付け履歴」タブ ──
+// 圃場に対する作付け（crop_cycle）の追加・一覧・終了操作を行う
+function CropCycleHistorySection({ field, cropCycles, onAdd, onUpdate, onDelete, onComplete }) {
+  const [showForm, setShowForm] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+  const [form, setForm] = React.useState({
+    field_id: field.id, crop: field.crop, start_month: 4, end_month: 6, note: '',
+  })
+  const updateField = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const history = getCropCycleHistory(cropCycles, field.id)
+  const current = history.find(c => c.status === 'active')
+
+  const handleAdd = () => {
+    if (!form.crop) return
+    onAdd({ ...form, field_id: field.id })
+    setForm({ field_id: field.id, crop: field.crop, start_month: 4, end_month: 6, note: '' })
+    setShowForm(false)
+  }
+
+  const statusLabel = { active: '栽培中', completed: '終了', planned: '計画中' }
+  const statusBadge = { active: 'badge-green', completed: 'badge-gray', planned: 'badge-blue' }
+
+  return React.createElement('div', null,
+    // 現在の作付け（強調表示）
+    current && React.createElement('div', { className:'card', style:{ marginBottom:'16px' } },
+      React.createElement('div', { style:{ fontSize:'11px', color:'#94A3B8', marginBottom:'4px' } }, '現在の作付け'),
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+        React.createElement('span', { style:{ fontSize:'17px', fontWeight:700 } }, current.crop),
+        React.createElement('span', { className:'badge badge-green' }, statusLabel[current.status]),
+        React.createElement('button', {
+          className:'btn btn-sm', style:{ marginLeft:'auto' },
+          onClick: () => onComplete(current.id),
+        }, '今期を終了する')
+      ),
+      React.createElement('div', { style:{ fontSize:'12px', color:'#64748B', marginTop:'6px' } },
+        current.start_month + '月 〜 ' + current.end_month + '月　' + (current.note || '')
+      )
+    ),
+
+    // 履歴一覧
+    React.createElement('div', { className:'card' },
+      React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' } },
+        React.createElement('div', { className:'section-title' }, '作付け履歴'),
+        React.createElement('button', { className:'btn btn-primary btn-sm', onClick:()=>setShowForm(true) }, '+ 新しい作付けを開始')
+      ),
+      history.length === 0
+        ? React.createElement('div', { style:{ color:'#94A3B8', fontSize:'13px', padding:'16px 0', textAlign:'center' } }, '作付け履歴がありません')
+        : React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:'13px' } },
+            React.createElement('thead', null,
+              React.createElement('tr', { style:{ borderBottom:'1px solid #E5E9F0' } },
+                ['作物','期間','状態','メモ',''].map(h =>
+                  React.createElement('th', { key:h, style:{ padding:'8px 12px', textAlign:'left', color:'#94A3B8', fontWeight:600, fontSize:'11px' } }, h)
+                )
+              )
+            ),
+            React.createElement('tbody', null,
+              history.map(c =>
+                React.createElement('tr', { key:c.id, style:{ borderBottom:'1px solid #F3F4F6' } },
+                  React.createElement('td', { style:{ padding:'10px 12px', fontWeight:600 } }, c.crop),
+                  React.createElement('td', { style:{ padding:'10px 12px', color:'#64748B' } }, c.start_month+'月〜'+c.end_month+'月'),
+                  React.createElement('td', { style:{ padding:'10px 12px' } },
+                    React.createElement('span', { className:'badge ' + (statusBadge[c.status]||'badge-gray') }, statusLabel[c.status]||c.status)
+                  ),
+                  React.createElement('td', { style:{ padding:'10px 12px', color:'#94A3B8', fontSize:'12px' } }, c.note || '—'),
+                  React.createElement('td', { style:{ padding:'10px 12px', textAlign:'right' } },
+                    React.createElement('button', {
+                      style:{ color:'#C2410C', background:'none', border:'none', cursor:'pointer', fontSize:'12px' },
+                      onClick: () => setDeleteTarget(c),
+                    }, '削除')
+                  )
+                )
+              )
+            )
+          )
+    ),
+
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '作付け履歴を削除しますか？',
+      targetName: deleteTarget.crop + '　' + deleteTarget.start_month + '月〜' + deleteTarget.end_month + '月',
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+    }),
+
+    // 新規作付け追加フォーム（モーダル簡易実装）
+    showForm && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(0,0,0,.35)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999 },
+      onClick: e => { if (e.target === e.currentTarget) setShowForm(false) }
+    },
+      React.createElement('div', { className:'card', style:{ width:'420px', background:'#fff' } },
+        React.createElement('div', { className:'section-title', style:{ marginBottom:'12px' } }, '新しい作付けを開始'),
+        React.createElement('label', { style:{ fontSize:'12px', color:'#64748B' } }, '作物'),
+        React.createElement('select', {
+          className:'form-select', value:form.crop, onChange:e=>updateField('crop', e.target.value),
+          style:{ width:'100%', marginBottom:'10px' }
+        },
+          ['レタス','ターサイ','水稲','とうもろこし'].map(c => React.createElement('option', { key:c, value:c }, c))
+        ),
+        React.createElement('div', { style:{ display:'flex', gap:'8px', marginBottom:'10px' } },
+          React.createElement('div', { style:{ flex:1 } },
+            React.createElement('label', { style:{ fontSize:'12px', color:'#64748B' } }, '開始月'),
+            React.createElement('input', { type:'number', min:1, max:12, className:'form-input', style:{width:'100%'},
+              value:form.start_month, onChange:e=>updateField('start_month', e.target.value) })
+          ),
+          React.createElement('div', { style:{ flex:1 } },
+            React.createElement('label', { style:{ fontSize:'12px', color:'#64748B' } }, '終了月'),
+            React.createElement('input', { type:'number', min:1, max:12, className:'form-input', style:{width:'100%'},
+              value:form.end_month, onChange:e=>updateField('end_month', e.target.value) })
+          ),
+        ),
+        React.createElement('label', { style:{ fontSize:'12px', color:'#64748B' } }, 'メモ'),
+        React.createElement('input', { type:'text', className:'form-input', style:{width:'100%', marginBottom:'14px'},
+          value:form.note, onChange:e=>updateField('note', e.target.value) }),
+        React.createElement('div', { style:{ display:'flex', gap:'8px', justifyContent:'flex-end' } },
+          React.createElement('button', { className:'btn', onClick:()=>setShowForm(false) }, 'キャンセル'),
+          React.createElement('button', { className:'btn btn-primary', onClick:handleAdd }, '開始する')
+        )
+      )
+    )
+  )
+}
+
+// ── 圃場別「実績評価」タブ ──
+// 圃場ごとの収穫集計・反収・前年比を表示するシンプルなサマリー
+function FieldEvalTab({ field, fieldRecords, harvestRecords }) {
+  const totalCases = harvestRecords
+    .filter(r => r.field_id === field.id)
+    .reduce((sum, r) => {
+      const cases = Object.values(r.cases || {}).reduce((s, v) => s + Number(v || 0), 0)
+      return sum + cases
+    }, 0)
+  const perTan = field.area_are > 0 ? Math.round((totalCases / field.area_are) * 10 * 10) / 10 : 0
+  const workCount = fieldRecords.length
+
+  return React.createElement('div', null,
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'14px', marginBottom:'24px' } },
+      // 合計収穫ケース数
+      React.createElement('div', { className:'stat-card green' },
+        React.createElement('div', { className:'stat-l' }, '合計収穫ケース数'),
+        React.createElement('div', { className:'stat-n' }, totalCases.toLocaleString()),
+        React.createElement('div', { style:{ fontSize:'11px', color:'#94A3B8', marginTop:'4px' } }, 'ケース')
+      ),
+      // 反収（10aあたり）
+      React.createElement('div', { className:'stat-card blue' },
+        React.createElement('div', { className:'stat-l' }, '反収（10aあたり）'),
+        React.createElement('div', { className:'stat-n', style:{ color:'#1D4ED8' } }, perTan.toLocaleString()),
+        React.createElement('div', { style:{ fontSize:'11px', color:'#94A3B8', marginTop:'4px' } }, 'ケース / 10a')
+      ),
+      // 作業記録数
+      React.createElement('div', { className:'stat-card' },
+        React.createElement('div', { className:'stat-l' }, '作業記録数'),
+        React.createElement('div', { className:'stat-n', style:{ color:'#6D28D9' } }, workCount),
+        React.createElement('div', { style:{ fontSize:'11px', color:'#94A3B8', marginTop:'4px' } }, '件')
+      ),
+    ),
+    // 収穫記録一覧（簡易）
+    React.createElement('div', { className:'card' },
+      React.createElement('div', { className:'section-title', style:{ marginBottom:'12px' } }, '収穫記録サマリー'),
+      harvestRecords.filter(r => r.field_id === field.id).length === 0
+        ? React.createElement('div', { style:{ color:'#94A3B8', fontSize:'13px', padding:'16px 0', textAlign:'center' } },
+            'この圃場の収穫記録はまだありません'
+          )
+        : React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:'13px' } },
+            React.createElement('thead', null,
+              React.createElement('tr', { style:{ borderBottom:'1px solid #E5E9F0' } },
+                ['収穫日','ロット','合計ケース数'].map(h =>
+                  React.createElement('th', { key:h, style:{ padding:'8px 12px', textAlign:'left', color:'#94A3B8', fontWeight:600, fontSize:'11px', letterSpacing:'.06em', textTransform:'uppercase' } }, h)
+                )
+              )
+            ),
+            React.createElement('tbody', null,
+              harvestRecords.filter(r => r.field_id === field.id).map((r, i) => {
+                const total = Object.values(r.cases || {}).reduce((s, v) => s + Number(v || 0), 0)
+                return React.createElement('tr', { key:r.id || i, style:{ borderBottom:'1px solid #F3F4F6' } },
+                  React.createElement('td', { style:{ padding:'10px 12px', color:'#374151' } }, r.date || '—'),
+                  React.createElement('td', { style:{ padding:'10px 12px', color:'#64748B', fontSize:'12px' } }, r.lot_code || '—'),
+                  React.createElement('td', { style:{ padding:'10px 12px', fontWeight:600, color:'#0A6B52' } }, total + ' ケース'),
+                )
+              })
+            )
+          )
+    )
+  )
+}
+
+
+// =====================================================
+// 共通: 削除確認モーダル（システム全体のデザイントーンに統一）
+// ブラウザ標準のwindow.confirm()の代わりに使用する、
+// 緑×ゴールドのテーマに合わせたカスタム確認ダイアログ。
+// =====================================================
+function ConfirmDeleteModal({ title='削除しますか？', targetName, detail, onCancel, onConfirm }) {
+  // Escキーでキャンセルできるようにする
+  React.useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  return React.createElement('div', {
+    style:{
+      position:'fixed', inset:0, background:'rgba(17,24,39,.45)',
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:10000,
+      backdropFilter:'blur(2px)',
+    },
+    onClick: e => { if (e.target === e.currentTarget) onCancel() }
+  },
+    React.createElement('div', {
+      style:{
+        background:'#fff', borderRadius:'14px', padding:'26px', width:'360px',
+        boxShadow:'0 20px 48px rgba(17,24,39,.25)',
+        border:'1px solid #E2E8E2',
+        position:'relative', overflow:'hidden',
+        animation:'confirmModalIn .18s ease-out',
+      }
+    },
+      // アイコン + タイトル
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'14px' } },
+        React.createElement('div', {
+          style:{
+            width:'40px', height:'40px', borderRadius:'50%', background:'#FEF2F2',
+            display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+          }
+        },
+          React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'19px', color:'#DC2626' } })
+        ),
+        React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827', lineHeight:1.3 } }, title)
+      ),
+      // 対象名（強調表示）
+      targetName && React.createElement('div', {
+        style:{
+          background:'#F8FAF8', border:'1px solid #E2E8E2', borderRadius:'8px',
+          padding:'10px 12px', marginBottom:'14px',
+        }
+      },
+        React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:'#111827' } }, targetName),
+        detail && React.createElement('div', { style:{ fontSize:'12px', color:'#64748B', marginTop:'2px' } }, detail)
+      ),
+      React.createElement('div', { style:{ fontSize:'13px', color:'#64748B', marginBottom:'22px', lineHeight:1.6 } },
+        'この操作は元に戻せません。本当に削除してよろしいですか？'
+      ),
+      // ボタン
+      React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+        React.createElement('button', {
+          onClick: onCancel,
+          style:{
+            flex:1, padding:'10px', borderRadius:'8px', border:'1.5px solid #D8E4D8',
+            background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer',
+          }
+        }, 'キャンセル'),
+        React.createElement('button', {
+          onClick: onConfirm,
+          style:{
+            flex:1, padding:'10px', borderRadius:'8px', border:'none',
+            background:'#DC2626', color:'#fff', fontSize:'13px', fontWeight:700, cursor:'pointer',
+          },
+          onMouseEnter: e => { e.currentTarget.style.background='#B91C1C' },
+          onMouseLeave: e => { e.currentTarget.style.background='#DC2626' },
+        }, '削除する')
+      )
+    )
+  )
+}
+
+function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavigate, cropCategories }) {
+  const [showAdd,setShowAdd] = React.useState(false)
+  // 地図クリックで新規圃場を登録する際の選択地点（モーダル表示トリガー）
+  const [pendingLatLng, setPendingLatLng] = React.useState(null)
+  const [cropTab, setCropTab] = React.useState('all')
+  const [statusFilter, setStatusFilter] = React.useState([]) // 複数選択。空配列=すべて表示
+  const toggleStatusFilter = (s) => setStatusFilter(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])
+  const clearStatusFilter  = () => setStatusFilter([])
+  // 削除確認モーダル用: 削除対象の圃場を保持（nullなら非表示）
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+
+  // 作物タブの選択肢: 圃場一覧から動的に抽出（現在の作付け基準。crop_cycleが無ければfield.cropにフォールバック）
+  const cropOf = (f) => {
+    const cur = getCurrentCropCycle(cropCycles, f.id)
+    return cur ? cur.crop : f.crop
+  }
+  const cropOptions = ['all', ...Array.from(new Set(fields.map(cropOf)))]
+  // 作物タブで絞り込んだ後の母集合（ステータスごとの件数カウント用）
+  const cropFilteredFields = fields.filter(f => cropTab === 'all' || cropOf(f) === cropTab)
+  const statusOptions = Array.from(new Set(fields.map(f => f.status)))
+  const statusCounts  = Object.fromEntries(
+    statusOptions.map(s => [s, cropFilteredFields.filter(f => f.status === s).length])
+  )
+  const visibleFields = cropFilteredFields
+    .filter(f => statusFilter.length === 0 || statusFilter.includes(f.status))
+  const mapRef         = React.useRef(null)
+  const mapInstanceRef = React.useRef(null)
+  const crops=['レタス','米','とうもろこし','ターサイ','トマト','大豆','玉ねぎ']
+  const colors=['#0D9972','#D97706','#2563EB','#7C3AED','#DC2626']
+  // 作物カラーマップ（B-4仕様）
+  const cropColorMap = { レタス:'#0D9972', 米:'#D97706', とうもろこし:'#EA580C', ターサイ:'#0891B2', トマト:'#DC2626', 大豆:'#7C3AED', 玉ねぎ:'#65A30D' }
+
+  React.useEffect(()=>{
+    if (!mapRef.current||mapInstanceRef.current) return
+    const map = L.map(mapRef.current).setView([35.384,139.925],14)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map)
+    mapInstanceRef.current = map
+
+    // B-4: マップクリックで新規圃場登録 → モーダルで入力（旧: window.prompt連打）
+    map.on('click', e => {
+      setPendingLatLng(e.latlng)
+    })
+
+    return ()=>{ map.remove(); mapInstanceRef.current=null }
+  },[])
+  React.useEffect(()=>{
+    const map=mapInstanceRef.current; if (!map) return
+    map.eachLayer(l=>{if (l instanceof L.CircleMarker) map.removeLayer(l)})
+    fields.forEach(f=>L.circleMarker([f.lat,f.lng],{color:f.color,fillColor:f.color,fillOpacity:.7,radius:10,weight:2}).bindPopup(
+      '<div style="min-width:150px">'
+      + '<b>'+f.name+'</b><br>'+f.crop+' / '+f.area_are+'a — '+f.status
+      + '<div class="popup-goto-field" data-field-id="'+f.id+'" style="margin-top:8px;padding:6px 10px;background:#0A6B52;color:#fff;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;">圃場詳細を見る →</div>'
+      + '</div>'
+    ).addTo(map))
+    // ポップアップ内「圃場詳細を見る →」タップで圃場詳細・ダッシュボードへ遷移
+    map.off('popupopen')
+    map.on('popupopen', e => {
+      const node = e.popup.getElement ? e.popup.getElement() : e.popup._contentNode
+      const btn  = node && node.querySelector('.popup-goto-field')
+      if (btn) btn.onclick = () => onNavigate && onNavigate('field:' + btn.getAttribute('data-field-id') + ':dashboard')
+    })
+  },[fields])
+  const listEl = fields.length === 0
+    ? React.createElement('div', { style:{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'56px 24px', gap:14, textAlign:'center', background:'#fff', borderRadius:12, border:'1.5px dashed #C6DDD0' } },
+        React.createElement('div', { style:{ width:64, height:64, borderRadius:'50%', background:'#F0F8F4', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:4 } },
+          React.createElement('i', { className:'ti ti-map-pin', style:{ fontSize:28, color:'#0A6B52' } })
+        ),
+        React.createElement('div', { style:{ fontSize:16, fontWeight:700, color:'#111827' } }, 'まだ圃場が登録されていません'),
+        React.createElement('div', { style:{ fontSize:13, color:'#6B7280', maxWidth:320, lineHeight:1.7 } },
+          '圃場を登録すると作業記録・農薬管理・収穫実績の管理が始まります。',
+          React.createElement('br', null),
+          '地図上をクリックするか、右上のボタンから追加できます。'
+        ),
+        React.createElement('button', { className:'btn btn-primary', onClick:()=>setShowAdd(true) }, '+ 最初の圃場を登録する')
+      )
+    : React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'12px' } },
+    visibleFields.map(f => React.createElement('div', {
+      key: f.id,
+      onClick: () => onNavigate && onNavigate('field:' + f.id + ':dashboard'),
+      style:{
+        background:'#fff', borderRadius:'12px', padding:'16px',
+        border:'1.5px solid #E8F0EA', cursor:'pointer',
+        boxShadow:'0 1px 4px rgba(0,0,0,.05)',
+        transition:'box-shadow .15s, border-color .15s',
+        display:'flex', flexDirection:'column', gap:'8px',
+      },
+      onMouseEnter: e => { e.currentTarget.style.boxShadow='0 4px 12px rgba(10,107,82,.12)'; e.currentTarget.style.borderColor='#0A6B52' },
+      onMouseLeave: e => { e.currentTarget.style.boxShadow='0 1px 4px rgba(0,0,0,.05)'; e.currentTarget.style.borderColor='#E8F0EA' },
+    },
+      // ヘッダー行: カラードット + 名前
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+        React.createElement('div', { style:{ width:10, height:10, borderRadius:'50%', background:f.color, flexShrink:0 } }),
+        React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:'#1F2937', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, f.name)
+      ),
+      // 作物 + 面積
+      React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, cropOf(f) + '　·　' + f.area_are + 'a'),
+      // フッター: ステータス + 削除
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:'4px' } },
+        React.createElement('span', { className:'badge ' + (f.status==='栽培中'?'badge-green':f.status==='休閑'?'badge-gray':f.status==='収穫期'?'badge-amber':'badge-blue') }, f.status),
+        React.createElement('button', {
+          onClick: e => { e.stopPropagation(); setDeleteTarget(f) },
+          style:{ fontSize:'11px', color:'#CBD5E1', background:'none', border:'none', cursor:'pointer', padding:'2px 4px', borderRadius:'4px' },
+          onMouseEnter: e => { e.currentTarget.style.color='#DC2626' },
+          onMouseLeave: e => { e.currentTarget.style.color='#CBD5E1' },
+        }, '削除')
+      )
+    ))
+  )
+
+  const mapEl = React.createElement('div',{className:'page-grow',style:{display:'flex',flexDirection:'column'}},
+    React.createElement('div',{ref:mapRef,id:'field-map',style:{flex:1,minHeight:'320px'}}),
+    React.createElement('div',{style:{fontSize:'12px',color:'#6B7280',marginTop:'6px',textAlign:'center'}},'📍 地図上をクリックして新規圃場を登録できます')
+  )
+
+  // ステータスの色（既存バッジと同じ配色ルールに合わせる）
+  const statusColor = (s) => s==='栽培中' ? { bg:'#ECFDF5', border:'#6EE7B7', text:'#047857', activeBg:'#0A6B52' }
+    : s==='休閑'   ? { bg:'#F1F5F9', border:'#CBD5E1', text:'#475569', activeBg:'#475569' }
+    : s==='収穫期' ? { bg:'#FFFBEB', border:'#FDE68A', text:'#92400E', activeBg:'#B45309' }
+    : { bg:'#EFF6FF', border:'#BFDBFE', text:'#1D4ED8', activeBg:'#1D4ED8' }
+
+  // ステータス絞り込み行（複数選択トグル + 右端に一括クリア）
+  const statusFilterRowEl = React.createElement('div', {
+    style:{ display:'flex', gap:'6px', marginBottom:'18px', flexWrap:'wrap', alignItems:'center' }
+  },
+    statusOptions.map(s => {
+      const c = statusColor(s)
+      const active = statusFilter.includes(s)
+      return React.createElement('button', {
+        key:s,
+        onClick: () => toggleStatusFilter(s),
+        style:{
+          display:'flex', alignItems:'center', gap:'6px',
+          padding:'6px 12px', borderRadius:'16px', fontSize:'12px', fontWeight:600,
+          border: active ? '1.5px solid '+c.activeBg : '1.5px solid '+c.border,
+          background: active ? c.activeBg : c.bg,
+          color: active ? '#fff' : c.text,
+          cursor:'pointer', transition:'all .12s',
+        }
+      },
+        s,
+        React.createElement('span', {
+          style:{
+            fontSize:'11px', fontWeight:700, padding:'0 5px', borderRadius:'8px',
+            background: active ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.06)',
+          }
+        }, statusCounts[s] || 0)
+      )
+    }),
+    statusFilter.length > 0 && React.createElement('button', {
+      onClick: clearStatusFilter,
+      style:{
+        marginLeft:'auto', display:'flex', alignItems:'center', gap:'4px',
+        padding:'6px 12px', borderRadius:'16px', fontSize:'12px', fontWeight:600,
+        border:'1.5px solid #DDE8DE', background:'#fff', color:'#64748B', cursor:'pointer',
+      }
+    },
+      React.createElement('i', { className:'ti ti-x', style:{ fontSize:'12px' } }),
+      '一括クリア'
+    )
+  )
+
+  const addFormEl = showAdd && React.createElement(AddFieldModal, {
+    onClose: () => setShowAdd(false),
+    onAdd: (f) => { onAdd(f); setShowAdd(false) },
+    cropCategories,
+  })
+
+  // 地図クリックで開く新規圃場追加モーダル（旧: window.prompt連打）
+  const pendingAddModalEl = pendingLatLng && React.createElement(AddFieldModal, {
+    initialLatLng: pendingLatLng,
+    onClose: () => setPendingLatLng(null),
+    onAdd: (f) => { onAdd(f); setPendingLatLng(null) },
+    cropCategories,
+  })
+
+  // 削除確認モーダル（おしゃれ版・アプリ共通デザイン準拠）
+  const deleteModalEl = deleteTarget && React.createElement(ConfirmDeleteModal, {
+    title: '圃場を削除しますか？',
+    targetName: deleteTarget.name,
+    detail: cropOf(deleteTarget) + '　·　' + deleteTarget.area_are + 'a　·　' + deleteTarget.status,
+    onCancel: () => setDeleteTarget(null),
+    onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) },
+  })
+
+  // CAT-05-3: mode で表示内容を切り替え
+  // mode='map'   → マップのみ（FieldMapPage から呼ばれる）
+  // mode='list'  → リスト+追加フォームのみ（FieldTablePage から呼ばれる）
+  // mode='full'  → マップ+リスト+追加フォーム（デフォルト）
+  if (mode === 'map') return React.createElement('div', { className:'page' },
+    React.createElement('div', { className:'eyebrow' }, 'FIELD MAP'),
+    React.createElement('div', { className:'page-title' }, '圃場マップ'),
+    React.createElement('div', { className:'page-sub' }, fields.length + '圃場 — 地図上をクリックして新規登録'),
+    mapEl,
+    pendingAddModalEl,
+    deleteModalEl
+  )
+
+  if (mode === 'list') return React.createElement('div', { className:'page' },
+    React.createElement('div', { className:'eyebrow' }, 'FIELD MANAGEMENT'),
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'6px' } },
+      React.createElement('div', { className:'page-title' }, '圃場一覧・管理'),
+      React.createElement('button', { className:'btn btn-primary', onClick:()=>setShowAdd(!showAdd) }, '+ 圃場を追加')
+    ),
+    React.createElement('div', { className:'page-sub' }, fields.length+'圃場登録済 / 総面積: '+fields.reduce((a,f)=>a+f.area_are,0)+'a'),
+    React.createElement('div', { style:{ display:'flex', gap:'6px', marginBottom:'18px', flexWrap:'wrap' } },
+      cropOptions.map(c =>
+        React.createElement('button', {
+          key:c,
+          onClick: () => setCropTab(c),
+          style:{
+            padding:'6px 14px', borderRadius:'16px', fontSize:'12px', fontWeight:600,
+            border: cropTab===c ? '1.5px solid #0A6B52' : '1.5px solid #DDE8DE',
+            background: cropTab===c ? '#0A6B52' : '#fff',
+            color: cropTab===c ? '#fff' : '#64748B',
+            cursor:'pointer',
+          }
+        }, c === 'all' ? 'すべて' : c)
+      )
+    ),
+    statusFilterRowEl,
+    addFormEl,
+    listEl,
+    deleteModalEl
+  )
+
+  return React.createElement('div',{className:'page'},
+    React.createElement('div', { className:'eyebrow' }, 'FIELD MANAGEMENT'),
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'6px' } },
+      React.createElement('div', { className:'page-title' }, '圃場管理'),
+      React.createElement('button', { className:'btn btn-primary', onClick:()=>setShowAdd(!showAdd) }, '+ 圃場を追加')
+    ),
+    React.createElement('div',{className:'page-sub'},fields.length+'圃場登録済 / 総面積: '+fields.reduce((a,f)=>a+f.area_are,0)+'a'),
+    React.createElement('div', { style:{ display:'flex', gap:'6px', marginBottom:'18px', flexWrap:'wrap' } },
+      cropOptions.map(c =>
+        React.createElement('button', {
+          key:c,
+          onClick: () => setCropTab(c),
+          style:{
+            padding:'6px 14px', borderRadius:'16px', fontSize:'12px', fontWeight:600,
+            border: cropTab===c ? '1.5px solid #0A6B52' : '1.5px solid #DDE8DE',
+            background: cropTab===c ? '#0A6B52' : '#fff',
+            color: cropTab===c ? '#fff' : '#64748B',
+            cursor:'pointer',
+          }
+        }, c === 'all' ? 'すべて' : c)
+      )
+    ),
+    statusFilterRowEl,
+    addFormEl,
+    React.createElement('div',{className:'page-grow',style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px'}},
+      listEl, mapEl
+    ),
+    pendingAddModalEl,
+    deleteModalEl
+  )
+}
+
+// =====================================================
+// CAT-05-3: FieldMapPage / FieldTablePage — FieldList から分割した専用コンポーネント
+// =====================================================
+function FieldMapPage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories }) {
+  return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'map', cropCycles, onNavigate, cropCategories })
+}
+function FieldTablePage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories }) {
+  return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'list', cropCycles, onNavigate, cropCategories })
+}
+
+// =====================================================
+// =====================================================
+// 【実装手順書 3.2.1】圃場実績・評価機能の強化
+// harvestRecordsから圃場別・シーズン別の合計ケース数を自動集計し、
+// 圃場面積(area_are)から反収(10aあたりケース数)を算出。
+// fieldPerformance(静的データ)を前シーズン参照として前年比を計算。
+// =====================================================
+function FieldPerformancePage({ fields, harvestRecords, fieldPerformance, performanceComments, onAddComment, cropComments, onAddCropComment, lotSprayRecords, topDressingRecords, pesticides, pesticidePurchases, fertilizers, cropCycles }) {
+  // ── Step1: harvestRecordsからシーズン導出 ──
+  // 月 >= 9 (秋〜冬) → `${year}-${year+1}`, 月 < 9 → `${year-1}-${year}`
+  function deriveSeason(dateStr) {
+    const d = new Date(dateStr)
+    const y = d.getFullYear(), m = d.getMonth() + 1
+    return m >= 9 ? `${y}-${y+1}` : `${y-1}-${y}`
+  }
+
+  // ── Step1: 収穫記録を圃場別・シーズン別に集計 ──
+  const computedBySeason = {}
+  ;(harvestRecords || []).forEach(rec => {
+    if (!rec.date) return
+    const season = deriveSeason(rec.date)
+    if (!computedBySeason[season]) computedBySeason[season] = {}
+    const fid = rec.field_id
+    if (!computedBySeason[season][fid]) {
+      computedBySeason[season][fid] = { field_id: fid, total_cases: 0, varieties: new Set() }
+    }
+    computedBySeason[season][fid].total_cases += (rec.total_cases || 0)
+    if (rec.variety) computedBySeason[season][fid].varieties.add(rec.variety)
+  })
+
+  // 全シーズン一覧: 収穫記録 + 静的データのシーズンを統合
+  const computedSeasons  = Object.keys(computedBySeason)
+  const perfSeasons      = [...new Set((fieldPerformance || []).map(p => p.season))]
+  const allSeasons       = [...new Set([...computedSeasons, ...perfSeasons])].sort().reverse()
+
+  const [season, setSeason]           = React.useState(allSeasons[0] || '')
+  const [showCommentForm, setShowCommentForm] = React.useState(false)
+  const [commentText, setCommentText] = React.useState('')
+  const [perfTab, setPerfTab]         = React.useState('summary') // 'summary' | 'cost'
+  // ── 圃場別実績テーブル: 絞り込み・ソート ──
+  const [varietyFilter, setVarietyFilter] = React.useState('all')
+  const [sortKey, setSortKey]             = React.useState('fid')   // 'fid' | 'name' | 'area' | 'cases_per_are' | 'total_cases' | 'prev_cases' | 'yoy_pct'
+  const [sortDir, setSortDir]             = React.useState('asc')   // 'asc' | 'desc'
+  // ── 作物別サマリー: メモ入力用 ──
+  const [cropCommentText, setCropCommentText]     = React.useState('')
+  const [cropCommentTarget, setCropCommentTarget] = React.useState('')
+  const [showCropCommentForm, setShowCropCommentForm] = React.useState(false)
+
+  // 前シーズン算出（前年比用）: "2024-2025" → "2023-2024"
+  const prevSeason = (() => {
+    if (!season) return null
+    const [y1, y2] = season.split('-').map(Number)
+    return isNaN(y1) || isNaN(y2) ? null : `${y1-1}-${y2-1}`
+  })()
+
+  // 前シーズンの静的パフォーマンスデータ（前年比の基準）
+  const prevPerfByField = {}
+  ;(fieldPerformance || []).filter(p => p.season === prevSeason).forEach(p => {
+    prevPerfByField[p.field_id] = p
+  })
+
+  // 選択シーズンの静的データ（収穫記録が無い圃場の補完 / 昨年参照値）
+  const staticPerfByField = {}
+  ;(fieldPerformance || []).filter(p => p.season === season).forEach(p => {
+    staticPerfByField[p.field_id] = p
+  })
+
+  // ── Step2: 表示行を構築（集計 → 反収算出） ──
+  // 収穫記録がある圃場 + 静的データにしかない圃場を統合
+  const fieldIds = new Set([
+    ...Object.keys(computedBySeason[season] || {}).map(Number),
+    ...Object.keys(staticPerfByField).map(Number),
+  ])
+
+  const rows = [...fieldIds].map(fid => {
+    const field   = fields.find(f => f.id === fid)
+    const comp    = (computedBySeason[season] || {})[fid]
+    const stat    = staticPerfByField[fid]
+    const prev    = prevPerfByField[fid]
+
+    // ── Step1 合計ケース数: 収穫記録優先、なければ静的データ ──
+    // ?? 0 で undefined（とうもろこし等ケース数管理外の作物）を 0 に正規化する
+    const total_cases    = comp ? (comp.total_cases ?? 0) : (stat ? (stat.total_cases ?? 0) : 0)
+    // ── Step2 反収算出: 圃場面積で割る（1a = 1アール = 0.1反 → 10aあたり） ──
+    const area_are       = field ? field.area_are : (stat ? stat.area_are : null)
+    // 反収 = total_cases / (area_are / 10) = total_cases * 10 / area_are
+    const cases_per_are  = (area_are && area_are > 0)
+      ? Math.round(total_cases * 10 / area_are * 10) / 10
+      : null
+    const varieties      = comp
+      ? [...comp.varieties]
+      : (stat ? stat.varieties || [] : [])
+    // ── Step3 前年比: 前シーズンの静的データ or 現シーズン静的データのprev_season_cases ──
+    const prev_cases     = prev
+      ? prev.total_cases
+      : (stat ? stat.prev_season_cases : null)
+    const yoy_pct        = (prev_cases && prev_cases > 0)
+      ? Math.round((total_cases - prev_cases) / prev_cases * 100)
+      : null
+    const is_computed    = !!comp          // 収穫記録から算出された実値
+    const is_estimated   = !comp && !!(stat && stat.is_estimated)  // 静的サンプル値
+
+    // 【とうもろこし両方表示対応】本数・重量(kg)は収穫記録(harvestRecords)に未対応のため
+    // 静的データ(fieldPerformance)のみから取得。無い場合(レタス等)はnullのまま「—」表示。
+    const total_stems       = stat ? (stat.total_stems ?? null) : null
+    const total_weight_kg   = stat ? (stat.total_weight_kg ?? null) : null
+    const stems_per_are     = (total_stems != null && area_are && area_are > 0)
+      ? Math.round(total_stems * 10 / area_are * 10) / 10
+      : (stat ? (stat.stems_per_are ?? null) : null)
+    const weight_per_are_kg = (total_weight_kg != null && area_are && area_are > 0)
+      ? Math.round(total_weight_kg * 10 / area_are * 10) / 10
+      : (stat ? (stat.weight_per_are_kg ?? null) : null)
+    const prev_stems        = prev ? (prev.total_stems ?? null) : (stat ? (stat.prev_season_stems ?? null) : null)
+    const prev_weight_kg    = prev ? (prev.total_weight_kg ?? null) : (stat ? (stat.prev_season_weight_kg ?? null) : null)
+    const stems_yoy_pct     = (prev_stems && prev_stems > 0 && total_stems != null)
+      ? Math.round((total_stems - prev_stems) / prev_stems * 100) : null
+    const weight_yoy_pct    = (prev_weight_kg && prev_weight_kg > 0 && total_weight_kg != null)
+      ? Math.round((total_weight_kg - prev_weight_kg) / prev_weight_kg * 100) : null
+
+    return { fid, field, total_cases, area_are, cases_per_are, varieties, prev_cases, yoy_pct, is_computed, is_estimated,
+      total_stems, total_weight_kg, stems_per_are, weight_per_are_kg, prev_stems, prev_weight_kg, stems_yoy_pct, weight_yoy_pct }
+  }).sort((a, b) => a.fid - b.fid)
+
+  // ── 品種フィルタ選択肢: rowsに実在する品種から動的生成（ハードコードしない） ──
+  const availableVarieties = [...new Set(rows.flatMap(r => r.varieties))].sort()
+
+  // ── 絞り込み: 選択中の品種を含む圃場のみ表示（'all'は全件） ──
+  const filteredRows = varietyFilter === 'all'
+    ? rows
+    : rows.filter(r => r.varieties.includes(varietyFilter))
+
+  // ── ソート: 圃場名/面積/反収/合計ケース数/前年実績/前年比のいずれかで並び替え ──
+  const sortAccessor = {
+    fid:           r => r.fid,
+    name:          r => r.field ? r.field.name : '',
+    area:          r => r.area_are,
+    cases_per_are: r => r.cases_per_are,
+    total_cases:   r => r.total_cases,
+    prev_cases:    r => r.prev_cases,
+    yoy_pct:       r => r.yoy_pct,
+  }
+  const sortedRows = [...filteredRows].sort((a, b) => {
+    const get = sortAccessor[sortKey] || sortAccessor.fid
+    let va = get(a), vb = get(b)
+    // null/undefinedは常に末尾（昇順・降順どちらでも下に固定）
+    const aNull = va == null, bNull = vb == null
+    if (aNull && bNull) return 0
+    if (aNull) return 1
+    if (bNull) return -1
+    if (typeof va === 'string') {
+      return sortDir === 'asc' ? va.localeCompare(vb, 'ja') : vb.localeCompare(va, 'ja')
+    }
+    return sortDir === 'asc' ? va - vb : vb - va
+  })
+
+  const SORT_COLUMNS = [
+    { key:'name',          label:'圃場名' },
+    { key:'area',          label:'面積' },
+    { key:'cases_per_are', label:'反収(10aあたり)' },
+    { key:'total_cases',   label:'合計ケース数' },
+    { key:'prev_cases',    label:'前年実績' },
+    { key:'yoy_pct',       label:'前年比' },
+  ]
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  // ── テーブル内「合計/平均」行用: 絞り込み中の表示行のみで再集計 ──
+  const filteredTotalCases = filteredRows.reduce((s, r) => s + r.total_cases, 0)
+  const filteredPrevTotal  = filteredRows.reduce((s, r) => s + (r.prev_cases || 0), 0)
+  const filteredAvgPerAre  = filteredRows.length
+    ? Math.round(filteredRows.reduce((s, r) => s + (r.cases_per_are || 0), 0) / filteredRows.length * 10) / 10
+    : 0
+  const filteredYoyPct     = filteredPrevTotal > 0
+    ? Math.round((filteredTotalCases - filteredPrevTotal) / filteredPrevTotal * 100)
+    : null
+  // 【とうもろこし両方表示対応】本数・重量(kg)の合計（値がある行のみ集計）
+  const filteredTotalStems   = filteredRows.reduce((s, r) => s + (r.total_stems || 0), 0)
+  const filteredTotalWeight  = filteredRows.reduce((s, r) => s + (r.total_weight_kg || 0), 0)
+  const hasStemsOrWeight     = filteredRows.some(r => r.total_stems != null || r.total_weight_kg != null)
+
+  // ── 転作対応: そのシーズンに実際に栽培されていた作物をcropCyclesから引く ──
+  // season "2024-2025" のとき、年2024 or 2025 のcropCycleが対象。
+  // 見つからなければ圃場マスタのcrop（現在の作物）にフォールバック。
+  const getCropForSeason = (fieldId, seasonStr) => {
+    if (!cropCycles || !cropCycles.length || !seasonStr) return null
+    const parts = seasonStr.split('-').map(Number)
+    if (parts.length < 2 || isNaN(parts[0])) return null
+    const [y1, y2] = parts
+    const matches = cropCycles.filter(c => c.field_id === fieldId && (c.year === y1 || c.year === y2))
+    if (!matches.length) return null
+    return matches.reduce((a, b) => b.id > a.id ? b : a).crop || null
+  }
+
+  // ── 作物別サマリー: そのシーズンの作物でグループ化（転作圃場も正しく集計される） ──
+  // 品種（varieties: オーウェン・アイゴ等）とは別の粒度。作物=栽培品目そのもの。
+  const cropGroups = {}
+  rows.forEach(r => {
+    const cropName = getCropForSeason(r.fid, season) || (r.field && r.field.crop) || '未分類'
+    if (!cropGroups[cropName]) {
+      cropGroups[cropName] = { crop: cropName, fieldCount: 0, total_cases: 0, prev_cases: 0, hasPrev: false, perAreSum: 0, perAreCount: 0 }
+    }
+    const g = cropGroups[cropName]
+    g.fieldCount += 1
+    g.total_cases += r.total_cases
+    if (r.prev_cases != null) { g.prev_cases += r.prev_cases; g.hasPrev = true }
+    if (r.cases_per_are != null) { g.perAreSum += r.cases_per_are; g.perAreCount += 1 }
+  })
+  const cropSummaryRows = Object.values(cropGroups).map(g => ({
+    crop: g.crop,
+    fieldCount: g.fieldCount,
+    total_cases: g.total_cases,
+    avg_cases_per_are: g.perAreCount > 0 ? Math.round(g.perAreSum / g.perAreCount * 10) / 10 : null,
+    prev_cases: g.hasPrev ? g.prev_cases : null,
+    yoy_pct: (g.hasPrev && g.prev_cases > 0) ? Math.round((g.total_cases - g.prev_cases) / g.prev_cases * 100) : null,
+  })).sort((a, b) => b.total_cases - a.total_cases)
+
+  // ── 作物別メモ（評価コメントと同様の仕組み。数値は自動集計のみ・メモは自由記述） ──
+  const seasonCropComments = (cropComments || []).filter(c => c.season === season)
+  const handleAddCropComment = () => {
+    if (!cropCommentText.trim() || !cropCommentTarget) return
+    if (onAddCropComment) onAddCropComment({ season, crop: cropCommentTarget, comment: cropCommentText.trim() })
+    setCropCommentText('')
+    setShowCropCommentForm(false)
+  }
+
+  // ── 資材コスト集計（使用量→コストの単純集計。最適化判定はしない・参考値） ──
+  // 農薬: 単価が無いためpesticidePurchasesから平均単価(円/L)を算出する
+  const pesticideAvgPrice = {}
+  ;(pesticidePurchases || []).forEach(pu => {
+    if (!pesticideAvgPrice[pu.pesticide_id]) pesticideAvgPrice[pu.pesticide_id] = { amount:0, price:0 }
+    pesticideAvgPrice[pu.pesticide_id].amount += Number(pu.amount_L) || 0
+    pesticideAvgPrice[pu.pesticide_id].price  += Number(pu.price_yen) || 0
+  })
+  const priceOfPesticide = (id) => {
+    const a = pesticideAvgPrice[id]
+    return (a && a.amount > 0) ? a.price / a.amount : null
+  }
+  // 肥料: マスタの unit_price_yen_per_kg をそのまま使用（null=価格未確定）
+  const priceOfFertilizer = (id) => {
+    const f = (fertilizers || []).find(x => x.id === id)
+    return (f && f.unit_price_yen_per_kg != null) ? f.unit_price_yen_per_kg : null
+  }
+
+  const costByField = {}
+  ;[...fieldIds].forEach(fid => { costByField[fid] = { pesticideCost:0, fertilizerCost:0, hasUnknownPrice:false, hasRecord:false } })
+
+  ;(lotSprayRecords || []).forEach(rec => {
+    if (!costByField[rec.field_id]) return
+    if ((rec.pesticides || []).length > 0) costByField[rec.field_id].hasRecord = true
+    ;(rec.pesticides || []).forEach(pe => {
+      const amount = Number(pe.disposal_amount) || 0
+      const price  = priceOfPesticide(pe.pesticide_id)
+      if (price == null) { costByField[rec.field_id].hasUnknownPrice = true; return }
+      costByField[rec.field_id].pesticideCost += amount * price
+    })
+  })
+  ;(topDressingRecords || []).forEach(rec => {
+    if (!costByField[rec.field_id]) return
+    if ((rec.fertilizers || []).length > 0) costByField[rec.field_id].hasRecord = true
+    ;(rec.fertilizers || []).forEach(fe => {
+      const amount = Number(fe.amount_kg) || 0
+      const price  = priceOfFertilizer(fe.fertilizer_id)
+      if (price == null) { costByField[rec.field_id].hasUnknownPrice = true; return }
+      costByField[rec.field_id].fertilizerCost += amount * price
+    })
+  })
+
+  const costRows = rows.map(r => {
+    const c = costByField[r.fid] || { pesticideCost:0, fertilizerCost:0, hasUnknownPrice:false, hasRecord:false }
+    const totalCost   = c.pesticideCost + c.fertilizerCost
+    const costPerCase = (c.hasRecord && r.total_cases > 0) ? totalCost / r.total_cases : null
+    return { ...r, pesticideCost:c.pesticideCost, fertilizerCost:c.fertilizerCost, totalCost, costPerCase, hasUnknownPrice:c.hasUnknownPrice, hasRecord:c.hasRecord }
+  })
+  const hasAnyCostData    = costRows.some(r => r.hasRecord)
+  const hasAnyUnknownCost = costRows.some(r => r.hasUnknownPrice)
+  const maxCostPerCase    = Math.max(1, ...costRows.map(r => r.costPerCase || 0))
+
+
+
+  const totalCases  = rows.reduce((s, r) => s + r.total_cases, 0)
+  const prevTotal   = rows.reduce((s, r) => s + (r.prev_cases || 0), 0)
+  const avgPerAre   = rows.length
+    ? Math.round(rows.reduce((s, r) => s + (r.cases_per_are || 0), 0) / rows.length * 10) / 10
+    : 0
+  const yoyPct      = prevTotal > 0
+    ? Math.round((totalCases - prevTotal) / prevTotal * 100)
+    : null
+  const hasEstimated  = rows.some(r => r.is_estimated)
+  const hasComputed   = rows.some(r => r.is_computed)
+
+  // 評価コメント（選択シーズンのみ）
+  const seasonComments = (performanceComments || []).filter(c => c.season === season)
+
+  const handleAddComment = () => {
+    if (!commentText.trim()) return
+    if (onAddComment) onAddComment({ season, comment: commentText.trim() })
+    setCommentText('')
+    setShowCommentForm(false)
+  }
+
+  return React.createElement('div', { className:'page' },
+
+    // ── ヘッダー ──
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'16px', flexWrap:'wrap', gap:'12px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'eyebrow' }, 'FIELD PERFORMANCE'),
+        React.createElement('div', { className:'page-title' }, '圃場実績・評価'),
+        React.createElement('div', { className:'page-sub', style:{ marginBottom:0 } },
+          '収穫記録から自動集計した圃場別KPIと前年比を横断で確認できます'
+        )
+      ),
+      React.createElement('div', { style:{ display:'flex', gap:'8px', alignItems:'center' } },
+        allSeasons.length > 0 && React.createElement('select', {
+          value: season,
+          onChange: e => setSeason(e.target.value),
+          className:'form-select',
+          style:{ width:'auto', minWidth:'150px' }
+        },
+          ...allSeasons.map(s => React.createElement('option', { key:s, value:s }, s+'年度'))
+        )
+      )
+    ),
+
+    rows.length === 0
+      ? React.createElement('div', { style:{
+          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          padding:'56px 24px', gap:14, textAlign:'center',
+          background:'#fff', borderRadius:12, border:'1.5px dashed #C6DDD0'
+        } },
+          React.createElement('div', { style:{ width:64, height:64, borderRadius:'50%', background:'#F0F8F4', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:4 } },
+            React.createElement('i', { className:'ti ti-chart-area', style:{ fontSize:28, color:'#0A6B52' } })
+          ),
+          React.createElement('div', { style:{ fontSize:16, fontWeight:700, color:'#111827' } }, '収穫記録がまだありません'),
+          React.createElement('div', { style:{ fontSize:13, color:'#6B7280', maxWidth:380, lineHeight:1.7 } },
+            '圃場詳細の「収穫」タブから収穫記録を入力すると、',
+            React.createElement('br', null),
+            '反収・前年比などのKPIがここに自動集計されます。'
+          ),
+          React.createElement('div', { style:{ display:'flex', gap:8 } },
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#6B7280', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:8, padding:'10px 16px' } },
+              React.createElement('i', { className:'ti ti-map-pin', style:{ fontSize:15, color:'#0A6B52' } }),
+              '①圃場一覧から圃場を選ぶ'
+            ),
+            React.createElement('i', { className:'ti ti-arrow-right', style:{ fontSize:14, color:'#CBD5E1' } }),
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#6B7280', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:8, padding:'10px 16px' } },
+              React.createElement('i', { className:'ti ti-basket', style:{ fontSize:15, color:'#0A6B52' } }),
+              '②「収穫」タブで記録する'
+            ),
+            React.createElement('i', { className:'ti ti-arrow-right', style:{ fontSize:14, color:'#CBD5E1' } }),
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#6B7280', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:8, padding:'10px 16px' } },
+              React.createElement('i', { className:'ti ti-chart-area', style:{ fontSize:15, color:'#0A6B52' } }),
+              '③ここに自動反映'
+            )
+          )
+        )
+      : React.createElement('div', null,
+
+          // ── 自動集計バナー ──
+          hasComputed && React.createElement('div', {
+            style:{ background:'#ECFDF5', border:'1px solid #6EE7B7', borderRadius:'8px', padding:'10px 14px', marginBottom:'16px', fontSize:'12px', color:'#065F46', display:'flex', alignItems:'center', gap:'8px' }
+          },
+            React.createElement('i', { className:'ti ti-refresh', style:{ fontSize:'14px', flexShrink:0 } }),
+            '収穫記録から自動集計しています。圃場詳細の収穫タブに記録を追加すると、このページのKPIがリアルタイムで更新されます。'
+          ),
+
+          // ── サンプル値の注記 ──
+          hasEstimated && React.createElement('div', {
+            style:{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'8px', padding:'10px 14px', marginBottom:'16px', fontSize:'12px', color:'#78350F', display:'flex', alignItems:'center', gap:'8px' }
+          },
+            React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'14px', flexShrink:0 } }),
+            '「参照値」の付いた圃場は収穫記録がなく静的マスタの仮値です。圃場詳細に収穫記録を入力すると自動集計値に切り替わります。'
+          ),
+
+          // ── Step4: サマリーKPIカード ──
+          React.createElement('div', { className:'stat-grid' },
+            React.createElement('div', { className:'stat-card' },
+              React.createElement('div', { className:'stat-l' }, '集計対象圃場'),
+              React.createElement('div', { className:'stat-n' }, rows.length+'圃場')
+            ),
+            React.createElement('div', { className:'stat-card green' },
+              React.createElement('div', { className:'stat-l' }, '合計ケース数（自動集計）'),
+              React.createElement('div', { className:'stat-n' }, totalCases.toLocaleString())
+            ),
+            React.createElement('div', { className:'stat-card blue' },
+              React.createElement('div', { className:'stat-l' }, '平均反収（10aあたり）'),
+              React.createElement('div', { className:'stat-n' }, avgPerAre.toLocaleString()+'ケース')
+            ),
+            React.createElement('div', { className:'stat-card '+(yoyPct == null ? '' : yoyPct >= 0 ? 'green' : 'red') },
+              React.createElement('div', { className:'stat-l' }, '前年比（合計）'),
+              React.createElement('div', { className:'stat-n' }, yoyPct == null ? '—' : (yoyPct >= 0 ? '+' : '')+yoyPct+'%')
+            )
+          ),
+
+          // ── 作物別サマリー（圃場マスタのcropでグループ化。品種より一段上の粒度） ──
+          cropSummaryRows.length > 0 && React.createElement('div', { className:'card card-data', style:{ marginBottom:'16px' } },
+            React.createElement(SectionTitle, { icon:'leaf' }, season+'年度　作物別サマリー'),
+            React.createElement('div', {
+              style:{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'12px', padding:'4px 20px 20px' }
+            },
+              ...cropSummaryRows.map(c => {
+                const fieldColor = (rows.find(r => r.field && r.field.crop === c.crop) || {}).field
+                const accent = (fieldColor && fieldColor.color) ? fieldColor.color : '#0A6B52'
+                const yoyColor = c.yoy_pct == null ? '#94A3B8' : c.yoy_pct >= 0 ? '#0A6B52' : '#C2410C'
+                return React.createElement('div', {
+                  key: c.crop,
+                  style:{
+                    background:'#FFFFFF', border:'1px solid var(--border-color)', borderRadius:'8px',
+                    borderTop:'3px solid '+accent, padding:'14px 16px', boxShadow:'var(--shadow-flat)'
+                  }
+                },
+                  React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' } },
+                    React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:'#111827' } }, c.crop),
+                    React.createElement('span', { style:{ fontSize:'10px', color:'#94A3B8', fontWeight:600 } }, c.fieldCount+'圃場')
+                  ),
+                  React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'6px' } },
+                    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', fontSize:'12px' } },
+                      React.createElement('span', { style:{ color:'#64748B' } }, '合計ケース数'),
+                      React.createElement('span', { style:{ fontWeight:700, color:accent } }, c.total_cases.toLocaleString()+'ケース')
+                    ),
+                    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', fontSize:'12px' } },
+                      React.createElement('span', { style:{ color:'#64748B' } }, '平均反収(10aあたり)'),
+                      React.createElement('span', { style:{ fontWeight:600 } }, c.avg_cases_per_are != null ? c.avg_cases_per_are.toLocaleString()+'ケース' : '—')
+                    ),
+                    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', fontSize:'12px' } },
+                      React.createElement('span', { style:{ color:'#64748B' } }, '前年比'),
+                      React.createElement('span', { style:{ fontWeight:700, color:yoyColor } },
+                        c.yoy_pct == null ? '—' : (c.yoy_pct >= 0 ? '+' : '')+c.yoy_pct+'%'
+                      )
+                    )
+                  )
+                )
+              })
+            ),
+
+            // ── 作物別メモ（自由記述。数値は自動集計のみで上書き不可） ──
+            React.createElement('div', { style:{ borderTop:'1px solid #EDF2ED', padding:'14px 20px 18px' } },
+              React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' } },
+                React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color:'#374151' } }, '作物別メモ'),
+                React.createElement('button', {
+                  className:'btn btn-ghost',
+                  style:{ fontSize:'12px', padding:'5px 10px' },
+                  onClick: () => setShowCropCommentForm(v => !v)
+                },
+                  React.createElement('i', { className:'ti ti-plus' }),
+                  showCropCommentForm ? 'キャンセル' : 'メモ追加'
+                )
+              ),
+
+              showCropCommentForm && React.createElement('div', { style:{ background:'#F8FAF8', border:'1px solid #E2E8E2', borderRadius:'8px', padding:'12px', marginBottom:'12px' } },
+                React.createElement('select', {
+                  value: cropCommentTarget,
+                  onChange: e => setCropCommentTarget(e.target.value),
+                  className:'form-select',
+                  style:{ marginBottom:'8px', width:'auto', minWidth:'140px' }
+                },
+                  React.createElement('option', { value:'' }, '対象の作物を選択'),
+                  ...cropSummaryRows.map(c => React.createElement('option', { key:c.crop, value:c.crop }, c.crop))
+                ),
+                React.createElement('textarea', {
+                  className:'form-input',
+                  rows:3,
+                  placeholder:'この作物の気づき・次年度への申し送り事項を入力...',
+                  value: cropCommentText,
+                  onChange: e => setCropCommentText(e.target.value),
+                  style:{ resize:'vertical' }
+                }),
+                React.createElement('div', { style:{ marginTop:'8px', display:'flex', gap:'8px', justifyContent:'flex-end' } },
+                  React.createElement('button', {
+                    className:'btn btn-primary',
+                    style:{ fontSize:'12px', padding:'6px 14px' },
+                    onClick: handleAddCropComment,
+                    disabled: !cropCommentText.trim() || !cropCommentTarget
+                  }, '保存')
+                )
+              ),
+
+              seasonCropComments.length === 0
+                ? React.createElement('div', { style:{ color:'#94A3B8', fontSize:'12px', padding:'4px 0' } },
+                    'このシーズンの作物別メモはまだありません'
+                  )
+                : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'8px' } },
+                    ...seasonCropComments.map((c, i) => React.createElement('div', {
+                      key:i,
+                      style:{ background:'#F8FAF8', border:'1px solid #E2E8E2', borderRadius:'8px', padding:'10px 14px' }
+                    },
+                      React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:'#0A6B52', marginBottom:'4px' } }, c.crop),
+                      React.createElement('div', { style:{ fontSize:'13px', color:'#374151', lineHeight:1.6 } }, c.comment)
+                    ))
+                  )
+            )
+          ),
+
+          // ── タブ切替（圃場別実績 / 資材コスト）──
+          React.createElement('div', { style:{ display:'flex', gap:'4px', marginBottom:'16px', borderBottom:'1px solid #E2E8E2' } },
+            ...[
+              { key:'summary', label:'圃場別実績', icon:'list-details' },
+              { key:'cost',    label:'資材コスト', icon:'report-money' },
+            ].map(t => {
+              const isActiveTab = perfTab === t.key
+              return React.createElement('button', {
+                key: t.key,
+                onClick: () => setPerfTab(t.key),
+                style:{
+                  display:'flex', alignItems:'center', gap:'6px',
+                  padding:'9px 16px', border:'none', background:'none', cursor:'pointer',
+                  fontSize:'13px', fontWeight: isActiveTab ? 700 : 500,
+                  color: isActiveTab ? '#0A6B52' : '#64748B',
+                  borderBottom: isActiveTab ? '2px solid #0A6B52' : '2px solid transparent',
+                  marginBottom:'-1px', transition:'all .12s',
+                }
+              },
+                React.createElement('i', { className:'ti ti-'+t.icon, style:{ fontSize:'14px' } }),
+                t.label
+              )
+            })
+          ),
+
+          // ── Step2+3: 圃場別実績テーブル ──
+          perfTab === 'summary' && React.createElement('div', { className:'card card-data', style:{ marginBottom:'16px' } },
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'8px', marginBottom:'4px' } },
+              React.createElement(SectionTitle, { icon:'list-details' }, season+'年度　圃場別実績（反収・前年比）'),
+              availableVarieties.length > 1 && React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px' } },
+                React.createElement('span', { style:{ fontSize:'12px', color:'#64748B', fontWeight:600 } }, '品種で絞り込み'),
+                React.createElement('select', {
+                  value: varietyFilter,
+                  onChange: e => setVarietyFilter(e.target.value),
+                  className:'form-select',
+                  style:{ width:'auto', minWidth:'140px', fontSize:'12px', padding:'5px 10px' }
+                },
+                  React.createElement('option', { value:'all' }, '全品種'),
+                  ...availableVarieties.map(v => React.createElement('option', { key:v, value:v }, v))
+                )
+              )
+            ),
+            React.createElement('table', { className:'table' },
+              React.createElement('thead', null,
+                React.createElement('tr', null,
+                  ...SORT_COLUMNS.map(col =>
+                    React.createElement('th', {
+                      key: col.key,
+                      onClick: () => handleSort(col.key),
+                      style:{ cursor:'pointer', userSelect:'none', whiteSpace:'nowrap' }
+                    },
+                      col.label,
+                      React.createElement('i', {
+                        className:'ti ti-'+(sortKey !== col.key ? 'arrows-sort' : (sortDir === 'asc' ? 'sort-ascending' : 'sort-descending')),
+                        style:{ fontSize:'12px', marginLeft:'4px', color: sortKey === col.key ? '#0A6B52' : '#CBD5E1' }
+                      })
+                    )
+                  ),
+                  React.createElement('th', { key:'variety' }, '主な品種'),
+                  // 【とうもろこし両方表示対応】本数・重量(kg)列（レタス等は値が無いため「—」表示）
+                  hasStemsOrWeight && React.createElement('th', { key:'stems', style:{ whiteSpace:'nowrap' } }, '合計本数'),
+                  hasStemsOrWeight && React.createElement('th', { key:'weight', style:{ whiteSpace:'nowrap' } }, '合計重量(kg)'),
+                  React.createElement('th', { key:'data-type' }, 'データ種別')
+                )
+              ),
+              React.createElement('tbody', null,
+                sortedRows.length === 0 && React.createElement('tr', null,
+                  React.createElement('td', { colSpan: hasStemsOrWeight ? 10 : 8, style:{ textAlign:'center', color:'#94A3B8', fontSize:'13px', padding:'20px 0' } },
+                    '選択した品種に該当する圃場がありません'
+                  )
+                ),
+                ...sortedRows.map(r => {
+                  const yoyColor = r.yoy_pct == null ? '#94A3B8' : r.yoy_pct >= 0 ? '#0A6B52' : '#C2410C'
+                  return React.createElement('tr', { key:r.fid },
+                    React.createElement('td', { style:{ fontWeight:600, color:'#374151' } },
+                      r.field ? r.field.name : ('圃場#'+r.fid)
+                    ),
+                    React.createElement('td', null, r.area_are != null ? r.area_are+'a' : '—'),
+                    // Step2: 反収 = 合計ケース数 × 10 / 面積(a)
+                    React.createElement('td', { style:{ fontWeight:600 } },
+                      r.cases_per_are != null ? r.cases_per_are.toLocaleString()+'ケース' : '—'
+                    ),
+                    React.createElement('td', { style:{ fontWeight:700, color:'#0A6B52' } },
+                      r.total_cases.toLocaleString()+'ケース'
+                    ),
+                    // Step3: 前年実績
+                    React.createElement('td', { style:{ color:'#64748B' } },
+                      r.prev_cases != null ? r.prev_cases.toLocaleString()+'ケース' : '—'
+                    ),
+                    // Step3: 前年比
+                    React.createElement('td', { style:{ color: yoyColor, fontWeight:600 } },
+                      r.yoy_pct == null ? '—' : (r.yoy_pct >= 0 ? '+' : '')+r.yoy_pct+'%'
+                    ),
+                    React.createElement('td', { style:{ color:'#6B7280', fontSize:'12px' } },
+                      r.varieties.length > 0 ? r.varieties.join('・') : '—'
+                    ),
+                    // 【とうもろこし両方表示対応】本数・重量(kg)（前年比は色分けして括弧内に表示）
+                    hasStemsOrWeight && React.createElement('td', { style:{ fontWeight:600 } },
+                      r.total_stems != null
+                        ? React.createElement(React.Fragment, null,
+                            r.total_stems.toLocaleString()+'本',
+                            r.stems_yoy_pct != null && React.createElement('span', {
+                              style:{ marginLeft:'4px', fontSize:'11px', fontWeight:600, color: r.stems_yoy_pct >= 0 ? '#0A6B52' : '#C2410C' }
+                            }, '('+(r.stems_yoy_pct >= 0 ? '+' : '')+r.stems_yoy_pct+'%)')
+                          )
+                        : '—'
+                    ),
+                    hasStemsOrWeight && React.createElement('td', { style:{ fontWeight:600 } },
+                      r.total_weight_kg != null
+                        ? React.createElement(React.Fragment, null,
+                            r.total_weight_kg.toLocaleString()+'kg',
+                            r.weight_yoy_pct != null && React.createElement('span', {
+                              style:{ marginLeft:'4px', fontSize:'11px', fontWeight:600, color: r.weight_yoy_pct >= 0 ? '#0A6B52' : '#C2410C' }
+                            }, '('+(r.weight_yoy_pct >= 0 ? '+' : '')+r.weight_yoy_pct+'%)')
+                          )
+                        : '—'
+                    ),
+                    React.createElement('td', null,
+                      r.is_computed
+                        ? React.createElement('span', { className:'badge badge-green' }, '自動集計')
+                        : r.is_estimated
+                          ? React.createElement('span', { className:'badge badge-amber' }, '参照値')
+                          : React.createElement('span', { className:'badge badge-gray' }, '静的データ')
+                    )
+                  )
+                }),
+                // 合計行（絞り込み中の表示行のみで再集計）
+                React.createElement('tr', { style:{ background:'#F8FAF8', borderTop:'2px solid #D8E8D8' } },
+                  React.createElement('td', { style:{ fontWeight:700, color:'#111827' } }, '合計 / 平均'),
+                  React.createElement('td', null, ''),
+                  React.createElement('td', { style:{ fontWeight:600 } }, filteredAvgPerAre+'ケース'),
+                  React.createElement('td', { style:{ fontWeight:700, color:'#0A6B52' } }, filteredTotalCases.toLocaleString()+'ケース'),
+                  React.createElement('td', { style:{ color:'#64748B' } }, filteredPrevTotal > 0 ? filteredPrevTotal.toLocaleString()+'ケース' : '—'),
+                  React.createElement('td', { style:{ color: filteredYoyPct == null ? '#94A3B8' : filteredYoyPct >= 0 ? '#0A6B52' : '#C2410C', fontWeight:700 } },
+                    filteredYoyPct == null ? '—' : (filteredYoyPct >= 0 ? '+' : '')+filteredYoyPct+'%'
+                  ),
+                  React.createElement('td', null, ''),
+                  // 【とうもろこし両方表示対応】本数・重量(kg)の合計
+                  hasStemsOrWeight && React.createElement('td', { style:{ fontWeight:700 } }, filteredTotalStems > 0 ? filteredTotalStems.toLocaleString()+'本' : '—'),
+                  hasStemsOrWeight && React.createElement('td', { style:{ fontWeight:700 } }, filteredTotalWeight > 0 ? filteredTotalWeight.toLocaleString()+'kg' : '—'),
+                  React.createElement('td', null, '')
+                )
+              )
+            )
+          ),
+
+          // ── 資材コスト（参考値）── 使用量→コストの単純集計。最適化判定は行わない ──
+          hasAnyCostData && React.createElement('div', { className:'card card-data', style:{ marginBottom:'16px' } },
+            React.createElement(SectionTitle, { icon:'report-money' }, season+'年度　圃場別 資材コスト（参考値）'),
+            React.createElement('div', {
+              style:{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'8px', padding:'10px 14px', marginBottom:'14px', fontSize:'12px', color:'#78350F', display:'flex', alignItems:'flex-start', gap:'8px' }
+            },
+              React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'14px', flexShrink:0, marginTop:'1px' } }),
+              React.createElement('div', null,
+                '農薬の散布記録・追肥記録から使用量×単価で算出した参考値です。価格が未確定の品目はコストに含めていません'
+                + (hasAnyUnknownCost ? '（一部の圃場で未確定品目を含むため、実際のコストより低く出ています）。' : '。'),
+                React.createElement('br', null),
+                '「コスト効率が良い/悪い」「最適化されている」といった判定は行っていません。圃場間の相対比較の参考としてご活用ください。'
+              )
+            ),
+            React.createElement('table', { className:'table' },
+              React.createElement('thead', null,
+                React.createElement('tr', null,
+                  ...['圃場名','農薬コスト','肥料コスト','合計コスト','合計ケース数','1ケースあたりコスト','備考'].map(h =>
+                    React.createElement('th', { key:h }, h)
+                  )
+                )
+              ),
+              React.createElement('tbody', null,
+                ...[...costRows].sort((a,b) => (b.costPerCase||0) - (a.costPerCase||0)).map(r =>
+                  React.createElement('tr', { key:r.fid },
+                    React.createElement('td', { style:{ fontWeight:600, color:'#374151' } },
+                      r.field ? r.field.name : ('圃場#'+r.fid)
+                    ),
+                    React.createElement('td', null, r.hasRecord ? '¥'+Math.round(r.pesticideCost).toLocaleString() : '—'),
+                    React.createElement('td', null, r.hasRecord ? '¥'+Math.round(r.fertilizerCost).toLocaleString() : '—'),
+                    React.createElement('td', { style:{ fontWeight:700, color:'#111827' } }, r.hasRecord ? '¥'+Math.round(r.totalCost).toLocaleString() : '—'),
+                    React.createElement('td', null, r.total_cases.toLocaleString()+'ケース'),
+                    React.createElement('td', null,
+                      r.costPerCase != null
+                        ? React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+                            React.createElement('span', { style:{ fontWeight:700, color:'#B45309', minWidth:'64px' } }, '¥'+Math.round(r.costPerCase).toLocaleString()),
+                            React.createElement('div', { style:{ flex:1, maxWidth:'90px', background:'#EDF2ED', borderRadius:'4px', height:'6px', overflow:'hidden' } },
+                              React.createElement('div', { style:{ height:'100%', borderRadius:'4px', width:(r.costPerCase/maxCostPerCase*100)+'%', background:'#B45309' } })
+                            )
+                          )
+                        : '—'
+                    ),
+                    React.createElement('td', null,
+                      r.hasUnknownPrice
+                        ? React.createElement('span', { style:{ fontSize:'11px', color:'#B45309' } }, '⚠ 未確定品目あり')
+                        : (!r.hasRecord ? React.createElement('span', { style:{ fontSize:'11px', color:'#9CA3AF' } }, '記録なし') : '')
+                    )
+                  )
+                )
+              )
+            )
+          ),
+
+          // ── 評価コメント ──
+          React.createElement('div', { className:'card' },
+            React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' } },
+              React.createElement(SectionTitle, { icon:'message-2' }, season+'年度　評価コメント'),
+              React.createElement('button', {
+                className:'btn btn-ghost',
+                style:{ fontSize:'12px', padding:'6px 12px' },
+                onClick: () => setShowCommentForm(v => !v)
+              },
+                React.createElement('i', { className:'ti ti-plus' }),
+                showCommentForm ? 'キャンセル' : 'コメント追加'
+              )
+            ),
+
+            // コメント追加フォーム
+            showCommentForm && React.createElement('div', { style:{ background:'#F8FAF8', border:'1px solid #E2E8E2', borderRadius:'8px', padding:'12px', marginBottom:'12px' } },
+              React.createElement('textarea', {
+                className:'form-input',
+                rows:3,
+                placeholder:`${season}年度の評価・気づき・次年度への申し送り事項を入力...`,
+                value: commentText,
+                onChange: e => setCommentText(e.target.value),
+                style:{ resize:'vertical' }
+              }),
+              React.createElement('div', { style:{ marginTop:'8px', display:'flex', gap:'8px', justifyContent:'flex-end' } },
+                React.createElement('button', {
+                  className:'btn btn-primary',
+                  style:{ fontSize:'12px', padding:'6px 14px' },
+                  onClick: handleAddComment,
+                  disabled: !commentText.trim()
+                }, '保存')
+              )
+            ),
+
+            seasonComments.length === 0
+              ? React.createElement('div', { style:{ color:'#94A3B8', fontSize:'13px', padding:'8px 0' } },
+                  React.createElement('i', { className:'ti ti-message-off', style:{ marginRight:'6px' } }),
+                  'このシーズンの評価コメントはまだありません'
+                )
+              : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'8px' } },
+                  ...seasonComments.map((c, i) => React.createElement('div', {
+                    key:i,
+                    style:{ background:'#F8FAF8', border:'1px solid #E2E8E2', borderRadius:'8px', padding:'12px 14px' }
+                  },
+                    React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:'#0A6B52', marginBottom:'4px' } }, c.season+'年度'),
+                    React.createElement('div', { style:{ fontSize:'13px', color:'#374151', lineHeight:1.6 } }, c.comment)
+                  ))
+                )
+          )
+        )
+  )
+}
+
+// CAT-05-4: VisaPage — UX-08: スタッフ追加フォーム（在留カード番号フィールド付き）を追加
+function VisaPage({ staff, onAdd, onDelete }) {
+  // UX-08: showForm / form state を追加
+  const [showForm, setShowForm] = React.useState(false)
+  const [form, setForm]         = React.useState({ name:'', nationality:'VN', role:'trainee', visa_expires_at:'', residence_card_no:'' })
+  const [toast, setToast]       = React.useState(null)
+
+  const sortedStaff = [...staff].sort((a,b)=>a.name.localeCompare(b.name,'ja'))
+  const alertStaff  = sortedStaff.filter(s => { const d=calcDaysLeft(s.visa_expires_at); return d!==null && d<=CONFIG.VISA_ALERT_DAYS.warn })
+  const getVisaStatus = s => {
+    const d = calcDaysLeft(s.visa_expires_at)
+    if (d===null) return { label:'該当なし', badgeClass:'badge-gray', days:null, type:'none' }
+    if (d<0)      return { label:'期限切れ', badgeClass:'badge-red',  days:d,    type:'expired' }
+    if (d<=CONFIG.VISA_ALERT_DAYS.urgent) return { label:'要対応',  badgeClass:'badge-red',   days:d, type:'urgent' }
+    if (d<=CONFIG.VISA_ALERT_DAYS.warn)   return { label:'要確認',  badgeClass:'badge-amber', days:d, type:'warn' }
+    return { label:'正常', badgeClass:'badge-green', days:d, type:'ok' }
+  }
+  const roleLabel = ROLE_LABEL
+  const natLabel  = NAT_LABEL
+
+  // UX-08: 登録ハンドラ
+  const handleAdd = () => {
+    if (!form.name.trim()) return
+    const newStaff = { ...form, id:Date.now(), avatar:form.name.slice(0,2), visa_expires_at:form.visa_expires_at||null }
+    onAdd(newStaff)
+    setForm({ name:'', nationality:'VN', role:'trainee', visa_expires_at:'', residence_card_no:'' })
+    setShowForm(false)
+    setToast(newStaff.name + ' を登録しました')
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleCancel = () => {
+    setForm({ name:'', nationality:'VN', role:'trainee', visa_expires_at:'', residence_card_no:'' })
+    setShowForm(false)
+  }
+
+  return React.createElement('div', { className:'page' },
+
+    // UX-08: 成功トースト
+    toast && React.createElement('div', {
+      style:{
+        position:'fixed', bottom:'28px', right:'28px', zIndex:9999,
+        background:'#065F46', color:'#fff', borderRadius:'10px',
+        padding:'12px 20px', fontSize:'13px', fontWeight:500,
+        boxShadow:'0 4px 20px rgba(0,0,0,0.18)',
+        display:'flex', alignItems:'center', gap:'10px'
+      }
+    },
+      React.createElement('span', null, '✅'),
+      React.createElement('span', null, toast)
+    ),
+
+    // ヘッダー — UX-08: 「+ スタッフを追加」ボタン追加
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'6px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'page-title' }, 'ビザ・在留管理'),
+        React.createElement('div', { className:'page-sub' },
+          '在留資格・ビザ期限の管理 — 外国籍スタッフ '+sortedStaff.filter(s=>s.visa_expires_at).length+'名'
+        )
+      ),
+      React.createElement('button', {
+        className: showForm ? 'btn' : 'btn btn-primary',
+        style:{ display:'flex', alignItems:'center', gap:'6px', fontSize:'13px', marginTop:'2px' },
+        onClick: showForm ? handleCancel : () => setShowForm(true)
+      },
+        React.createElement('span', { style:{ fontSize:'16px', lineHeight:1 } }, showForm ? '✕' : '+'),
+        showForm ? 'キャンセル' : 'スタッフを追加'
+      )
+    ),
+
+    // UX-08: スライドインフォーム（在留カード番号フィールド付き）
+    showForm && React.createElement('div', {
+      className: 'card',
+      style:{
+        marginBottom:'20px', borderColor: CONFIG.COLOR.primary+'55',
+        background:'#F0FDF9', animation:'fadeInDown .2s ease'
+      }
+    },
+      React.createElement(SectionTitle, { icon:'user-plus' }, '外国籍スタッフを登録'),
+
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' } },
+
+        // 氏名
+        React.createElement('div', { className:'form-group', style:{ gridColumn:'1 / -1' } },
+          React.createElement('label', { className:'form-label' }, '氏名 *'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.name, autoFocus:true,
+            onChange: e => setForm(f=>({...f,name:e.target.value})),
+            placeholder:'Nguyen Van B',
+            onKeyDown: e => { if(e.key==='Enter' && form.name.trim()) handleAdd() }
+          })
+        ),
+
+        // 国籍
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '国籍'),
+          React.createElement('select', {
+            className:'form-select', value:form.nationality,
+            onChange: e => setForm(f=>({...f,nationality:e.target.value}))
+          }, ...Object.entries(natLabel).map(([v,l]) => React.createElement('option',{key:v,value:v},l)))
+        ),
+
+        // 役割
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '役割'),
+          React.createElement('select', {
+            className:'form-select', value:form.role,
+            onChange: e => setForm(f=>({...f,role:e.target.value}))
+          }, ...Object.entries(roleLabel).map(([v,l]) => React.createElement('option',{key:v,value:v},l)))
+        ),
+
+        // ビザ期限
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, 'ビザ・在留期限'),
+          React.createElement('input', {
+            type:'date', className:'form-input', value:form.visa_expires_at,
+            onChange: e => setForm(f=>({...f,visa_expires_at:e.target.value}))
+          })
+        ),
+
+        // 在留カード番号（UX-08仕様: VisaPage 専用フィールド）
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '在留カード番号'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.residence_card_no,
+            onChange: e => setForm(f=>({...f,residence_card_no:e.target.value})),
+            placeholder:'AB12345678CD'
+          })
+        )
+      ),
+
+      // 登録ボタン行
+      React.createElement('div', { style:{ display:'flex', gap:'10px', marginTop:'4px' } },
+        React.createElement('button', {
+          className:'btn btn-primary', disabled: !form.name.trim(),
+          onClick: handleAdd, style:{ flex:1 }
+        }, '登録する'),
+        React.createElement('button', {
+          className:'btn', onClick: handleCancel, style:{ minWidth:'80px' }
+        }, 'キャンセル')
+      )
+    ),
+
+    // ビザアラートバナー
+    alertStaff.length > 0 && React.createElement('div', {
+      style:{ background:'#FEF2F2', border:'1px solid #F87171', borderRadius:'10px', padding:'14px 18px', marginBottom:'20px', display:'flex', alignItems:'flex-start', gap:'12px' }
+    },
+      React.createElement('span', { style:{ fontSize:'20px', flexShrink:0 } }, '🚨'),
+      React.createElement('div', { style:{ flex:1 } },
+        React.createElement('div', { style:{ fontSize:'14px', fontWeight:600, color:'#DC2626', marginBottom:'8px' } }, 'ビザ期限アラート — '+alertStaff.length+'名が要対応'),
+        React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'8px' } },
+          ...alertStaff.map(s => {
+            const st = getVisaStatus(s)
+            return React.createElement('div', { key:s.id, style:{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:'8px', padding:'6px 12px', fontSize:'12px' } },
+              React.createElement('span', { style:{ color:'#DC2626', fontWeight:500 } }, s.name),
+              React.createElement('span', { style:{ color:'#991B1B', marginLeft:'6px' } }, st.type==='expired'?'⚠️ 期限切れ':'残'+st.days+'日')
+            )
+          })
+        )
+      )
+    ),
+
+    // スタッフテーブル
+    React.createElement('div', { className:'card card-data' },
+      React.createElement('table', { className:'table' },
+        React.createElement('thead', null,
+          React.createElement('tr', null,
+            ...['氏名','国籍','役割','ビザ期限','状態'].map(h => React.createElement('th',{key:h},h))
+          )
+        ),
+        React.createElement('tbody', null,
+          ...sortedStaff.map(s => {
+            const st = getVisaStatus(s)
+            return React.createElement('tr', { key:s.id },
+              React.createElement('td', { style:{ fontWeight:600, color:'#374151' } }, s.name),
+              React.createElement('td', null, natLabel[s.nationality] || s.nationality),
+              React.createElement('td', null, roleLabel[s.role]),
+              React.createElement('td', { style:{ color:'#374151' } }, s.visa_expires_at || '—'),
+              React.createElement('td', null, React.createElement('span', { className:'badge '+st.badgeClass }, st.label))
+            )
+          })
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// C05-1: GapSupport を3コンポーネントに分割
+//   GapChecklist — チェックリスト専用ページ
+//   GapExport    — 帳票出力 / 申請パッケージ専用ページ
+//   GapFull      — 両方を組み合わせたフルページ（旧デフォルト表示）
+// =====================================================
+
+// ── 共通フック: GAP集計・PDF/Excel出力処理 ──────────────────
+function useGapBase({ gap, records, fields, pesticides }) {
+  // CAT-04-3: 初期値を {} から全カテゴリ false で明示化（初回クリック前の undefined 扱いを排除）
+  const [open, setOpen] = React.useState({
+    '農薬管理': false,
+    '労働安全': false,
+    '衛生管理': false,
+    '記録管理': false,
+  })
+  const [exporting,  setExporting]     = React.useState(false)
+
+  const cats       = [...new Set(gap.map(c => c.category))]
+  const total      = gap.length
+  const done       = gap.filter(c => c.is_cleared).length
+  const pct        = Math.round(done / total * 100)
+  const sprayCount = records.filter(r => r.work_type === '農薬散布').length
+
+  const handleExportPDF = async () => {
+    setExporting(true)
+    try { await exportSprayPDF(records, fields, pesticides) }
+    catch(e) { alert('PDF出力に失敗しました: ' + e.message) }
+    finally  { setExporting(false) }
+  }
+  const handleExportExcel = () => {
+    try { exportFertilizerExcel(records, fields) }
+    catch(e) { alert('Excel出力に失敗しました: ' + e.message) }
+  }
+
+  return { open, setOpen, exporting, cats, total, done, pct, sprayCount,
+           handleExportPDF, handleExportExcel }
+}
+
+// ── 共通UI: 全体進捗バー ────────────────────────────────────
+function GapProgressBar({ done, total, pct }) {
+  return React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'16px',marginBottom:'24px'}},
+    React.createElement('div',{style:{flex:1}},
+      React.createElement('div',{className:'prog-label'},
+        React.createElement('span',null,'全体進捗 ('+done+'/'+total+'項目)'),
+        React.createElement('span',{style:{color:'#0D9972',fontWeight:500}},pct+'%')
+      ),
+      React.createElement('div',{className:'prog-bg',style:{height:'10px'}},
+        React.createElement('div',{className:'prog-fill',style:{width:pct+'%'}})
+      )
+    ),
+    React.createElement('div',{style:{background:'#ECFDF5',border:'1px solid #A7F3D0',borderRadius:'8px',padding:'10px 20px',textAlign:'center'}},
+      React.createElement('div',{style:{fontSize:'22px',fontWeight:600,color:'#0D9972'}},pct+'%'),
+      React.createElement('div',{style:{fontSize:'12px',color:'#6B7280',marginTop:'2px'}},'達成')
+    )
+  )
+}
+
+// ── 共通UI: チェックリスト＋カテゴリ別進捗 ─────────────────
+function GapChecklistPanel({ gap, cats, open, setOpen, onToggle }) {
+  return React.createElement('div',{className:'page-grow',style:{display:'grid',gridTemplateColumns:'1fr 280px',gap:'24px',alignItems:'start'}},
+    React.createElement('div',null,
+      ...cats.map(cat => {
+        const items   = gap.filter(c => c.category === cat)
+        const catDone = items.filter(c => c.is_cleared).length
+        const isOpen  = open[cat]
+        return React.createElement('div',{key:cat,className:'gap-check-cat'},
+          React.createElement('div',{className:'gap-cat-hdr',onClick:()=>setOpen(o=>({...o,[cat]:!o[cat]}))},
+            React.createElement('span',null,cat),
+            React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'10px'}},
+              React.createElement('span',{className:'badge '+(catDone===items.length?'badge-green':'badge-amber')},catDone+'/'+items.length+'完了'),
+              React.createElement('span',{style:{
+                color:'#6B7280', fontSize:'12px',
+                display:'inline-block',
+                transition:'transform .3s cubic-bezier(.4,0,.2,1)',
+                transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+              }},'▼')
+            )
+          ),
+          React.createElement('div', { className: 'smooth-collapse-wrap' + (isOpen ? ' open' : '') },
+            React.createElement('div', { className: 'smooth-collapse-inner' },
+            items.map(c => React.createElement('div',{key:c.id,className:'gap-item '+(c.is_cleared?'done':''),onClick:()=>onToggle(c.id)},
+            React.createElement('div', {
+              style: {
+                width:18, height:18, borderRadius:'4px',
+                border:'1px solid',
+                borderColor:  c.is_cleared ? CONFIG.COLOR.primary : '#CBD5E1',
+                background:   c.is_cleared ? CONFIG.COLOR.primary : 'transparent',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                flexShrink:0, fontSize:12, color:'#0D9972'
+              }
+            }, c.is_cleared ? '✓' : ''),
+            React.createElement('span',null,c.item)
+          ))
+          ) // end smooth-collapse-inner
+          ) // end smooth-collapse-wrap
+        )
+      })
+    ),
+    React.createElement('div',null,
+      React.createElement('div',{className:'section-title'},'カテゴリ別達成率'),
+      ...cats.map(cat => {
+        const items   = gap.filter(c => c.category === cat)
+        const catDone = items.filter(c => c.is_cleared).length
+        const catPct  = Math.round(catDone / items.length * 100)
+        return React.createElement('div',{key:cat,className:'card-sm',style:{marginBottom:'8px'}},
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'}},
+            React.createElement('span',{style:{fontSize:'12px',color:'#374151',fontWeight:500}},cat),
+            React.createElement('span',{style:{fontSize:'12px',color:catDone===items.length?CONFIG.COLOR.primary:'#B45309',fontWeight:600}},catPct+'%')
+          ),
+          React.createElement('div',{style:{background:'#E5E9F0',borderRadius:'4px',height:'5px',overflow:'hidden'}},
+            React.createElement('div',{style:{height:'100%',borderRadius:'4px',background:catDone===items.length?CONFIG.COLOR.primary:'#D97706',width:catPct+'%',transition:'width .4s'}})
+          ),
+          React.createElement('div',{style:{fontSize:'10px',color:'#6B7280',marginTop:'4px'}},catDone+'/'+items.length+' 完了')
+        )
+      })
+    )
+  )
+}
+
+// ── 共通UI: 帳票出力ボタン群 ────────────────────────────────
+function GapExportButtons({ exporting, sprayCount, handleExportPDF, handleExportExcel }) {
+  return React.createElement('div',{style:{display:'flex',gap:'8px',flexShrink:0,marginTop:'4px'}},
+    React.createElement('button',{
+      className:'btn btn-primary', onClick:handleExportPDF, disabled:exporting,
+      style:{ background: exporting ? CONFIG.COLOR.primaryDark : CONFIG.COLOR.primary }
+    }, exporting ? '⏳ 生成中...' : '📄 農薬散布PDF ('+sprayCount+'件)'),
+    React.createElement('button',{
+      className:'btn btn-ghost', onClick:handleExportExcel,
+      style:{ borderColor:'#0D9972', color:'#0D9972' }
+    }, '📊 施肥記録 Excel')
+  )
+}
+
+// ── GapChecklist: チェックリスト専用ページ（UX-06: 未完了タブ追加）─
+function GapChecklist({ gap, onToggle }) {
+  const { open, setOpen, done, total, pct, cats } = useGapBase({ gap, records:[], fields:[], pesticides:[] })
+  // UX-06: タブ状態管理（'all' | 'incomplete'）
+  const [activeTab, setActiveTab] = React.useState('all')
+
+  // 未完了件数（バッジ用）
+  const incompleteCount = gap.filter(c => !c.is_cleared).length
+
+  // タブに応じてフィルターしたgapリストを生成
+  const filteredGap = activeTab === 'incomplete'
+    ? gap.filter(c => !c.is_cleared)
+    : gap
+
+  // 未完了タブ時は空カテゴリを除外
+  const filteredCats = cats.filter(cat => filteredGap.some(c => c.category === cat))
+
+  // タブスタイル定義
+  const tabBase = {
+    display:'inline-flex', alignItems:'center', gap:'6px',
+    padding:'7px 16px', borderRadius:'8px', fontSize:'13px',
+    fontWeight:600, cursor:'pointer', border:'none',
+    transition:'all .15s', whiteSpace:'nowrap'
+  }
+  const tabActive   = { ...tabBase, background:CONFIG.COLOR.primary, color:'#fff', boxShadow:'0 2px 8px rgba(10,107,82,.25)' }
+  const tabInactive = { ...tabBase, background:'#F1F5F1', color:'#64748B' }
+
+  // 未完了バッジ（タブ内）
+  const incompleteBadge = React.createElement('span',{
+    style:{
+      display:'inline-flex', alignItems:'center', justifyContent:'center',
+      minWidth:'18px', height:'18px', borderRadius:'9px',
+      background: activeTab === 'incomplete' ? 'rgba(255,255,255,.3)' : '#C2410C',
+      color: activeTab === 'incomplete' ? '#fff' : '#fff',
+      fontSize:'10px', fontWeight:700, padding:'0 4px'
+    }
+  }, incompleteCount)
+
+  return React.createElement('div',{className:'page'},
+    // ページタイトル
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'eyebrow'},'GAP CHECKLIST'),
+        React.createElement('div',{className:'page-title'},'GAPチェックリスト'),
+        React.createElement('div',{className:'page-sub'},'JGAP / GlobalGAP 対応チェックリスト')
+      )
+    ),
+    // 進捗バー
+    React.createElement(GapProgressBar,{ done, total, pct }),
+    // UX-06: タブ切り替えUI
+    React.createElement('div',{
+      style:{
+        display:'flex', alignItems:'center', gap:'6px',
+        marginBottom:'20px',
+        background:'#F8FAF8', borderRadius:'10px',
+        padding:'4px', width:'fit-content',
+        border:'1px solid #DDE8DE'
+      }
+    },
+      // 全項目タブ
+      React.createElement('button',{
+        style: activeTab === 'all' ? tabActive : tabInactive,
+        onClick:() => setActiveTab('all')
+      },
+        React.createElement('i',{className:'ti ti-list-check','aria-hidden':'true',style:{fontSize:'15px'}}),
+        '全項目',
+        React.createElement('span',{
+          style:{
+            display:'inline-flex', alignItems:'center', justifyContent:'center',
+            minWidth:'18px', height:'18px', borderRadius:'9px',
+            background: activeTab === 'all' ? 'rgba(255,255,255,.3)' : '#E2E8E2',
+            color: activeTab === 'all' ? '#fff' : '#64748B',
+            fontSize:'10px', fontWeight:700, padding:'0 4px'
+          }
+        }, total)
+      ),
+      // 未完了のみタブ
+      React.createElement('button',{
+        style: activeTab === 'incomplete' ? {...tabActive, background:'#B45309', boxShadow:'0 2px 8px rgba(180,83,9,.25)'} : tabInactive,
+        onClick:() => setActiveTab('incomplete')
+      },
+        React.createElement('i',{className:'ti ti-alert-circle','aria-hidden':'true',style:{fontSize:'15px'}}),
+        '未完了のみ',
+        incompleteBadge
+      )
+    ),
+    // 未完了タブで全部クリア済みの場合
+    activeTab === 'incomplete' && incompleteCount === 0
+      ? React.createElement('div',{
+          style:{
+            display:'flex', flexDirection:'column', alignItems:'center',
+            justifyContent:'center', padding:'48px 24px',
+            background:'#ECFDF5', borderRadius:'14px',
+            border:'1px solid #A7F3D0', gap:'12px'
+          }
+        },
+          React.createElement('div',{style:{fontSize:'36px'}},'🎉'),
+          React.createElement('div',{style:{fontSize:'16px',fontWeight:700,color:'#065F46'}},
+            '全項目クリア済みです！'
+          ),
+          React.createElement('div',{style:{fontSize:'13px',color:'#059669'}},
+            'GAP申請の準備が整っています。帳票を出力して提出してください。'
+          )
+        )
+      : React.createElement(GapChecklistPanel,{ gap:filteredGap, cats:filteredCats, open, setOpen, onToggle })
+  )
+}
+
+// ── 生成される書類一覧（チェックリスト表示） ──────────────
+function GapDocumentList({ sprayCount }) {
+  const docs = [
+    { icon:'file-text',   name:'農薬散布記録簿',     format:'PDF',   desc:'JGAP / GlobalGAP 様式 GAP-P-001　｜　'+sprayCount+'件の散布記録' },
+    { icon:'file-spreadsheet', name:'施肥記録簿',     format:'Excel', desc:'肥料種別・施肥量・作業者の一覧（GAP様式 xlsx）' },
+    { icon:'clipboard-check',  name:'審査チェックリスト概要', format:'PDF', desc:'カテゴリ別達成率サマリー（現在 '+CONFIG.CURRENT_YEAR+' 年度）' },
+  ]
+  return React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'2px',marginBottom:'22px'}},
+    ...docs.map((d,i) => React.createElement('div',{
+      key:i,
+      style:{display:'flex',alignItems:'center',gap:'14px',padding:'13px 4px',
+             borderBottom: i<docs.length-1 ? '1px solid rgba(255,255,255,.08)' : 'none'}
+    },
+      React.createElement('div',{style:{
+        width:'34px',height:'34px',borderRadius:'9px',
+        background:'rgba(255,255,255,.08)',
+        display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0
+      }},
+        React.createElement('i',{className:'ti ti-'+d.icon,'aria-hidden':'true',style:{fontSize:'17px',color:'#fff'}})
+      ),
+      React.createElement('div',{style:{flex:1}},
+        React.createElement('div',{style:{fontWeight:600,fontSize:'13px',color:'#fff'}},d.name),
+        React.createElement('div',{style:{fontSize:'11px',color:'rgba(255,255,255,.55)',marginTop:'2px'}},d.desc)
+      ),
+      React.createElement('span',{
+        style:{fontSize:'10px',padding:'3px 10px',borderRadius:'20px',fontWeight:700,letterSpacing:'.04em',
+               background:'rgba(255,255,255,.1)',color:'#fff',border:'1px solid rgba(255,255,255,.15)'}
+      },d.format)
+    ))
+  )
+}
+
+// ── GAP達成率ヒーロー：①書類確認→②生成中→③完成 の「わー！」体験 ─
+function GapExportHero({ done, total, pct, sprayCount, onGenerateAll, isGenerating, justCompleted }) {
+  // 昨年度の達成率（モック：今年から-12ptの想定値を逆算して+表示する）
+  const lastYearPct = Math.max(0, pct - 12)
+  const delta = pct - lastYearPct
+
+  return React.createElement('div',{
+    style:{
+      background:'#0A6B52',
+      borderRadius:'16px', padding:'30px 32px', marginBottom:'16px',
+      color:'#fff', boxShadow:'none',
+      position:'relative', overflow:'hidden'
+    }
+  },
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-end',justifyContent:'space-between',flexWrap:'wrap',gap:'20px',marginBottom:'22px'}},
+      React.createElement('div',null,
+        React.createElement('div',{style:{fontSize:'12px',opacity:.65,letterSpacing:'.08em',marginBottom:'6px'}},'GAP 審査基準 達成率'),
+        React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:'12px'}},
+          React.createElement('span',{style:{fontSize:'46px',fontWeight:700,lineHeight:1,letterSpacing:'-.02em'}},pct+'%'),
+          React.createElement('span',{
+            style:{fontSize:'12px',fontWeight:700,padding:'4px 10px',borderRadius:'20px',
+                   background: delta >= 0 ? 'rgba(74,222,128,.18)' : 'rgba(248,113,113,.18)',
+                   color: delta >= 0 ? '#86EFAC' : '#FCA5A5',
+                   border: '1px solid ' + (delta >= 0 ? 'rgba(74,222,128,.35)' : 'rgba(248,113,113,.35)')}
+          }, (delta >= 0 ? '▲ 昨年比+' : '▼ 昨年比') + delta + 'pt')
+        ),
+        React.createElement('div',{style:{fontSize:'12px',opacity:.6,marginTop:'6px'}},done+' / '+total+' 項目クリア')
+      ),
+      React.createElement('div',{style:{textAlign:'right'}},
+        React.createElement('div',{style:{fontSize:'11px',opacity:.6,marginBottom:'4px'}},'GAP審査 提出書類パッケージ'),
+        React.createElement('div',{style:{fontSize:'20px',fontWeight:700}},'3点の書類を一括生成')
+      )
+    ),
+    React.createElement(GapDocumentList,{ sprayCount }),
+    React.createElement('button',{
+      onClick:onGenerateAll, disabled:isGenerating,
+      style:{
+        width:'100%', background: isGenerating ? 'rgba(255,255,255,.15)' : '#FAC775',
+        color: isGenerating ? '#fff' : '#06382C', border:'none',
+        borderRadius:'10px', padding:'16px', fontSize:'15px', fontWeight:700,
+        cursor: isGenerating ? 'not-allowed' : 'pointer',
+        display:'flex', alignItems:'center', justifyContent:'center', gap:'10px',
+        transition:'all .2s', letterSpacing:'.02em'
+      }
+    },
+      React.createElement('i',{
+        className: 'ti ti-' + (isGenerating ? 'loader-2' : (justCompleted ? 'circle-check' : 'package')),
+        'aria-hidden':'true',
+        style:{fontSize:'18px', animation: isGenerating ? 'spin 0.8s linear infinite' : 'none'}
+      }),
+      isGenerating ? '生成中...' : (justCompleted ? '3点の書類が完成しました' : '書類パッケージを生成する')
+    ),
+    React.createElement('style',null,'@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}')
+  )
+}
+
+// ── GapExport: 帳票出力 / 申請パッケージ専用ページ ─────────
+function GapExport({ gap, records, fields, pesticides }) {
+  const { exporting, done, total, pct, sprayCount,
+          handleExportPDF, handleExportExcel } = useGapBase({ gap, records, fields, pesticides })
+
+  const [isGenerating, setIsGenerating] = React.useState(false)
+  const [justCompleted, setJustCompleted] = React.useState(false)
+  const [packageToast, setPackageToast] = React.useState(null)
+
+  const handleGenerateAll = async () => {
+    setIsGenerating(true)
+    setJustCompleted(false)
+    try {
+      await Promise.all([
+        new Promise(r => setTimeout(r, 800)),
+        handleExportPDF(),
+      ])
+      handleExportExcel()
+      setJustCompleted(true)
+      setPackageToast('3点の書類が完成しました')
+      setTimeout(() => setPackageToast(null), 3000)
+      setTimeout(() => setJustCompleted(false), 4000)
+    } catch (e) {
+      alert('書類パッケージの生成に失敗しました: ' + e.message)
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  return React.createElement('div',{className:'page'},
+    packageToast && React.createElement('div',{
+      style:{
+        position:'fixed', bottom:'28px', right:'28px', zIndex:9999,
+        background:'#065F46', color:'#fff', borderRadius:'10px',
+        padding:'12px 20px', fontSize:'13px', fontWeight:500,
+        boxShadow:'0 4px 20px rgba(0,0,0,0.18)',
+        display:'flex', alignItems:'center', gap:'10px'
+      }
+    },
+      React.createElement('span', null, '✅'),
+      React.createElement('span', null, packageToast)
+    ),
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'eyebrow'},'GAP DOCUMENT EXPORT'),
+        React.createElement('div',{className:'page-title'},'帳票出力 / 申請パッケージ'),
+        React.createElement('div',{className:'page-sub'},'GAP審査提出用の書類を出力します')
+      )
+    ),
+    React.createElement(GapProgressBar,{ done, total, pct }),
+    React.createElement(GapExportHero,{
+      done, total, pct, sprayCount,
+      onGenerateAll: handleGenerateAll,
+      isGenerating, justCompleted
+    }),
+    /* ── 様式プレビューカード ── */
+    React.createElement('div',{className:'card',style:{marginBottom:'16px'}},
+      React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}},
+        React.createElement(SectionTitle,{icon:'file-text',style:{margin:0}},'様式プレビュー（農薬散布記録簿）'),
+        React.createElement('div',{style:{display:'flex',gap:'6px'}},
+          React.createElement('span',{style:{fontSize:'10px',padding:'2px 8px',borderRadius:'20px',background:'#ECFDF5',color:CONFIG.COLOR.primary,border:'1px solid #A7F3D0',fontWeight:600}},'JGAP / GlobalGAP 様式'),
+          React.createElement('span',{style:{fontSize:'10px',padding:'2px 8px',borderRadius:'20px',background:'#EFF6FF',color:'#1D4ED8',border:'1px solid #BFDBFE',fontWeight:600}},'GAP-P-001 Rev.3')
+        )
+      ),
+      React.createElement('div',{style:{border:'1px solid #E2E8F0',borderRadius:'6px',overflow:'hidden',fontSize:'12px',background:'#fff',boxShadow:'0 2px 8px rgba(0,0,0,.06)'}},
+        /* ヘッダー帯 */
+        React.createElement('div',{style:{background:CONFIG.COLOR.primary,color:'#fff',padding:'10px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:'15px',fontWeight:700,letterSpacing:'.06em'}},'農薬散布記録簿'),
+            React.createElement('div',{style:{fontSize:'9px',opacity:.8,marginTop:'2px'}},'PESTICIDE APPLICATION RECORD　｜　JGAP / GlobalGAP 農薬管理基準様式　｜　※ 仮様式')
+          ),
+          React.createElement('div',{style:{textAlign:'right',fontSize:'9px'}},
+            React.createElement('div',{style:{fontWeight:700,letterSpacing:'.05em'}},'様式番号：GAP-P-001'),
+            React.createElement('div',{style:{opacity:.8}},'改訂：Rev.3　｜　'+new Date().getFullYear()+'年度版')
+          )
+        ),
+        /* 農園情報行 */
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',borderBottom:'1px solid #cde8e0'}},
+          ...[
+            ['農業者名称 / Organization',CONFIG.FARM_NAME],
+            ['JGAP認証番号 / Certificate No.',CONFIG.JGAP_CERT_NO],
+            ['出力日 / Issued Date',''+new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'})+'（'+sprayCount+'件）']
+          ].map(([label,val],i)=>
+            React.createElement('div',{key:i,style:{padding:'7px 12px',borderRight:i<2?'1px solid #cde8e0':'none'}},
+              React.createElement('div',{style:{fontSize:'8px',color:CONFIG.COLOR.primary,fontWeight:700,letterSpacing:'.06em',marginBottom:'2px'}},label),
+              React.createElement('div',{style:{fontWeight:600,color:'#111',fontSize:'11px'}},val)
+            )
+          )
+        ),
+        /* 公印スペース */
+        React.createElement('div',{style:{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:'8px',padding:'8px 16px',borderBottom:'1px solid #E2E8F0'}},
+          React.createElement('span',{style:{fontSize:'9px',color:'#9CA3AF'}},'捺印欄'),
+          ...[['代表者印'],['管理責任者印']].map(([label])=>
+            React.createElement('div',{key:label,style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'3px'}},
+              React.createElement('div',{style:{width:'52px',height:'52px',borderRadius:'50%',border:'1.5px dashed #CBD5E1',display:'flex',alignItems:'center',justifyContent:'center',background:'#FAFAFA'}},''),
+              React.createElement('span',{style:{fontSize:'8px',color:'#9CA3AF'}},label)
+            )
+          )
+        ),
+        /* テーブル */
+        React.createElement('div',{style:{overflowX:'auto'}},
+          React.createElement('table',{style:{width:'100%',borderCollapse:'collapse',fontSize:'9px',minWidth:'640px'}},
+            React.createElement('thead',null,
+              React.createElement('tr',null,
+                ...['No.','作業日','圃場名','作物名','農薬名（商品名）','農薬登録番号','希釈倍率','散布量(L/10a)','天気','作業者','収穫前日数制限'].map((h,i)=>
+                  React.createElement('th',{key:i,style:{background:CONFIG.COLOR.primary,color:'#fff',padding:'5px 6px',textAlign:'center',border:'1px solid #088060',fontWeight:600,whiteSpace:'nowrap'}},h)
+                )
+              )
+            ),
+            React.createElement('tbody',null,
+              ...records.filter(r=>r.work_type==='農薬散布').slice(0,3).map((r,i)=>{
+                const field=fields.find(f=>f.id===r.field_id)
+                const pest=pesticides.find(p=>p.id===r.pesticide_id)
+                return React.createElement('tr',{key:r.id,style:{background:i%2===1?'#f4faf8':'#fff'}},
+                  ...[i+1,r.date,field?field.name:'—',field?field.crop:'—',pest?pest.name:'—',pest?pest.reg_no:'—',r.dilution?r.dilution+'倍':'—',r.amount||'—',r.weather||'—',r.worker||'—',pest?pest.preharvest_days+'日':'—'].map((v,j)=>
+                    React.createElement('td',{key:j,style:{padding:'4px 6px',border:'1px solid #ccc',textAlign:'center'}},v)
+                  )
+                )
+              }),
+              ...[0,1,2].map(i=>React.createElement('tr',{key:'empty-'+i},
+                ...Array(11).fill(null).map((_,j)=>React.createElement('td',{key:j,style:{padding:'4px 6px',border:'1px solid #E5E7EB',height:'22px',background:i%2===1?'#f4faf8':'#fff'}},''))
+              ))
+            )
+          )
+        ),
+        /* フッター */
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',padding:'8px 14px',borderTop:'1px solid #E2E8F0',background:'#FAFAFA'}},
+          React.createElement('div',{style:{fontSize:'8.5px',color:'#6B7280',lineHeight:'1.6'}},
+            React.createElement('div',null,'※ 本記録はJGAP基準 / GlobalGAP AF 4.1「農薬使用記録の保管（5年間）」に基づき作成'),
+            React.createElement('div',null,'※ 使用農薬はすべて農薬取締法に基づく登録農薬であることを確認済み')
+          ),
+          React.createElement('div',{style:{fontSize:'8.5px',color:'#9CA3AF'}},'農場名　｜　1 / 1')
+        )
+      )
+    ),
+    React.createElement('div',{className:'card'},
+      React.createElement(SectionTitle,{icon:'download'},'書類ダウンロード'),
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:'12px',padding:'8px 0'}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0',borderBottom:'1px solid #F1F5F9'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:'14px',fontWeight:600,color:'#374151'}},'農薬散布記録簿 (PDF)'),
+            React.createElement('div',{style:{fontSize:'12px',color:'#6B7280',marginTop:'2px'}},'散布記録 '+sprayCount+'件 — JGAP様式')
+          ),
+          React.createElement('button',{className:'btn btn-primary',onClick:handleExportPDF,disabled:exporting,style:{background:exporting?CONFIG.COLOR.primaryDark:CONFIG.COLOR.primary}},exporting?'⏳ 生成中...':'📄 PDF出力')
+        ),
+        React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0'}},
+          React.createElement('div',null,
+            React.createElement('div',{style:{fontSize:'14px',fontWeight:600,color:'#374151'}},'施肥記録簿 (Excel)'),
+            React.createElement('div',{style:{fontSize:'12px',color:'#6B7280',marginTop:'2px'}},'施肥記録 — GAP様式 xlsx')
+          ),
+          React.createElement('button',{className:'btn btn-ghost',onClick:handleExportExcel,style:{borderColor:'#0D9972',color:'#0D9972'}},'📊 Excel出力')
+        )
+      )
+    )
+  )
+}
+
+// ── GapFull: チェックリスト＋出力ボタンのフルページ ────────
+function GapFull({ gap, onToggle, records, fields, pesticides }) {
+  const { open, setOpen, exporting, done, total, pct, cats, sprayCount,
+          handleExportPDF, handleExportExcel } = useGapBase({ gap, records, fields, pesticides })
+  return React.createElement('div',{className:'page'},
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'}},
+      React.createElement('div',null,
+        React.createElement('div',{className:'eyebrow'},'GAP CHECKLIST'),
+        React.createElement('div',{className:'page-title'},'GAP申請サポート'),
+        React.createElement('div',{className:'page-sub'},'JGAP / GlobalGAP 対応チェックリスト')
+      ),
+      React.createElement(GapExportButtons,{ exporting, sprayCount, handleExportPDF, handleExportExcel })
+    ),
+    React.createElement(GapProgressBar,{ done, total, pct }),
+    React.createElement(GapChecklistPanel,{ gap, cats, open, setOpen, onToggle })
+  )
+}
+
+// =====================================================
+// C-4: 機器シェア予約カレンダー（完全実装）
+// ・月次カレンダー表示（自社=緑 / 外部貸出=琥珀で色分け）
+// ・カレンダーセルをクリック → 日付プリセット済みで予約フォームを開く
+// ・ダブルブッキング防止ロジック（同機器×同日付をブロック）
+// ・機器別フィルタータブ
+// ※ EQUIP_LIST / EQUIP_DEFAULTS はファイル上部モックデータセクション参照（C06-4）
+// =====================================================
+
+// =====================================================
+// 収益シミュレーター
+// =====================================================
+function RevenueSimulator() {
+  const [equip,    setEquip]    = React.useState('トラクター')
+  const [days,     setDays]     = React.useState(8)
+  const [rate,     setRate]     = React.useState(EQUIP_DEFAULTS['トラクター'].rate)
+  const [cost,     setCost]     = React.useState(EQUIP_DEFAULTS['トラクター'].cost)
+  const [months,   setMonths]   = React.useState(12)
+
+  const handleEquipChange = (e) => {
+    const eq = e.target.value
+    setEquip(eq)
+    setRate(EQUIP_DEFAULTS[eq].rate)
+    setCost(EQUIP_DEFAULTS[eq].cost)
+  }
+
+  const revenuePerDay  = rate - cost
+  const revenuePerMonth = revenuePerDay * days
+  const revenuePerYear  = revenuePerMonth * months
+  const fmtYen = (n) => (n >= 10000
+    ? Math.floor(n / 10000) + '万' + (n % 10000 > 0 ? (n % 10000).toLocaleString() : '') + '円'
+    : n.toLocaleString() + '円')
+
+  const barPct = Math.min(100, Math.round(revenuePerYear / 1200000 * 100))
+  const barColor = revenuePerYear >= 500000 ? CONFIG.COLOR.primary : revenuePerYear >= 200000 ? CONFIG.COLOR.amber : '#6B7280'
+
+  const scenarios = [
+    { label: '月4日貸出', val: revenuePerDay * 4  * months },
+    { label: '月8日貸出', val: revenuePerDay * 8  * months },
+    { label: '月15日貸出',val: revenuePerDay * 15 * months },
+  ]
+  const maxScenario = Math.max(...scenarios.map(s => s.val))
+
+  return React.createElement('div', { className:'page' },
+
+    React.createElement('div', { style:{ marginBottom:'6px' } },
+      React.createElement('div', { className:'eyebrow' }, 'REVENUE SIMULATOR'),
+      React.createElement('div', { className:'page-title' },
+        React.createElement('i', { className:'ti ti-currency-yen', 'aria-hidden':'true', style:{ fontSize:'20px', verticalAlign:'-2px', marginRight:'8px' } }),
+        '機器シェア収益シミュレーター'
+      ),
+      React.createElement('div', { className:'page-sub' }, '農機の空き時間を貸し出すと年間いくら稼げるか試算できます')
+    ),
+
+    // ─── メインカード ───
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'20px', alignItems:'start' } },
+
+      // 左: パラメーター入力
+      React.createElement('div', { className:'card' },
+        React.createElement(SectionTitle, { icon:'ruler-2' }, 'シミュレーション条件'),
+
+        // 機器選択
+        React.createElement('div', { className:'form-group' },
+          React.createElement('label', { className:'form-label' }, '貸出機器'),
+          React.createElement('select', {
+            className:'form-select', value:equip, onChange:handleEquipChange
+          }, ...EQUIP_LIST.map(e => React.createElement('option',{key:e,value:e},e)))
+        ),
+
+        // 月間貸出日数スライダー
+        React.createElement('div', { className:'form-group' },
+          React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'} },
+            React.createElement('label', { className:'form-label', style:{marginBottom:0} }, '月間貸出日数'),
+            React.createElement('span', { style:{fontSize:'22px',fontWeight:700,color:CONFIG.COLOR.primary} }, days+'日/月')
+          ),
+          React.createElement('input', {
+            type:'range', min:1, max:25, step:1, value:days,
+            onChange: e => setDays(Number(e.target.value)),
+            style:{ width:'100%', accentColor:CONFIG.COLOR.primary, cursor:'pointer' }
+          }),
+          React.createElement('div', { style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'#94A3B8',marginTop:'3px'} },
+            React.createElement('span',null,'1日'),
+            React.createElement('span',null,'週1回目安: 4日'),
+            React.createElement('span',null,'25日')
+          )
+        ),
+
+        // 1日あたり貸出単価
+        React.createElement('div', { className:'form-group' },
+          React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'} },
+            React.createElement('label', { className:'form-label', style:{marginBottom:0} }, '1日あたり貸出単価'),
+            React.createElement('span', { style:{fontSize:'22px',fontWeight:700,color:'#1D4ED8'} }, rate.toLocaleString()+'円')
+          ),
+          React.createElement('input', {
+            type:'range', min:3000, max:80000, step:1000, value:rate,
+            onChange: e => setRate(Number(e.target.value)),
+            style:{ width:'100%', accentColor:'#1D4ED8', cursor:'pointer' }
+          }),
+          React.createElement('div', { style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'#94A3B8',marginTop:'3px'} },
+            React.createElement('span',null,'3,000円'),
+            React.createElement('span',null,'市場相場'),
+            React.createElement('span',null,'80,000円')
+          )
+        ),
+
+        // 1日あたりコスト
+        React.createElement('div', { className:'form-group' },
+          React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'} },
+            React.createElement('label', { className:'form-label', style:{marginBottom:0} }, '1日あたり燃料・消耗品代'),
+            React.createElement('span', { style:{fontSize:'18px',fontWeight:600,color:'#C2410C'} }, '−'+cost.toLocaleString()+'円')
+          ),
+          React.createElement('input', {
+            type:'range', min:0, max:10000, step:100, value:cost,
+            onChange: e => setCost(Number(e.target.value)),
+            style:{ width:'100%', accentColor:'#C2410C', cursor:'pointer' }
+          }),
+          React.createElement('div', { style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'#94A3B8',marginTop:'3px'} },
+            React.createElement('span',null,'0円'), React.createElement('span',null,'10,000円')
+          )
+        ),
+
+        // 稼働月数
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'} },
+            React.createElement('label', { className:'form-label', style:{marginBottom:0} }, '年間稼働月数（農繁期除く）'),
+            React.createElement('span', { style:{fontSize:'22px',fontWeight:700,color:'#6D28D9'} }, months+'ヶ月')
+          ),
+          React.createElement('input', {
+            type:'range', min:1, max:12, step:1, value:months,
+            onChange: e => setMonths(Number(e.target.value)),
+            style:{ width:'100%', accentColor:'#6D28D9', cursor:'pointer' }
+          }),
+          React.createElement('div', { style:{display:'flex',justifyContent:'space-between',fontSize:'10px',color:'#94A3B8',marginTop:'3px'} },
+            React.createElement('span',null,'1ヶ月'), React.createElement('span',null,'12ヶ月（通年）')
+          )
+        )
+      ),
+
+      // 右: 結果パネル
+      React.createElement('div', null,
+
+        // メイン結果カード
+        React.createElement('div', {
+          className:'card',
+          style:{ background:CONFIG.COLOR.primary, marginBottom:'14px', border:'none' }
+        },
+          React.createElement('div', { style:{fontSize:'12px',color:'rgba(255,255,255,.75)',marginBottom:'4px',fontWeight:600,letterSpacing:'.06em',textTransform:'uppercase'} }, '年間収益（試算）'),
+          React.createElement('div', { style:{fontSize:'48px',fontWeight:700,color:'#FFFFFF',lineHeight:1,letterSpacing:'-.03em',margin:'8px 0'} },
+            fmtYen(revenuePerYear)
+          ),
+          React.createElement('div', { style:{fontSize:'14px',color:'rgba(255,255,255,.8)',marginTop:'6px'} },
+            '月間: '+fmtYen(revenuePerMonth)+'　／　1日純利益: '+fmtYen(revenuePerDay)
+          ),
+
+          // プログレスバー（120万円を100%とする）
+          React.createElement('div', { style:{marginTop:'16px'} },
+            React.createElement('div', { style:{height:'6px',background:'rgba(255,255,255,.25)',borderRadius:'4px',overflow:'hidden'} },
+              React.createElement('div', {
+                style:{ height:'100%', width:barPct+'%', background:'#FFFFFF', borderRadius:'4px', transition:'width .6s ease' }
+              })
+            ),
+            React.createElement('div', { style:{fontSize:'10px',color:'rgba(255,255,255,.6)',marginTop:'4px',textAlign:'right'} }, '目標120万円の '+barPct+'%')
+          )
+        ),
+
+        // 内訳カード
+        React.createElement('div', { className:'card', style:{marginBottom:'14px'} },
+          React.createElement(SectionTitle, { icon:'chart-bar' }, '月間内訳'),
+          ...[
+            { label:'貸出収入',   val:'+'+fmtYen(rate*days),         color:CONFIG.COLOR.primary, bold:true },
+            { label:'経費（燃料等）', val:'−'+fmtYen(cost*days),     color:'#C2410C', bold:false },
+            { label:'月間純利益', val:fmtYen(revenuePerMonth),        color:'#1D4ED8', bold:true },
+          ].map(item =>
+            React.createElement('div', {
+              key:item.label,
+              style:{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 0', borderBottom:'1px solid #F1F5F9' }
+            },
+              React.createElement('span', { style:{fontSize:'14px',color:'#64748B'} }, item.label),
+              React.createElement('span', { style:{fontSize:'14px',fontWeight:item.bold?700:400,color:item.color} }, item.val)
+            )
+          )
+        ),
+
+        // 比較シナリオ
+        React.createElement('div', { className:'card' },
+          React.createElement(SectionTitle, { icon:'arrows-shuffle' }, '貸出日数別シナリオ比較'),
+          ...scenarios.map((s, i) =>
+            React.createElement('div', { key:i, style:{ marginBottom:'10px' } },
+              React.createElement('div', { style:{display:'flex',justifyContent:'space-between',fontSize:'12px',marginBottom:'4px'} },
+                React.createElement('span', { style:{color:'#374151',fontWeight:500} }, s.label),
+                React.createElement('span', { style:{color:CONFIG.COLOR.primary,fontWeight:700} }, fmtYen(s.val)+'/年')
+              ),
+              React.createElement('div', { style:{background:'#F1F5F9',borderRadius:'4px',height:'7px',overflow:'hidden'} },
+                React.createElement('div', {
+                  style:{
+                    height:'100%', borderRadius:'4px',
+                    width: (s.val / maxScenario * 100)+'%',
+                    background: i===0 ? '#94A3B8' : i===1 ? '#0D9972' : CONFIG.COLOR.primary,
+                    transition:'width .5s ease'
+                  }
+                })
+              )
+            )
+          ),
+          React.createElement('div', {
+            style:{ marginTop:'10px', padding:'10px 12px', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'8px', fontSize:'12px', color:'#065F46', lineHeight:1.6 }
+          }, '💡 農繁期（4〜6月・9〜10月）を除いた閑散期に貸し出すだけで、'+equip+'1台で大きな副収入が生まれます。')
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// UX-07: 機器予約の詳細モーダル（確認・編集）
+// ・カレンダーのイベント or 予約一覧の行クリックで開く
+// ・機器/日付/種別/備考を編集して保存
+// ・ダブルブッキング検知（自身を除外して判定）
+// ・削除も可能（確認つき）
+// =====================================================
+function RentalDetailModal({ rental, onClose, onSave, onDelete, conflictCheck }) {
+  const [form, setForm] = React.useState({ ...rental })
+  const [confirmDelete, setConfirmDelete] = React.useState(false)
+
+  const isConflict = conflictCheck(form.equipment, form.date, rental.id)
+  const isDirty = JSON.stringify(form) !== JSON.stringify(rental)
+
+  return React.createElement('div', {
+    style:{
+      position:'fixed', inset:0, background:'rgba(17,24,39,.45)',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      zIndex:1000, padding:'16px'
+    },
+    onClick: onClose
+  },
+    React.createElement('div', {
+      className:'card',
+      style:{ width:'420px', maxWidth:'100%', boxShadow:'0 8px 40px rgba(17,24,39,.25)' },
+      onClick: e => e.stopPropagation()
+    },
+      // ヘッダー
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'14px' } },
+        React.createElement(SectionTitle, { icon:'calendar-event' }, '予約の詳細'),
+        React.createElement('button', {
+          className:'btn btn-ghost', style:{ padding:'4px 8px', fontSize:'16px', lineHeight:1 },
+          onClick: onClose
+        }, '✕')
+      ),
+
+      // 機器
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '機器'),
+        React.createElement('select', {
+          className:'form-select', value:form.equipment,
+          onChange: e => setForm(f=>({...f, equipment:e.target.value}))
+        }, ...EQUIP_LIST.map(e => React.createElement('option',{key:e,value:e},e)))
+      ),
+
+      // 日付
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '日付'),
+        React.createElement('input', {
+          type:'date', className:'form-input', value:form.date,
+          onChange: e => setForm(f=>({...f, date:e.target.value}))
+        })
+      ),
+
+      // 種別
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '種別'),
+        React.createElement('select', {
+          className:'form-select', value:form.type,
+          onChange: e => setForm(f=>({...f, type:e.target.value}))
+        },
+          React.createElement('option',{value:'own'},'🟢 自社使用'),
+          React.createElement('option',{value:'rent'},'🟡 外部貸出')
+        )
+      ),
+
+      // 備考
+      React.createElement('div', { className:'form-group' },
+        React.createElement('label', { className:'form-label' }, '備考'),
+        React.createElement('input', {
+          type:'text', className:'form-input', value:form.note,
+          onChange: e => setForm(f=>({...f, note:e.target.value})),
+          placeholder:'例: A農園'
+        })
+      ),
+
+      // ダブルブッキング警告
+      isConflict && React.createElement('div', {
+        style:{
+          background:'#FEF2F2', border:'1px solid #F87171',
+          borderRadius:'8px', padding:'10px 14px', marginBottom:'12px',
+          fontSize:'14px', color:'#DC2626', display:'flex', gap:'8px', alignItems:'flex-start'
+        }
+      },
+        React.createElement('span',null,'🚫'),
+        React.createElement('div',null,
+          React.createElement('div',{style:{fontWeight:600,marginBottom:'2px'}},'ダブルブッキング'),
+          React.createElement('div',{style:{fontSize:'12px',color:'#991B1B'}},form.equipment+'はこの日付にすでに別の予約が入っています')
+        )
+      ),
+
+      // 削除確認
+      confirmDelete && React.createElement('div', {
+        style:{
+          background:'#FFF7ED', border:'1px solid #FDBA74',
+          borderRadius:'8px', padding:'10px 14px', marginBottom:'12px',
+          fontSize:'13px', color:'#9A3412'
+        }
+      }, 'この予約を削除します。よろしいですか？'),
+
+      // アクション
+      React.createElement('div', { style:{ display:'flex', gap:'8px', marginTop:'4px' } },
+        confirmDelete
+          ? React.createElement(React.Fragment, null,
+              React.createElement('button', {
+                className:'btn btn-primary', style:{ flex:1, background:'#DC2626', borderColor:'#DC2626' },
+                onClick: () => onDelete(rental.id)
+              }, '削除する'),
+              React.createElement('button', {
+                className:'btn btn-ghost',
+                onClick: () => setConfirmDelete(false)
+              }, 'キャンセル')
+            )
+          : React.createElement(React.Fragment, null,
+              React.createElement('button', {
+                className:'btn btn-primary', style:{ flex:1 },
+                disabled: !form.date || !isDirty || isConflict,
+                onClick: () => onSave(form)
+              }, '保存する'),
+              React.createElement('button', {
+                className:'btn btn-ghost',
+                style:{ color:'#DC2626', borderColor:'#FDBA74' },
+                onClick: () => setConfirmDelete(true)
+              }, '削除'),
+              React.createElement('button', {
+                className:'btn btn-ghost',
+                onClick: onClose
+              }, '閉じる')
+            )
+      )
+    )
+  )
+}
+
+// =====================================================
+// Equipment — カレンダー／一覧 タブ切り替え + 機器フィルター
+// ・上部: 機器フィルタータグ（すべて / 機器名）
+// ・中段: ビュータブ（📅 カレンダー ／ 📋 一覧）
+// ・カレンダービュー: セルクリック → 新規予約フォームをスライドイン
+// ・一覧ビュー: ソート・件数バッジ付きテーブル + 予約追加ボタン
+// =====================================================
+function Equipment({ rentals, onAdd, onUpdate, onDelete }) {
+  const [viewTab,  setViewTab]  = React.useState('calendar') // 'calendar' | 'list'
+  const [filterEq, setFilterEq] = React.useState('すべて')
+  const [mo,       setMo]       = React.useState(new Date().getMonth() + 1)
+  const [showForm, setShowForm]  = React.useState(false)
+  const [form,     setForm]     = React.useState({ equipment:'トラクター', date:'', type:'own', note:'' })
+  const [selectedRental, setSelectedRental] = React.useState(null)
+  // 一覧ビュー: ソート
+  const [sortKey,  setSortKey]  = React.useState('date') // 'date' | 'equipment' | 'type'
+  const [sortAsc,  setSortAsc]  = React.useState(true)
+
+  const year     = 2026
+  const days     = new Date(year, mo, 0).getDate()
+  const firstDow = new Date(year, mo - 1, 1).getDay()
+
+  const isConflict = form.date && hasDateConflict(rentals, form.equipment, form.date)
+
+  const handleAdd = () => {
+    if (!form.date || isConflict) return
+    onAdd({ ...form, id: Date.now() })
+    setForm({ equipment:'トラクター', date:'', type:'own', note:'' })
+    setShowForm(false)
+  }
+
+  const handleDayClick = (dateStr) => {
+    setForm(f => ({ ...f, date: dateStr }))
+    setShowForm(true)
+    // カレンダービューのまま、フォームはスライドイン
+  }
+
+  const openAddForm = () => {
+    setForm(f => ({ ...f, date:'' }))
+    setShowForm(s => !s)
+  }
+
+  // フィルター適用済みリスト
+  const visibleRentals = filterEq === 'すべて'
+    ? rentals
+    : rentals.filter(r => r.equipment === filterEq)
+
+  // 一覧ビュー: ソート
+  const sortedRentals = React.useMemo(() => {
+    return [...visibleRentals].sort((a, b) => {
+      const va = a[sortKey] || ''
+      const vb = b[sortKey] || ''
+      return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va)
+    })
+  }, [visibleRentals, sortKey, sortAsc])
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortAsc(v => !v)
+    else { setSortKey(key); setSortAsc(true) }
+  }
+
+  // ── 統計バッジ（フィルター後）
+  const ownCount  = visibleRentals.filter(r => r.type === 'own').length
+  const rentCount = visibleRentals.filter(r => r.type === 'rent').length
+
+  // ── スタイル定数
+  const TAB_BASE = {
+    display:'inline-flex', alignItems:'center', gap:'6px',
+    padding:'8px 20px', border:'none', cursor:'pointer',
+    fontSize:'13px', fontWeight:600, transition:'all .15s',
+  }
+
+  // ── 新規予約フォーム（カレンダー・一覧両ビューで共用）
+  const AddForm = () => React.createElement('div', {
+    style:{
+      background:'#F6FBF7', border:'1px solid #C8E6D0',
+      borderRadius:'12px', padding:'20px', marginBottom:'16px',
+      animation:'fadeInDown .18s ease',
+    }
+  },
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+        React.createElement('div', { style:{ width:30, height:30, borderRadius:'8px', background:'#ECFDF5', display:'flex', alignItems:'center', justifyContent:'center' } },
+          React.createElement('i', { className:'ti ti-calendar-plus', style:{ fontSize:'15px', color:CONFIG.COLOR.primary } })
+        ),
+        React.createElement('span', { style:{ fontSize:'14px', fontWeight:700, color:'#111827' } }, '新規予約登録'),
+      ),
+      React.createElement('button', {
+        onClick: () => setShowForm(false),
+        style:{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', fontSize:'18px', lineHeight:1, padding:'4px' }
+      }, React.createElement('i', { className:'ti ti-x' }))
+    ),
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' } },
+      // 機器
+      React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+        React.createElement('label', { className:'form-label' }, '機器'),
+        React.createElement('select', {
+          className:'form-select', value:form.equipment,
+          onChange: e => setForm(f=>({...f, equipment:e.target.value}))
+        }, ...EQUIP_LIST.map(e => React.createElement('option',{key:e,value:e},e)))
+      ),
+      // 日付
+      React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+        React.createElement('label', { className:'form-label' }, '日付'),
+        React.createElement('input', {
+          type:'date', className:'form-input', value:form.date,
+          onChange: e => setForm(f=>({...f, date:e.target.value}))
+        })
+      ),
+      // 種別
+      React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+        React.createElement('label', { className:'form-label' }, '種別'),
+        React.createElement('select', {
+          className:'form-select', value:form.type,
+          onChange: e => setForm(f=>({...f, type:e.target.value}))
+        },
+          React.createElement('option',{value:'own'},'🟢 自社使用'),
+          React.createElement('option',{value:'rent'},'🟡 外部貸出')
+        )
+      ),
+      // 備考
+      React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+        React.createElement('label', { className:'form-label' }, '備考'),
+        React.createElement('input', {
+          type:'text', className:'form-input', value:form.note,
+          onChange: e => setForm(f=>({...f, note:e.target.value})),
+          placeholder:'例: A農園'
+        })
+      ),
+    ),
+    // ダブルブッキング警告
+    isConflict && React.createElement('div', {
+      style:{ background:'#FEF2F2', border:'1px solid #F87171', borderRadius:'8px', padding:'10px 14px', marginTop:'12px', fontSize:'13px', color:'#DC2626', display:'flex', gap:'8px', alignItems:'center' }
+    },
+      React.createElement('i', { className:'ti ti-alert-circle', style:{ fontSize:'16px', flexShrink:0 } }),
+      React.createElement('span', null, form.equipment + ' はこの日にすでに予約が入っています（ダブルブッキング）')
+    ),
+    React.createElement('div', { style:{ display:'flex', gap:'8px', marginTop:'14px' } },
+      React.createElement('button', {
+        className:'btn btn-primary', style:{ flex:1 },
+        disabled: !form.date || isConflict,
+        onClick: handleAdd
+      },
+        React.createElement('i', { className:'ti ti-check', style:{ fontSize:'14px' } }),
+        '　登録する'
+      ),
+      React.createElement('button', {
+        className:'btn btn-ghost',
+        onClick: () => setShowForm(false)
+      }, 'キャンセル')
+    )
+  )
+
+  // ── カレンダービュー
+  const CalendarView = () => React.createElement('div', null,
+    // フォーム（スライドイン）
+    showForm && React.createElement(AddForm),
+
+    // 月ナビ + 凡例
+    React.createElement('div', {
+      style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px', flexWrap:'wrap' }
+    },
+      React.createElement('button', {
+        className:'btn btn-ghost', style:{ padding:'6px 12px' },
+        onClick: () => setMo(m => Math.max(1, m-1))
+      }, React.createElement('i', { className:'ti ti-chevron-left', style:{ fontSize:'14px' } })),
+      React.createElement('div', {
+        style:{ fontSize:'16px', fontWeight:700, color:'#111827', minWidth:'90px', textAlign:'center' }
+      }, year + '年 ' + mo + '月'),
+      React.createElement('button', {
+        className:'btn btn-ghost', style:{ padding:'6px 12px' },
+        onClick: () => setMo(m => Math.min(12, m+1))
+      }, React.createElement('i', { className:'ti ti-chevron-right', style:{ fontSize:'14px' } })),
+      React.createElement('div', { style:{ marginLeft:'auto', display:'flex', gap:'10px', alignItems:'center', fontSize:'11px', color:'#64748B' } },
+        React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('span', { style:{ width:10, height:10, borderRadius:'2px', background:'#ECFDF5', border:'1px solid #6EE7B7', display:'inline-block' } }),
+          '自社'
+        ),
+        React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('span', { style:{ width:10, height:10, borderRadius:'2px', background:'#FFFBEB', border:'1px solid #FDE68A', display:'inline-block' } }),
+          '外部貸出'
+        ),
+        React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('span', { style:{ width:10, height:10, borderRadius:'2px', background:'#FEF2F2', border:'1px solid #FECACA', display:'inline-block' } }),
+          '競合'
+        ),
+      )
+    ),
+
+    // 曜日ヘッダー
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'3px', marginBottom:'3px' } },
+      ...['日','月','火','水','木','金','土'].map((d, i) =>
+        React.createElement('div', {
+          key: d,
+          style:{ fontSize:'11px', textAlign:'center', padding:'5px 2px', fontWeight:700,
+                  color: i===0?'#DC2626': i===6?'#2563EB':'#94A3B8' }
+        }, d)
+      )
+    ),
+
+    // カレンダーグリッド
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:'3px' } },
+      ...[...Array(firstDow)].map((_, i) => React.createElement('div', { key:'e'+i, style:{ minHeight:64 } })),
+      ...[...Array(days)].map((_, i) => {
+        const d       = i + 1
+        const dateStr = year + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0')
+        const dayR    = visibleRentals.filter(r => r.date === dateStr)
+        const isToday = dateStr === new Date().toISOString().slice(0, 10)
+        const dow     = (firstDow + i) % 7
+        const hasDbl  = EQUIP_LIST.some(eq => rentals.filter(r => r.date===dateStr && r.equipment===eq).length > 1)
+
+        return React.createElement('div', {
+          key: d,
+          className: 'cal-day',
+          onClick: () => handleDayClick(dateStr),
+          style:{
+            minHeight: 64,
+            cursor: 'pointer',
+            borderColor: isToday ? CONFIG.COLOR.primary : hasDbl ? '#F87171' : '#E2E8F0',
+            background: isToday ? '#F0FDF9' : '#FFFFFF',
+            transition: 'background .1s, box-shadow .1s',
+            position: 'relative',
+          }
+        },
+          React.createElement('div', {
+            style:{
+              fontSize:'11px', fontWeight:700, marginBottom:'3px',
+              color: isToday ? CONFIG.COLOR.primary : dow===0 ? '#DC2626' : dow===6 ? '#2563EB' : '#374151',
+            }
+          }, isToday ? '● ' + d : d),
+          ...dayR.map(r =>
+            React.createElement('div', {
+              key: r.id,
+              className: 'cal-event ' + r.type,
+              title: r.equipment + ' — ' + (r.note||'') + '（クリックで詳細）',
+              onClick: e => { e.stopPropagation(); setSelectedRental(r) },
+              style:{ fontSize:'9px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', cursor:'pointer', marginBottom:'1px' }
+            },
+              React.createElement('i', { className:'ti ti-'+(r.type==='own'?'tractor':'arrow-right'), style:{ fontSize:'8px', marginRight:'2px' } }),
+              r.equipment.length > 4 ? r.equipment.slice(0,4)+'…' : r.equipment
+            )
+          )
+        )
+      })
+    ),
+
+    // 月サマリー
+    React.createElement('div', {
+      style:{ display:'flex', gap:'16px', marginTop:'10px', paddingTop:'10px', borderTop:'1px solid #EDF2ED', fontSize:'12px', color:'#64748B', alignItems:'center' }
+    },
+      React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'4px' } },
+        React.createElement('span', { style:{ width:8, height:8, borderRadius:'50%', background:CONFIG.COLOR.primary, display:'inline-block' } }),
+        '自社 ' + ownCount + '件'
+      ),
+      React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:'4px' } },
+        React.createElement('span', { style:{ width:8, height:8, borderRadius:'50%', background:'#D97706', display:'inline-block' } }),
+        '外部貸出 ' + rentCount + '件'
+      ),
+      React.createElement('span', { style:{ color:'#94A3B8' } }, '計 ' + visibleRentals.length + '件'),
+      React.createElement('span', { style:{ marginLeft:'auto', fontSize:'11px', color:'#94A3B8' } }, '📅 日付セルをクリックして予約追加')
+    )
+  )
+
+  // ── 一覧ビュー
+  const ListView = () => {
+    const SortTh = ({ label, k }) => {
+      const active = sortKey === k
+      return React.createElement('th', {
+        onClick: () => toggleSort(k),
+        style:{ cursor:'pointer', userSelect:'none', whiteSpace:'nowrap' }
+      },
+        React.createElement('span', { style:{ display:'inline-flex', alignItems:'center', gap:'4px', color: active ? CONFIG.COLOR.primary : '#64748B' } },
+          label,
+          React.createElement('i', {
+            className: 'ti ti-' + (active ? (sortAsc ? 'sort-ascending' : 'sort-descending') : 'selector'),
+            style:{ fontSize:'11px' }
+          })
+        )
+      )
+    }
+
+    return React.createElement('div', null,
+      // フォーム（スライドイン）
+      showForm && React.createElement(AddForm),
+
+      // 統計サマリーカード 3枚
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px', marginBottom:'16px' } },
+        React.createElement('div', { className:'stat-card green' },
+          React.createElement('div', { className:'stat-n' }, ownCount),
+          React.createElement('div', { className:'stat-l' }, '自社使用件数')
+        ),
+        React.createElement('div', { className:'stat-card amber' },
+          React.createElement('div', { className:'stat-n' }, rentCount),
+          React.createElement('div', { className:'stat-l' }, '外部貸出件数')
+        ),
+        React.createElement('div', { className:'stat-card blue' },
+          React.createElement('div', { className:'stat-n' }, visibleRentals.length),
+          React.createElement('div', { className:'stat-l' }, '合計予約件数')
+        ),
+      ),
+
+      // テーブル
+      visibleRentals.length === 0
+        ? React.createElement('div', {
+            style:{ background:'#F8FAFF', border:'1.5px dashed #C8D0DC', borderRadius:'10px', padding:'40px', textAlign:'center', color:'#94A3B8' }
+          },
+            React.createElement('i', { className:'ti ti-calendar-off', style:{ fontSize:'32px', display:'block', marginBottom:'8px' } }),
+            React.createElement('div', { style:{ fontSize:'14px', fontWeight:500 } }, '予約がありません'),
+            React.createElement('div', { style:{ fontSize:'12px', marginTop:'4px' } }, '右上の「+ 予約」から登録できます')
+          )
+        : React.createElement('div', { className:'card card-data' },
+            React.createElement('table', { className:'table' },
+              React.createElement('thead', null,
+                React.createElement('tr', null,
+                  React.createElement(SortTh, { label:'機器', k:'equipment' }),
+                  React.createElement(SortTh, { label:'日付', k:'date' }),
+                  React.createElement(SortTh, { label:'種別', k:'type' }),
+                  React.createElement('th', null, '備考'),
+                  React.createElement('th', null, '')
+                )
+              ),
+              React.createElement('tbody', null,
+                ...sortedRentals.map(r => {
+                  const isUpcoming = r.date >= new Date().toISOString().slice(0,10)
+                  return React.createElement('tr', {
+                    key: r.id,
+                    onClick: () => setSelectedRental(r),
+                    style:{ cursor:'pointer', opacity: isUpcoming ? 1 : 0.6 }
+                  },
+                    React.createElement('td', { style:{ fontWeight:600, color:'#374151' } },
+                      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+                        React.createElement('div', {
+                          style:{ width:28, height:28, borderRadius:'6px', background:'#F0F4F8', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }
+                        }, React.createElement('i', { className:'ti ti-tractor', style:{ fontSize:'14px', color:'#64748B' } })),
+                        r.equipment
+                      )
+                    ),
+                    React.createElement('td', null,
+                      React.createElement('span', { style:{ fontWeight: isUpcoming ? 600 : 400, color: isUpcoming ? '#111827' : '#94A3B8' } }, r.date),
+                      isUpcoming && React.createElement('span', {
+                        style:{ fontSize:'10px', marginLeft:'6px', background:'#EFF6FF', color:'#1D4ED8', border:'1px solid #BFDBFE', borderRadius:'4px', padding:'1px 5px', fontWeight:600 }
+                      }, '予定')
+                    ),
+                    React.createElement('td', null,
+                      React.createElement('span', { className:'badge ' + (r.type==='own' ? 'badge-green' : 'badge-amber') },
+                        r.type === 'own' ? '自社使用' : '外部貸出'
+                      )
+                    ),
+                    React.createElement('td', { style:{ color:'#6B7280', fontSize:'12px' } }, r.note || '—'),
+                    React.createElement('td', { style:{ textAlign:'right', paddingRight:'16px' }, onClick: e => e.stopPropagation() },
+                      React.createElement('button', {
+                        onClick: () => setSelectedRental(r),
+                        style:{ fontSize:'11px', fontWeight:600, color:CONFIG.COLOR.primary, background:'#F0FDF9', border:'1px solid #6EE7B7', borderRadius:'6px', padding:'3px 10px', cursor:'pointer' }
+                      }, '詳細 / 編集')
+                    )
+                  )
+                })
+              )
+            )
+          )
+    )
+  }
+
+  return React.createElement('div', { className:'page' },
+
+    // ── ページヘッダー
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'16px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'eyebrow' }, 'EQUIPMENT BOOKING'),
+        React.createElement('div', { className:'page-title' }, '機器シェア予約'),
+        React.createElement('div', { className:'page-sub', style:{ marginBottom:0 } }, '農機具の自家使用・外部貸出スケジュールを管理します')
+      ),
+      React.createElement('button', {
+        className: 'btn btn-primary',
+        style:{ display:'flex', alignItems:'center', gap:'6px' },
+        onClick: openAddForm
+      },
+        React.createElement('i', { className: showForm ? 'ti ti-x' : 'ti ti-plus', style:{ fontSize:'14px' } }),
+        showForm ? 'キャンセル' : '予約を追加'
+      )
+    ),
+
+    // ── 機器フィルター + ビュータブ（同一行）
+    React.createElement('div', {
+      style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px', gap:'12px', flexWrap:'wrap' }
+    },
+
+      // 機器フィルター（チップ型）
+      React.createElement('div', { style:{ display:'flex', gap:'6px', flexWrap:'wrap', alignItems:'center' } },
+        React.createElement('span', { style:{ fontSize:'11px', fontWeight:700, color:'#94A3B8', letterSpacing:'.06em', marginRight:'2px' } }, '機器'),
+        ...['すべて', ...EQUIP_LIST].map(eq => {
+          const count = eq === 'すべて' ? rentals.length : rentals.filter(r => r.equipment === eq).length
+          return React.createElement('button', {
+            key: eq,
+            onClick: () => setFilterEq(eq),
+            style:{
+              display:'inline-flex', alignItems:'center', gap:'5px',
+              padding:'4px 12px', borderRadius:'20px', fontSize:'12px', fontWeight:600,
+              cursor:'pointer', border:'1px solid', transition:'all .12s',
+              borderColor: filterEq===eq ? CONFIG.COLOR.primary : '#DDE2EC',
+              background:  filterEq===eq ? CONFIG.COLOR.primary : '#FFFFFF',
+              color:       filterEq===eq ? '#FFFFFF' : '#64748B',
+            }
+          },
+            eq,
+            React.createElement('span', {
+              style:{
+                fontSize:'10px', fontWeight:700, minWidth:'16px', height:'16px',
+                borderRadius:'8px', display:'inline-flex', alignItems:'center', justifyContent:'center',
+                background: filterEq===eq ? 'rgba(255,255,255,.25)' : '#F1F5F9',
+                color:       filterEq===eq ? '#FFFFFF' : '#94A3B8',
+              }
+            }, count)
+          )
+        })
+      ),
+
+      // ビュータブ（カレンダー ／ 一覧）
+      React.createElement('div', {
+        style:{ display:'flex', background:'#F1F5F1', borderRadius:'10px', padding:'3px', flexShrink:0 }
+      },
+        ...[
+          { id:'calendar', label:'カレンダー', icon:'calendar-month' },
+          { id:'list',     label:'一覧',       icon:'list-details'    },
+        ].map(tab =>
+          React.createElement('button', {
+            key: tab.id,
+            onClick: () => setViewTab(tab.id),
+            style:{
+              ...TAB_BASE,
+              borderRadius:'8px',
+              background:  viewTab === tab.id ? '#FFFFFF' : 'transparent',
+              color:       viewTab === tab.id ? CONFIG.COLOR.primary : '#94A3B8',
+              boxShadow:   viewTab === tab.id ? '0 1px 4px rgba(17,24,39,.10)' : 'none',
+            }
+          },
+            React.createElement('i', { className:'ti ti-'+tab.icon, style:{ fontSize:'14px' } }),
+            tab.label
+          )
+        )
+      )
+    ),
+
+    // ── ビュー本体
+    viewTab === 'calendar'
+      ? React.createElement(CalendarView)
+      : React.createElement(ListView),
+
+    // 予約詳細モーダル
+    selectedRental && React.createElement(RentalDetailModal, {
+      rental: selectedRental,
+      onClose: () => setSelectedRental(null),
+      onSave:   r  => { onUpdate(r); setSelectedRental(null) },
+      onDelete: id => { onDelete(id); setSelectedRental(null) },
+      conflictCheck: (equipment, date, excludeId) =>
+        rentals.some(x => x.id !== excludeId && x.equipment === equipment && x.date === date)
+    })
+  )
+}
+
+// =====================================================
+// C-5: スタッフ名簿 + ビザ期限アラート（完全実装）
+// ・ビザ期限30日以内 → 赤バッジ（C-5仕様通り）
+// ・30〜60日 → 黄バッジで事前警告
+// ・期限切れ → 専用エラー表示
+// ・ページ上部にアラートバナー（要対応者をまとめて表示）
+// ・役割別統計サマリー
+// ・ビザ期限昇順ソート（要対応者が上位に来る）
+// =====================================================
+// UX-09: スタッフ追加を「モーダル」化 + ビザ管理機能を削除（組合が管理するため不要）+ カード一覧をグリッド化
+function StaffList({ staff, onAdd, onDelete, onUpdate }) {
+  const [showAddModal, setShowAddModal] = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+  const [selectedStaff, setSelectedStaff] = React.useState(null)  // 【Step1-3】詳細モーダル対象
+  const [toast, setToast]               = React.useState(null)  // 登録完了トースト
+
+  const roleLabel = ROLE_LABEL
+  const natLabel  = NAT_LABEL
+  const avatarPalette = [CONFIG.COLOR.primary,'#1D4ED8','#B45309','#6D28D9','#C2410C','#0369A1','#047857']
+
+  // UX-09: 登録ハンドラ — モーダルから受け取った form をそのまま登録
+  const handleAdd = (form) => {
+    if (!form.name.trim()) return
+    const newStaff = { name:form.name, name_kana:(form.name_kana||'').trim(), nationality:form.nationality, role:form.role, id:Date.now(), avatar:form.name.slice(0,2), skills:[] }
+    onAdd(newStaff)
+    setShowAddModal(false)
+    setToast(newStaff.name + ' を登録しました')
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const roleCounts = Object.keys(roleLabel).reduce((acc, r) => {
+    acc[r] = staff.filter(s => s.role === r).length
+    return acc
+  }, {})
+
+  // UX-09: スタッフ追加モーダル（氏名・国籍・役割のみ。ビザ期限は組合管理のため削除）
+  const StaffAddModal = ({ onClose, onSave }) => {
+    const [form, setForm] = React.useState({ name:'', name_kana:'', nationality:'JP', role:'worker' })
+    // kanaTouched: カタカナ欄をユーザーが一度でも手動編集したら true。
+    // true になった後は氏名を変更しても自動上書きしない（手直しした内容を勝手に消さないため）
+    const [kanaTouched, setKanaTouched] = React.useState(false)
+    const uf = (k, v) => setForm(f => ({ ...f, [k]: v }))
+    const canSave = form.name.trim().length > 0
+
+    // 氏名が変わるたびカタカナを自動生成（まだ手で触っていない場合のみ）
+    const handleNameChange = (value) => {
+      setForm(f => ({
+        ...f,
+        name: value,
+        name_kana: kanaTouched ? f.name_kana : romajiToKatakana(value)
+      }))
+    }
+    const handleKanaChange = (value) => {
+      setKanaTouched(true)
+      uf('name_kana', value)
+    }
+    // 手動編集後でも「自動生成に戻す」をワンクリックでできるように
+    const regenerateKana = () => {
+      setKanaTouched(false)
+      uf('name_kana', romajiToKatakana(form.name))
+    }
+
+    const inputStyle = { width:'100%', padding:'8px 10px', borderRadius:'6px', border:'1px solid #D1D5DB', fontSize:'13px', color:'#111827', boxSizing:'border-box', outline:'none' }
+    const labelStyle = { fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:'4px' }
+    return React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.5)', zIndex:2100, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: onClose
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'440px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.25)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        // ヘッダー
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+            React.createElement('div', { style:{ width:36, height:36, borderRadius:'50%', background:'#0A6B52', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+              React.createElement('i', { className:'ti ti-user-plus', style:{ fontSize:'18px', color:'#FFFFFF' } })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, 'スタッフを追加'),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, '氏名・国籍・役割を登録します')
+            )
+          ),
+          React.createElement('button', {
+            onClick: onClose,
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+
+        // 氏名
+        React.createElement('div', { style:{ marginBottom:'14px' } },
+          React.createElement('label', { style: labelStyle }, '氏名 *'),
+          React.createElement('input', {
+            type:'text', value:form.name, autoFocus:true,
+            onChange: e => handleNameChange(e.target.value),
+            placeholder:'山田 一郎 / Nguyen Van B',
+            onKeyDown: e => { if (e.key==='Enter' && canSave) onSave(form) },
+            style: inputStyle
+          })
+        ),
+
+        // 【スタッフ カタカナ表記】カタカナ表記（氏名から自動生成・手直し可能）
+        React.createElement('div', { style:{ marginBottom:'14px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'4px' } },
+            React.createElement('label', { style:{ ...labelStyle, marginBottom:0 } }, 'カタカナ表記'),
+            form.name.trim() && React.createElement('button', {
+              type:'button',
+              onClick: regenerateKana,
+              title:'氏名から自動生成し直す',
+              style:{ background:'none', border:'none', cursor:'pointer', fontSize:'10px', color:'#0A6B52', fontWeight:600, display:'flex', alignItems:'center', gap:'3px' }
+            },
+              React.createElement('i', { className:'ti ti-refresh', style:{ fontSize:'11px' } }),
+              '自動生成し直す'
+            )
+          ),
+          React.createElement('input', {
+            type:'text', value: form.name_kana,
+            onChange: e => handleKanaChange(e.target.value),
+            placeholder:'グエン・バン・ビー',
+            style: inputStyle
+          }),
+          React.createElement('div', { style:{ fontSize:'10px', color:'#9CA3AF', marginTop:'3px' } },
+            '氏名から自動入力されます。読み方が違う場合は直接修正してください。'
+          )
+        ),
+
+        // 国籍・役割（2カラム）
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'20px' } },
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '国籍'),
+            React.createElement('select', {
+              value: form.nationality,
+              onChange: e => uf('nationality', e.target.value),
+              style: inputStyle
+            }, ...Object.entries(natLabel).map(([v,l]) => React.createElement('option', { key:v, value:v }, l)))
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '役割'),
+            React.createElement('select', {
+              value: form.role,
+              onChange: e => uf('role', e.target.value),
+              style: inputStyle
+            }, ...Object.entries(roleLabel).map(([v,l]) => React.createElement('option', { key:v, value:v }, l)))
+          )
+        ),
+
+        // ボタン群
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('button', {
+            onClick: onClose,
+            style:{ flex:1, padding:'10px 18px', borderRadius:'6px', border:'1px solid #D1D5DB', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+          }, 'キャンセル'),
+          React.createElement('button', {
+            onClick: () => { if (canSave) onSave(form) },
+            disabled: !canSave,
+            style:{ flex:2, padding:'10px 18px', borderRadius:'6px', border:'none', fontSize:'13px', fontWeight:700, cursor: canSave ? 'pointer' : 'not-allowed',
+              background: canSave ? '#0A6B52' : '#D1D5DB', color:'#fff' }
+          }, '登録する')
+        )
+      )
+    )
+  }
+
+  // 【スタッフ スキル管理 Step1-4】詳細モーダル（スキル編集UI付き）
+  const StaffDetailModal = ({ staffMember, onClose, onSave }) => {
+    // editSkills: 編集中のスキル配列（保存前はローカルstateで保持）
+    const [editSkills, setEditSkills] = React.useState(staffMember.skills || [])
+    // expandedSkillId: インライン編集フォームを開いているスキルID
+    const [expandedSkillId, setExpandedSkillId] = React.useState(null)
+    const [dirty, setDirty] = React.useState(false)  // 未保存変更あり
+    // 【スタッフ カタカナ表記】カタカナ表記のインライン編集
+    const [editKana, setEditKana] = React.useState(staffMember.name_kana || '')
+    const [kanaEditing, setKanaEditing] = React.useState(false)
+
+    const inputStyle = { padding:'5px 8px', borderRadius:'5px', border:'1px solid #D1D5DB', fontSize:'12px', color:'#111827', background:'#fff', outline:'none' }
+    const labelStyle = { fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:'3px' }
+
+    // スキル行をクリック → 展開/折りたたみ
+    const toggleExpand = (skillId) => {
+      setExpandedSkillId(prev => prev === skillId ? null : skillId)
+    }
+
+    // スキルのフィールドを更新（level/certified_at/note）
+    const updateSkillField = (skillId, field, value) => {
+      setDirty(true)
+      setEditSkills(prev => {
+        const existing = prev.find(x => x.skill_id === skillId)
+        if (existing) {
+          return prev.map(x => x.skill_id === skillId ? { ...x, [field]: value } : x)
+        } else {
+          // 未登録スキルを新規追加
+          return [...prev, { skill_id: skillId, level: 1, certified_at: null, note: '', [field]: value }]
+        }
+      })
+    }
+
+    // スキルを削除（未登録に戻す）
+    const removeSkill = (skillId) => {
+      setDirty(true)
+      setEditSkills(prev => prev.filter(x => x.skill_id !== skillId))
+      setExpandedSkillId(null)
+    }
+
+    // 保存
+    const handleSave = () => {
+      onSave({ ...staffMember, skills: editSkills, name_kana: editKana.trim() })
+      setDirty(false)
+      onClose()
+    }
+
+    return React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.5)', zIndex:2100, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: onClose
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'480px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.25)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        // ヘッダー（アバター・氏名・国籍・役割）
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px' } },
+            React.createElement('div', {
+              className: 'staff-avatar',
+              style:{ width:46, height:46, fontSize:'16px', background:'#0A6B52', color:'#FFFFFF', flexShrink:0 }
+            }, staffMember.avatar || staffMember.name.slice(0,2)),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, staffMember.name),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } },
+                (natLabel[staffMember.nationality] || staffMember.nationality) + ' · ' + roleLabel[staffMember.role]
+              )
+            )
+          ),
+          React.createElement('button', {
+            onClick: onClose,
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+
+        // 【スタッフ カタカナ表記】カタカナ表記（クリックでインライン編集）
+        React.createElement('div', { style:{ marginBottom:'18px', paddingLeft:'58px' } },
+          kanaEditing
+            ? React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'6px' } },
+                React.createElement('input', {
+                  type:'text', value: editKana, autoFocus:true,
+                  onChange: e => setEditKana(e.target.value),
+                  onBlur: () => setKanaEditing(false),
+                  onKeyDown: e => { if (e.key === 'Enter') setKanaEditing(false) },
+                  placeholder:'カタカナ表記を入力',
+                  style:{ ...inputStyle, width:'200px' }
+                }),
+                React.createElement('button', {
+                  onClick: () => setEditKana(romajiToKatakana(staffMember.name)),
+                  title:'氏名から自動生成し直す',
+                  style:{ background:'none', border:'none', cursor:'pointer', color:'#0A6B52', fontSize:'13px', padding:'2px' }
+                }, React.createElement('i', { className:'ti ti-refresh' }))
+              )
+            : React.createElement('div', {
+                onClick: () => setKanaEditing(true),
+                style:{ fontSize:'12px', color: editKana ? '#6B7280' : '#B0B8C1', cursor:'pointer', display:'flex', alignItems:'center', gap:'5px' }
+              },
+                React.createElement('i', { className:'ti ti-edit', style:{ fontSize:'11px' } }),
+                editKana || 'カタカナ表記を追加'
+              )
+        ),
+
+        // スキルセクションラベル
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' } },
+          React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.05em' } }, 'スキル'),
+          React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF' } }, 'スキル行をクリックして編集')
+        ),
+
+        // スキル一覧（SKILL_MASTER全件。クリックでインライン編集フォーム展開）
+        React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'4px', marginBottom:'20px' } },
+          ...SKILL_MASTER.map(meta => {
+            const sk = editSkills.find(x => x.skill_id === meta.id)
+            const isOpen = expandedSkillId === meta.id
+            return React.createElement('div', { key: meta.id },
+              // スキル行（クリッカブル）
+              React.createElement('div', {
+                onClick: () => toggleExpand(meta.id),
+                style:{
+                  display:'flex', alignItems:'center', justifyContent:'space-between',
+                  padding:'9px 12px', borderRadius: isOpen ? '8px 8px 0 0' : '8px',
+                  background: isOpen ? '#EEF6F2' : (sk ? '#F0F8F4' : '#F9FAFB'),
+                  border: '1px solid ' + (isOpen ? '#B6D9C8' : (sk ? '#DDE8DE' : '#E5E7EB')),
+                  cursor:'pointer', transition:'background .1s',
+                  borderBottom: isOpen ? '1px solid #B6D9C8' : undefined
+                }
+              },
+                React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+                  React.createElement('i', { className:'ti ti-' + meta.icon, style:{ fontSize:'15px', color: sk ? '#0A6B52' : '#9CA3AF' } }),
+                  React.createElement('span', { style:{ fontSize:'13px', fontWeight:600, color: sk ? '#111827' : '#9CA3AF' } }, meta.label)
+                ),
+                React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+                  sk
+                    ? React.createElement('div', { style:{ textAlign:'right' } },
+                        React.createElement('span', {
+                          style:{ fontSize:'11px', fontWeight:700, color:'#0A6B52', background:'#DDF3E8', borderRadius:'10px', padding:'2px 8px' }
+                        }, SKILL_LEVEL_LABEL[sk.level] || sk.level),
+                        sk.certified_at && React.createElement('div', { style:{ fontSize:'10px', color:'#6B7280', marginTop:'1px' } }, sk.certified_at + ' 習得')
+                      )
+                    : React.createElement('span', { style:{ fontSize:'11px', color:'#B0B8C1' } }, '未登録'),
+                  React.createElement('i', {
+                    className: 'ti ti-chevron-down',
+                    style:{ fontSize:'13px', color:'#9CA3AF', transition:'transform .28s cubic-bezier(.4,0,.2,1)', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }
+                  })
+                )
+              ),
+
+              // インライン編集フォーム（smooth-collapse でなめらかに展開）
+              React.createElement('div', { className: 'smooth-collapse-wrap' + (isOpen ? ' open' : '') },
+              React.createElement('div', { className: 'smooth-collapse-inner' },
+              React.createElement('div', {
+                style:{
+                  padding:'12px 14px', background:'#F7FBF9',
+                  border:'1px solid #B6D9C8', borderTop:'none',
+                  borderRadius:'0 0 8px 8px'
+                }
+              },
+                // レベル・習得日（2カラム）
+                React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' } },
+                  // レベル
+                  React.createElement('div', null,
+                    React.createElement('label', { style: labelStyle }, 'レベル'),
+                    React.createElement('select', {
+                      value: sk ? sk.level : '',
+                      onChange: e => updateSkillField(meta.id, 'level', Number(e.target.value)),
+                      style: { ...inputStyle, width:'100%' }
+                    },
+                      React.createElement('option', { value:'' }, '— 選択 —'),
+                      ...Object.entries(SKILL_LEVEL_LABEL).map(([v, l]) =>
+                        React.createElement('option', { key:v, value:v }, l)
+                      )
+                    )
+                  ),
+                  // 習得日
+                  React.createElement('div', null,
+                    React.createElement('label', { style: labelStyle }, '習得日（任意）'),
+                    React.createElement('input', {
+                      type:'date',
+                      value: sk?.certified_at || '',
+                      onChange: e => updateSkillField(meta.id, 'certified_at', e.target.value || null),
+                      style: { ...inputStyle, width:'100%' }
+                    })
+                  )
+                ),
+                // メモ
+                React.createElement('div', { style:{ marginBottom:'10px' } },
+                  React.createElement('label', { style: labelStyle }, 'メモ（任意）'),
+                  React.createElement('input', {
+                    type:'text',
+                    value: sk?.note || '',
+                    placeholder:'例：単独作業可、研修中 等',
+                    onChange: e => updateSkillField(meta.id, 'note', e.target.value),
+                    style: { ...inputStyle, width:'100%' }
+                  })
+                ),
+                // フォーム内ボタン
+                React.createElement('div', { style:{ display:'flex', justifyContent:'flex-end', gap:'6px' } },
+                  sk && React.createElement('button', {
+                    onClick: () => removeSkill(meta.id),
+                    style:{ padding:'5px 12px', borderRadius:'5px', border:'1px solid #FCA5A5', background:'#FFF5F5', color:'#DC2626', fontSize:'11px', fontWeight:600, cursor:'pointer' }
+                  }, '未登録に戻す'),
+                  React.createElement('button', {
+                    onClick: () => setExpandedSkillId(null),
+                    style:{ padding:'5px 12px', borderRadius:'5px', border:'1px solid #D1D5DB', background:'#fff', color:'#374151', fontSize:'11px', fontWeight:600, cursor:'pointer' }
+                  }, '折りたたむ')
+                )
+              )
+              ) // end smooth-collapse-inner
+              ) // end smooth-collapse-wrap
+            )
+          })
+        ),
+
+        // フッター（保存・閉じる）
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('button', {
+            onClick: onClose,
+            style:{ flex:1, padding:'10px 18px', borderRadius:'6px', border:'1px solid #D1D5DB', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+          }, 'キャンセル'),
+          React.createElement('button', {
+            onClick: handleSave,
+            style:{ flex:2, padding:'10px 18px', borderRadius:'6px', border:'none', background: dirty ? '#0A6B52' : '#34A97A', color:'#fff', fontSize:'13px', fontWeight:700, cursor:'pointer' }
+          }, dirty ? '💾 保存する' : '閉じる（変更なし）')
+        )
+      )
+    )
+  }
+
+  return React.createElement('div', { className: 'page' },  // 【UIバグ修正】Fragmentだったため.pageのpaddingが効かず画面端に張り付いていた問題を修正
+    toast && React.createElement('div', {
+      style:{
+        position:'fixed', bottom:'28px', right:'28px', zIndex:9999,
+        background:'#065F46', color:'#fff', borderRadius:'10px',
+        padding:'12px 20px', fontSize:'13px', fontWeight:500,
+        boxShadow:'0 4px 20px rgba(0,0,0,0.18)',
+        display:'flex', alignItems:'center', gap:'10px',
+        animation:'fadeInUp .25s ease'
+      }
+    },
+      React.createElement('span', null, '✅'),
+      React.createElement('span', null, toast)
+    ),
+
+    // ヘッダー
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'16px' } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'eyebrow' }, 'STAFF MANAGEMENT'),
+        React.createElement('div', { className:'page-title' }, 'スタッフ管理'),
+        React.createElement('div', { className:'page-sub' }, staff.length+'名登録 — 技能実習生 '+staff.filter(s=>s.role==='trainee').length+'名')
+      ),
+      React.createElement('button', {
+        className: 'btn btn-primary',
+        style:{ display:'flex', alignItems:'center', gap:'6px', fontSize:'13px', marginTop:'2px' },
+        onClick: () => setShowAddModal(true)
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'14px' } }),
+        'スタッフを追加'
+      )
+    ),
+
+    // 役割別サマリーカード
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px', marginBottom:'24px' } },
+      ...Object.entries(roleLabel).map(([r, l]) =>
+        React.createElement('div', { key:r, className:'card-sm', style:{ textAlign:'center', padding:'12px' } },
+          React.createElement('div', { style:{ fontSize:'22px', fontWeight:600, color:'#374151', lineHeight:1 } }, roleCounts[r]),
+          React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginTop:'4px' } }, l)
+        )
+      )
+    ),
+
+    // スタッフ一覧（UX-09: カード型グリッドに変更。横長で見づらかった一覧をやめ、人物カードを並べる形に）
+    React.createElement('div', { className:'section-title' }, 'スタッフ一覧'),
+    React.createElement('div', {
+      style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'14px' }
+    },
+      ...staff.map((s, i) =>
+        React.createElement('div', {
+          key: s.id,
+          className: 'card-sm',
+          onClick: () => setSelectedStaff(s),  // 【Step1-3】カードクリックで詳細モーダルを開く
+          style:{
+            padding:'18px 16px', display:'flex', flexDirection:'column', alignItems:'center',
+            textAlign:'center', gap:'4px', position:'relative', cursor:'pointer'
+          }
+        },
+          // 削除ボタン（右上）
+          React.createElement('button', {
+            title:'削除',
+            onClick: (e) => { e.stopPropagation(); setDeleteTarget(s) },  // 【Step1-3】カードのクリックに伝播させない
+            style:{
+              position:'absolute', top:'8px', right:'8px',
+              padding:'4px 6px', fontSize:'12px', color:'#9CA3AF',
+              background:'transparent', border:'none', cursor:'pointer', lineHeight:1
+            }
+          }, React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'14px' } })),
+
+          // アバター
+          React.createElement('div', {
+            className: 'staff-avatar',
+            style:{ background: avatarPalette[i % avatarPalette.length], color:'#FFFFFF', width:'52px', height:'52px', fontSize:'16px', marginBottom:'6px' }
+          }, s.avatar || s.name.slice(0,2)),
+
+          // 氏名
+          React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:'#374151', width:'100%', overflow:'hidden', textOverflow:'ellipsis' } }, s.name),
+
+          // 【スタッフ カタカナ表記】カタカナ表記（登録されている場合のみ表示）
+          s.name_kana && React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', width:'100%', overflow:'hidden', textOverflow:'ellipsis' } }, s.name_kana),
+
+          // 国籍・役割
+          React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } },
+            (natLabel[s.nationality] || s.nationality) + ' · ' + roleLabel[s.role]
+          ),
+
+          // 【スタッフ スキル管理 Step1-2】スキル概要バッジ（最大3件＋「+N」表記）
+          // skills が未設定の既存データでも落ちないよう s.skills || [] でフォールバック
+          (() => {
+            const skills = s.skills || []
+            if (skills.length === 0) {
+              return React.createElement('div', { style:{ fontSize:'11px', color:'#B0B8C1', marginTop:'6px' } }, 'スキル未登録')
+            }
+            const visible = skills.slice(0, 3)
+            const restCount = skills.length - visible.length
+            return React.createElement('div', {
+              style:{ display:'flex', flexWrap:'wrap', justifyContent:'center', gap:'4px', marginTop:'6px' }
+            },
+              ...visible.map(sk => {
+                const meta = SKILL_MASTER.find(m => m.id === sk.skill_id)
+                return React.createElement('span', {
+                  key: sk.skill_id,
+                  style:{
+                    fontSize:'10px', fontWeight:600, color:'#0A6B52',
+                    background:'#F0F8F4', border:'1px solid #DDE8DE',
+                    borderRadius:'10px', padding:'2px 8px'
+                  }
+                }, meta ? meta.label : sk.skill_id)
+              }),
+              restCount > 0 && React.createElement('span', {
+                style:{
+                  fontSize:'10px', fontWeight:600, color:'#6B7280',
+                  background:'#F1F5F9', borderRadius:'10px', padding:'2px 8px'
+                }
+              }, '+' + restCount)
+            )
+          })()
+        )
+      )
+    ),
+
+    showAddModal && React.createElement(StaffAddModal, {
+      onClose: () => setShowAddModal(false),
+      onSave: handleAdd
+    }),
+
+    // 【Step1-4】スタッフ詳細モーダル（スキル編集UI付き）
+    selectedStaff && React.createElement(StaffDetailModal, {
+      staffMember: selectedStaff,
+      onClose: () => setSelectedStaff(null),
+      onSave: (updated) => {
+        if (onUpdate) onUpdate(updated)
+        setSelectedStaff(null)
+      }
+    }),
+
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: 'スタッフを削除しますか？',
+      targetName: deleteTarget.name + '（' + (natLabel[deleteTarget.nationality] || deleteTarget.nationality) + ' · ' + roleLabel[deleteTarget.role] + '）',
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+    })
+  )
+}
+
+// =====================================================
+// 【日誌UX改善 Step2】技能実習生 作業日誌: 月次PDF出力（html2canvas利用）
+// 既存の exportCropPlanPDF と同じパターン（非表示プレビュー→キャプチャ→jsPDF）を流用
+// =====================================================
+async function exportTraineeDiaryPDF(staffMember, monthLabel, diaryRows, summary) {
+  const el = document.getElementById('diary-pdf-preview')
+  const today = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })
+  const natLabel = NAT_LABEL
+
+  const sortedRows = [...diaryRows].sort((a, b) => a.date.localeCompare(b.date))
+
+  el.innerHTML = `
+    <div style="font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;padding:24px;background:#fff;color:#111;width:900px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+        <div>
+          <h2 style="font-size:18px;font-weight:700;margin:0 0 4px">技能実習生 作業日誌（月次報告）</h2>
+          <div style="font-size:11px;color:#555">農園名: 農場名　／　対象月: ${monthLabel}　／　作成日: ${today}</div>
+        </div>
+        <div style="font-size:10px;color:#888;text-align:right">技能実習制度 報告資料<br>在留資格管理用</div>
+      </div>
+
+      <div style="display:flex;gap:10px;border:1px solid #ccc;border-radius:6px;padding:10px 14px;margin-bottom:14px;background:#F8FAF8">
+        <div style="flex:1"><div style="font-size:9px;color:#777">実習生</div><div style="font-size:13px;font-weight:700">${staffMember.name}</div></div>
+        <div style="flex:1"><div style="font-size:9px;color:#777">国籍</div><div style="font-size:13px;font-weight:700">${natLabel[staffMember.nationality] || staffMember.nationality}</div></div>
+        <div style="flex:1"><div style="font-size:9px;color:#777">記録日数</div><div style="font-size:13px;font-weight:700">${summary.count}日</div></div>
+        <div style="flex:1"><div style="font-size:9px;color:#777">実働時間合計</div><div style="font-size:13px;font-weight:700">${summary.totalHours}h${summary.totalMins ? summary.totalMins+'m' : ''}</div></div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+        <thead>
+          <tr style="background:#1a5276;color:#fff">
+            <th style="padding:6px 8px;border:1px solid #aaa;width:48px">日付</th>
+            <th style="padding:6px 8px;border:1px solid #aaa;width:36px">曜日</th>
+            <th style="padding:6px 8px;border:1px solid #aaa;width:90px">作業時間</th>
+            <th style="padding:6px 8px;border:1px solid #aaa;width:55px">実働</th>
+            <th style="padding:6px 8px;border:1px solid #aaa">作業内容</th>
+            <th style="padding:6px 8px;border:1px solid #aaa;width:60px">指導者</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sortedRows.length === 0
+            ? `<tr><td colspan="6" style="padding:18px;text-align:center;color:#999;border:1px solid #ddd">この月の記録はありません</td></tr>`
+            : sortedRows.map((d, i) => {
+                const dateObj = new Date(d.date + 'T00:00:00')
+                const wday = ['日','月','火','水','木','金','土'][dateObj.getDay()]
+                const mins = (() => {
+                  if (!d.start_time || !d.end_time) return 0
+                  const [sh, sm] = d.start_time.split(':').map(Number)
+                  const [eh, em] = d.end_time.split(':').map(Number)
+                  const t = (eh*60+em) - (sh*60+sm) - (d.break_minutes||0)
+                  return t > 0 ? t : 0
+                })()
+                const hh = Math.floor(mins/60), mm = mins%60
+                return `<tr style="${i%2===1?'background:#f9f9f9':''}">
+                  <td style="padding:5px 7px;border:1px solid #ddd;text-align:center;font-weight:600">${d.date.slice(8)}</td>
+                  <td style="padding:5px 7px;border:1px solid #ddd;text-align:center;color:${wday==='日'?'#DC2626':wday==='土'?'#1D4ED8':'#555'}">${wday}</td>
+                  <td style="padding:5px 7px;border:1px solid #ddd;text-align:center">${d.start_time}〜${d.end_time}</td>
+                  <td style="padding:5px 7px;border:1px solid #ddd;text-align:center">${hh}h${mm?mm+'m':''}</td>
+                  <td style="padding:5px 7px;border:1px solid #ddd;white-space:pre-wrap">${(d.tasks||'').replace(/</g,'&lt;')}</td>
+                  <td style="padding:5px 7px;border:1px solid #ddd;text-align:center">${d.supervisor||'—'}</td>
+                </tr>`
+              }).join('')
+          }
+        </tbody>
+      </table>
+      <div style="margin-top:14px;font-size:9px;color:#888;text-align:right">
+        ※ 本書類は技能実習制度に関する報告資料として作成　農場名
+      </div>
+    </div>
+  `
+  el.style.display = 'block'
+  const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false })
+  el.style.display = 'none'
+  el.innerHTML = ''
+
+  const { jsPDF } = window.jspdf
+  const pdf  = new jsPDF('p', 'mm', 'a4')
+  const imgW = 190
+  const imgH = canvas.height * imgW / canvas.width
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgW, imgH)
+  pdf.save(`作業日誌_${staffMember.name}_${monthLabel}.pdf`)
+}
+
+// =====================================================
+// 【実装手順書 A】技能実習生 作業日誌ページ
+// =====================================================
+function TraineeDiaryPage({ staff, fields, diaries, onAdd, onDelete }) {
+  const trainees = (staff || []).filter(s => s.role === 'trainee')
+  const [selectedStaff, setSelectedStaff] = React.useState(trainees[0]?.id || null)
+  const [selectedDiary, setSelectedDiary] = React.useState(null)  // 詳細モーダル対象
+  const [deleteTarget, setDeleteTarget]   = React.useState(null)  // 削除確認モーダル対象
+  const [showAddModal, setShowAddModal]   = React.useState(false) // 新規追加モーダル
+  const [editTarget, setEditTarget]       = React.useState(null)  // 編集モーダル対象
+  const today = new Date().toISOString().slice(0, 10)
+  // 【日誌UX改善 Step1】月次フィルター — 'YYYY-MM' 形式。初期値は当月
+  const [selectedMonth, setSelectedMonth] = React.useState(today.slice(0, 7))
+  const [exportingPdf, setExportingPdf]   = React.useState(false)
+
+  const emptyForm = () => ({
+    date: today, staff_id: selectedStaff, start_time:'08:00', end_time:'17:00',
+    break_minutes: 60, tasks:'', field_ids:[], supervisor:'', notes:''
+  })
+
+  // スタッフ絞り込みのみ（月をまたいだ「全期間」リストが必要な場面向け）
+  const filteredByStaff = (diaries || [])
+    .filter(d => !selectedStaff || d.staff_id === selectedStaff)
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  // 【日誌UX改善 Step1】スタッフ＋選択中の月で絞り込み
+  const filtered = filteredByStaff.filter(d => d.date.slice(0, 7) === selectedMonth)
+
+  // 実働分を数値で返す（サマリー集計用）。calcWorkHoursは表示文字列専用として残す
+  const calcWorkMinutes = (d) => {
+    if (!d.start_time || !d.end_time) return 0
+    const [sh, sm] = d.start_time.split(':').map(Number)
+    const [eh, em] = d.end_time.split(':').map(Number)
+    const total = (eh * 60 + em) - (sh * 60 + sm) - (d.break_minutes || 0)
+    return total > 0 ? total : 0
+  }
+
+  const calcWorkHours = (d) => {
+    if (!d.start_time || !d.end_time) return '—'
+    const [sh, sm] = d.start_time.split(':').map(Number)
+    const [eh, em] = d.end_time.split(':').map(Number)
+    const total = (eh * 60 + em) - (sh * 60 + sm) - (d.break_minutes || 0)
+    return total > 0 ? `${Math.floor(total/60)}h${total%60 ? total%60+'m' : ''}` : '—'
+  }
+
+  // 【日誌UX改善 Step1】月送り（前月／翌月）
+  const shiftMonth = (delta) => {
+    const [y, m] = selectedMonth.split('-').map(Number)
+    const d = new Date(y, m - 1 + delta, 1)
+    setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+  const monthLabel = (() => {
+    const [y, m] = selectedMonth.split('-').map(Number)
+    return `${y}年${m}月`
+  })()
+  const isCurrentMonth = selectedMonth === today.slice(0, 7)
+
+  // 【日誌UX改善 Step1】月次サマリー（記録日数・実働時間合計・指導者記載数）
+  const monthSummary = React.useMemo(() => {
+    const totalMinutes = filtered.reduce((sum, d) => sum + calcWorkMinutes(d), 0)
+    return {
+      count: filtered.length,
+      totalHours: Math.floor(totalMinutes / 60),
+      totalMins: totalMinutes % 60,
+      withSupervisor: filtered.filter(d => d.supervisor).length,
+    }
+  }, [filtered])
+
+  // ── 追加・編集フォームモーダル（共通） ──
+  const DiaryFormModal = ({ initialValues, isEdit, onClose, onSave }) => {
+    const [form, setForm] = React.useState(initialValues)
+    const uf = (k, v) => setForm(f => ({ ...f, [k]: v }))
+    const canSave = form.date && form.staff_id && form.tasks.trim()
+    const inputStyle = { width:'100%', padding:'8px 10px', borderRadius:'6px', border:'1px solid #D1D5DB', fontSize:'13px', color:'#111827', boxSizing:'border-box', outline:'none' }
+    const labelStyle = { fontSize:'10px', fontWeight:700, color:'#64748B', textTransform:'uppercase', letterSpacing:'.05em', display:'block', marginBottom:'4px' }
+    return React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.5)', zIndex:2100, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: onClose
+    },
+      React.createElement('div', {
+        style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'520px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.25)', animation:'fadeInDown .18s ease' },
+        onClick: e => e.stopPropagation()
+      },
+        // ヘッダー
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+            React.createElement('div', { style:{ width:36, height:36, borderRadius:'50%', background: isEdit ? '#1D4ED8' : '#0A6B52', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+              React.createElement('i', { className: isEdit ? 'ti ti-edit' : 'ti ti-notebook', style:{ fontSize:'18px', color:'#FFFFFF' } })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, isEdit ? '日誌を編集' : '日誌を追加'),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, isEdit ? '内容を修正して保存してください' : '新しい作業日誌を記録します')
+            )
+          ),
+          React.createElement('button', {
+            onClick: onClose,
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+
+        // 実習生選択（追加時のみ・編集時は固定）
+        !isEdit && React.createElement('div', { style:{ marginBottom:'14px' } },
+          React.createElement('label', { style: labelStyle }, '実習生 *'),
+          React.createElement('select', {
+            value: form.staff_id || '',
+            onChange: e => uf('staff_id', Number(e.target.value)),
+            style:{ ...inputStyle }
+          },
+            React.createElement('option', { value:'' }, '— 選択してください —'),
+            ...trainees.map(s =>
+              React.createElement('option', { key:s.id, value:s.id }, s.name)
+            )
+          )
+        ),
+
+        // 日付・開始・終了・休憩（4カラム）
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 100px', gap:'10px', marginBottom:'14px' } },
+          ...[
+            ['date',         '日付',     'date'],
+            ['start_time',   '開始時刻', 'time'],
+            ['end_time',     '終了時刻', 'time'],
+          ].map(([key, label, type]) =>
+            React.createElement('div', { key },
+              React.createElement('label', { style: labelStyle }, label),
+              React.createElement('input', {
+                type, value: form[key],
+                onChange: e => uf(key, e.target.value),
+                style: inputStyle
+              })
+            )
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '休憩（分）'),
+            React.createElement('input', {
+              type:'number', value: form.break_minutes, min:0, step:15,
+              onChange: e => uf('break_minutes', Number(e.target.value)),
+              style: inputStyle
+            })
+          )
+        ),
+
+        // 実働時間プレビュー
+        React.createElement('div', { style:{ background:'#F0F8F4', borderRadius:'6px', padding:'8px 12px', marginBottom:'14px', display:'flex', alignItems:'center', gap:'6px' } },
+          React.createElement('i', { className:'ti ti-clock', style:{ color:'#0A6B52', fontSize:'14px' } }),
+          React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280' } }, '実働時間:'),
+          React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color:'#0A6B52' } }, calcWorkHours(form))
+        ),
+
+        // 作業内容
+        React.createElement('div', { style:{ marginBottom:'14px' } },
+          React.createElement('label', { style: labelStyle }, '作業内容 *'),
+          React.createElement('textarea', {
+            value: form.tasks, rows:3,
+            onChange: e => uf('tasks', e.target.value),
+            placeholder:'例: 9号圃場 レタス収穫補助。サイズ選別・コンテナ積み込み作業。',
+            style:{ ...inputStyle, resize:'vertical' }
+          })
+        ),
+
+        // 指導者・特記事項（2カラム）
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'20px' } },
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '指導者名'),
+            React.createElement('input', {
+              type:'text', value: form.supervisor, placeholder:'田中',
+              onChange: e => uf('supervisor', e.target.value),
+              style: inputStyle
+            })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { style: labelStyle }, '特記事項'),
+            React.createElement('input', {
+              type:'text', value: form.notes, placeholder:'体調良好・特記事項なし',
+              onChange: e => uf('notes', e.target.value),
+              style: inputStyle
+            })
+          )
+        ),
+
+        // ボタン群
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('button', {
+            onClick: onClose,
+            style:{ flex:1, padding:'10px 18px', borderRadius:'6px', border:'1px solid #D1D5DB', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
+          }, 'キャンセル'),
+          React.createElement('button', {
+            onClick: () => { if (canSave) onSave(form) },
+            disabled: !canSave,
+            style:{ flex:2, padding:'10px 18px', borderRadius:'6px', border:'none', fontSize:'13px', fontWeight:700, cursor: canSave ? 'pointer' : 'not-allowed',
+              background: canSave ? (isEdit ? '#1D4ED8' : '#0A6B52') : '#D1D5DB', color:'#fff' }
+          }, isEdit ? '変更を保存' : '日誌を登録')
+        )
+      )
+    )
+  }
+
+  const handleAdd = (form) => {
+    onAdd({ ...form, id: Date.now(), created_at: new Date().toISOString() })
+    setShowAddModal(false)
+    // 【日誌UX改善】登録した日誌の月が現在の表示月と異なる場合、その月へ自動で切り替える
+    // （過去日付で記録した直後に一覧から消えて見える、という混乱を防ぐため）
+    setSelectedMonth(form.date.slice(0, 7))
+  }
+
+  const handleEdit = (form) => {
+    // onAddを使ってIDを保持したまま上書き（既存レコードを削除→追加）
+    onDelete(editTarget.id)
+    onAdd({ ...form, id: editTarget.id, created_at: editTarget.created_at, updated_at: new Date().toISOString() })
+    setEditTarget(null)
+    setSelectedDiary(null)
+    setSelectedMonth(form.date.slice(0, 7))
+  }
+
+  return React.createElement('div', { className:'page' },
+    // ヘッダー
+    React.createElement('div', { className:'eyebrow' }, 'TRAINEE DIARY'),
+    React.createElement('div', { className:'page-title' }, '技能実習生 作業日誌'),
+    React.createElement('div', { className:'page-sub' },
+      `実習生 ${trainees.length}名 — 月次報告・在留資格管理に対応`
+    ),
+
+    trainees.length === 0
+      ? React.createElement('div', {
+          style:{ padding:'48px', textAlign:'center', color:'#9CA3AF', fontSize:'14px' }
+        }, 'スタッフ管理ページで「技能実習生」ロールのスタッフを登録してください')
+      : React.createElement(React.Fragment, null,
+
+        // 実習生タブ + 追加ボタン
+        React.createElement('div', {
+          style:{ display:'flex', gap:'8px', marginTop:'20px', marginBottom:'20px', flexWrap:'wrap', alignItems:'center' }
+        },
+          ...trainees.map(s =>
+            React.createElement('button', {
+              key: s.id,
+              onClick: () => setSelectedStaff(s.id),
+              style:{
+                padding:'7px 18px', borderRadius:'24px', border:'none', cursor:'pointer',
+                fontSize:'13px', fontWeight:600, transition:'all .15s',
+                background: selectedStaff===s.id ? '#0A6B52' : '#F1F5F9',
+                color:       selectedStaff===s.id ? '#fff'    : '#64748B',
+              }
+            }, s.avatar ? `${s.avatar} ${s.name}` : s.name)
+          ),
+          React.createElement('div', { style:{ flex:1 } }),
+          React.createElement('button', {
+            onClick: () => setShowAddModal(true),
+            style:{
+              display:'flex', alignItems:'center', gap:'6px',
+              padding:'8px 18px', borderRadius:'8px', border:'none', cursor:'pointer',
+              background:'#0A6B52', color:'#fff', fontSize:'13px', fontWeight:600
+            }
+          },
+            React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'14px' } }),
+            '日誌を追加'
+          )
+        ),
+
+        // 【スタッフ スキル管理 Step1-6】選択中の実習生の主要スキルを参照表示
+        // skills が未設定の既存データでも落ちないよう s.skills || [] でフォールバック
+        (() => {
+          const current = trainees.find(s => s.id === selectedStaff)
+          if (!current) return null
+          const skills = current.skills || []
+          return React.createElement('div', {
+            style:{
+              display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap',
+              background:'#F8FAF8', border:'1px solid #E5E7EB', borderRadius:'8px',
+              padding:'10px 14px', marginBottom:'16px', marginTop:'-8px'
+            }
+          },
+            React.createElement('span', { style:{ fontSize:'11px', fontWeight:700, color:'#6B7280', flexShrink:0 } }, 'スキル:'),
+            skills.length === 0
+              ? React.createElement('span', { style:{ fontSize:'12px', color:'#B0B8C1' } }, '未登録')
+              : React.createElement(React.Fragment, null,
+                  ...skills.map(sk => {
+                    const meta = SKILL_MASTER.find(m => m.id === sk.skill_id)
+                    return React.createElement('span', {
+                      key: sk.skill_id,
+                      style:{
+                        fontSize:'11px', fontWeight:600, color:'#0A6B52',
+                        background:'#F0F8F4', border:'1px solid #DDE8DE',
+                        borderRadius:'10px', padding:'2px 9px'
+                      }
+                    }, (meta ? meta.label : sk.skill_id) + (sk.level ? '・' + (SKILL_LEVEL_LABEL[sk.level] || sk.level) : ''))
+                  })
+                )
+          )
+        })(),
+
+        // 【日誌UX改善 Step1・Step2】月次フィルター + サマリー + PDF出力
+        (() => {
+          const current = trainees.find(s => s.id === selectedStaff)
+          const navBtnStyle = {
+            width:'30px', height:'30px', display:'flex', alignItems:'center', justifyContent:'center',
+            borderRadius:'6px', border:'1px solid #D1D5DB', background:'#fff', color:'#374151',
+            cursor:'pointer', fontSize:'13px', flexShrink:0
+          }
+          return React.createElement('div', {
+            style:{
+              display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'12px',
+              background:'#fff', border:'1px solid #E5E7EB', borderRadius:'10px',
+              padding:'12px 16px', marginBottom:'16px'
+            }
+          },
+            // 月送りナビ
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+              React.createElement('button', { onClick: () => shiftMonth(-1), style: navBtnStyle, title:'前月' },
+                React.createElement('i', { className:'ti ti-chevron-left' })
+              ),
+              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827', minWidth:'92px', textAlign:'center' } }, monthLabel),
+              React.createElement('button', { onClick: () => shiftMonth(1), style: navBtnStyle, title:'翌月' },
+                React.createElement('i', { className:'ti ti-chevron-right' })
+              ),
+              !isCurrentMonth && React.createElement('button', {
+                onClick: () => setSelectedMonth(today.slice(0, 7)),
+                style:{
+                  marginLeft:'4px', padding:'5px 12px', borderRadius:'20px', border:'1px solid #DDE8DE',
+                  background:'#F0F8F4', color:'#0A6B52', fontSize:'11px', fontWeight:600, cursor:'pointer'
+                }
+              }, '今月へ戻る')
+            ),
+
+            // サマリー
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'18px', fontSize:'12px', color:'#6B7280' } },
+              React.createElement('span', null,
+                '記録 ',
+                React.createElement('b', { style:{ color:'#111827', fontSize:'14px' } }, monthSummary.count),
+                ' 日'
+              ),
+              React.createElement('span', null,
+                '実働計 ',
+                React.createElement('b', { style:{ color:'#0A6B52', fontSize:'14px' } },
+                  `${monthSummary.totalHours}h${monthSummary.totalMins ? monthSummary.totalMins+'m' : ''}`
+                )
+              ),
+              // PDF出力ボタン
+              React.createElement('button', {
+                disabled: !current || exportingPdf,
+                onClick: async () => {
+                  if (!current) return
+                  setExportingPdf(true)
+                  try {
+                    await exportTraineeDiaryPDF(current, monthLabel, filtered, monthSummary)
+                  } finally {
+                    setExportingPdf(false)
+                  }
+                },
+                style:{
+                  display:'flex', alignItems:'center', gap:'6px',
+                  padding:'7px 14px', borderRadius:'7px', border:'1px solid #1D4ED8',
+                  background: exportingPdf ? '#93C5FD' : '#EFF6FF', color:'#1D4ED8',
+                  fontSize:'12px', fontWeight:700, cursor: (!current || exportingPdf) ? 'not-allowed' : 'pointer'
+                }
+              },
+                React.createElement('i', { className: exportingPdf ? 'ti ti-loader-2' : 'ti ti-file-type-pdf', style:{ fontSize:'14px' } }),
+                exportingPdf ? '出力中…' : 'PDF出力'
+              )
+            )
+          )
+        })(),
+
+        // 日誌一覧
+        filtered.length === 0
+          ? React.createElement('div', { style:{ padding:'40px', textAlign:'center', color:'#9CA3AF', fontSize:'13px' } },
+              filteredByStaff.length === 0
+                ? '日誌がまだありません。「+ 日誌を追加」から記録してください。'
+                : `${monthLabel}の記録はありません。月を切り替えるか、新しく記録してください。`
+            )
+          : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'10px' } },
+              ...filtered.map(d => {
+                const s = (staff||[]).find(x => x.id === d.staff_id)
+                return React.createElement('div', {
+                  key: d.id,
+                  onClick: () => setSelectedDiary(d),
+                  style:{
+                    background:'#fff', border:'1px solid #E5E7EB', borderRadius:'10px',
+                    padding:'14px 18px', display:'flex', gap:'16px', alignItems:'flex-start',
+                    cursor:'pointer', transition:'all .12s'
+                  },
+                  onMouseEnter: e => { e.currentTarget.style.borderColor = '#0A6B52'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(10,107,82,.1)' },
+                  onMouseLeave: e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.boxShadow = 'none' },
+                },
+                  // 日付バッジ
+                  React.createElement('div', {
+                    style:{ minWidth:'52px', textAlign:'center', background:'#F0F8F4', borderRadius:'8px', padding:'8px 6px' }
+                  },
+                    React.createElement('div', { style:{ fontSize:'18px', fontWeight:800, color:'#0A6B52', lineHeight:1 } }, d.date.slice(8)),
+                    React.createElement('div', { style:{ fontSize:'10px', color:'#6B7280', marginTop:'2px' } }, d.date.slice(5, 7) + '月')
+                  ),
+                  // 内容
+                  React.createElement('div', { style:{ flex:1, minWidth:0 } },
+                    React.createElement('div', { style:{ display:'flex', gap:'8px', alignItems:'center', marginBottom:'5px', flexWrap:'wrap' } },
+                      React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color:'#111827' } }, s ? s.name : `ID:${d.staff_id}`),
+                      React.createElement('span', { style:{ fontSize:'12px', color:'#6B7280' } },
+                        `${d.start_time}〜${d.end_time}（休憩${d.break_minutes}分 / 実働 ${calcWorkHours(d)}）`
+                      ),
+                    ),
+                    React.createElement('div', { style:{ fontSize:'13px', color:'#374151', lineHeight:1.6, marginBottom:'4px' } }, d.tasks),
+                    d.notes && React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF' } }, `📝 ${d.notes}`),
+                    d.supervisor && React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF' } }, `👤 指導者: ${d.supervisor}`),
+                  ),
+                  // 編集ボタン（カード右上）
+                  React.createElement('button', {
+                    onClick: e => { e.stopPropagation(); setEditTarget(d); setSelectedDiary(null) },
+                    style:{ background:'none', border:'none', cursor:'pointer', color:'#94A3B8', fontSize:'15px', padding:'4px' }
+                  }, React.createElement('i', { className:'ti ti-edit' }))
+                )
+              })
+            )
+      ),
+
+    // ── 詳細モーダル ──
+    selectedDiary && (() => {
+      const d = selectedDiary
+      const s = (staff||[]).find(x => x.id === d.staff_id)
+      return React.createElement('div', {
+        style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+        onClick: () => setSelectedDiary(null)
+      },
+        React.createElement('div', {
+          style:{ background:'#FFFFFF', borderRadius:'12px', padding:'24px', width:'480px', maxWidth:'95vw', maxHeight:'90vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,.2)', animation:'fadeInDown .18s ease' },
+          onClick: e => e.stopPropagation()
+        },
+
+          // ── ヘッダー ──
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+              React.createElement('div', { style:{ width:36, height:36, borderRadius:'50%', background:'#0A6B52', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+                React.createElement('i', { className:'ti ti-notebook', style:{ fontSize:'18px', color:'#FFFFFF' } })
+              ),
+              React.createElement('div', null,
+                React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '作業日誌'),
+                React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, d.date + (s ? '　' + s.name : ''))
+              )
+            ),
+            React.createElement('button', {
+              onClick: () => setSelectedDiary(null),
+              style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+            }, '✕')
+          ),
+
+          // 【スタッフ スキル管理 Step1-6】対象実習生の主要スキルを参照表示
+          // skills が未設定の既存データでも落ちないよう s.skills || [] でフォールバック
+          s && (() => {
+            const skills = s.skills || []
+            return React.createElement('div', {
+              style:{ display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap', marginBottom:'14px' }
+            },
+              React.createElement('span', { style:{ fontSize:'10px', fontWeight:700, color:'#9CA3AF', flexShrink:0 } }, 'スキル:'),
+              skills.length === 0
+                ? React.createElement('span', { style:{ fontSize:'11px', color:'#B0B8C1' } }, '未登録')
+                : React.createElement(React.Fragment, null,
+                    ...skills.map(sk => {
+                      const meta = SKILL_MASTER.find(m => m.id === sk.skill_id)
+                      return React.createElement('span', {
+                        key: sk.skill_id,
+                        style:{
+                          fontSize:'10px', fontWeight:600, color:'#0A6B52',
+                          background:'#F0F8F4', border:'1px solid #DDE8DE',
+                          borderRadius:'10px', padding:'1px 8px'
+                        }
+                      }, meta ? meta.label : sk.skill_id)
+                    })
+                  )
+            )
+          })(),
+
+          // ── 情報行（グレー背景ブロック） ──
+          React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'8px', padding:'4px 12px', marginBottom:'16px' } },
+            React.createElement('div', { style:rowStyle2 },
+              React.createElement('span', { style:{ color:'#6B7280' } }, '日付'),
+              React.createElement('span', { style:{ fontWeight:600 } }, d.date)
+            ),
+            React.createElement('div', { style:rowStyle2 },
+              React.createElement('span', { style:{ color:'#6B7280' } }, '実習生'),
+              React.createElement('span', { style:{ fontWeight:600 } }, s ? s.name : `ID:${d.staff_id}`)
+            ),
+            React.createElement('div', { style:rowStyle2 },
+              React.createElement('span', { style:{ color:'#6B7280' } }, '作業時間'),
+              React.createElement('span', { style:{ fontWeight:600 } }, `${d.start_time}〜${d.end_time}`)
+            ),
+            React.createElement('div', { style:rowStyle2 },
+              React.createElement('span', { style:{ color:'#6B7280' } }, '休憩'),
+              React.createElement('span', null, `${d.break_minutes}分`)
+            ),
+            React.createElement('div', { style:rowStyle2 },
+              React.createElement('span', { style:{ color:'#6B7280' } }, '実働時間'),
+              React.createElement('span', { style:{ fontWeight:700, color:'#0A6B52' } }, calcWorkHours(d))
+            ),
+            d.supervisor && React.createElement('div', { style:rowStyle2 },
+              React.createElement('span', { style:{ color:'#6B7280' } }, '指導者'),
+              React.createElement('span', null, d.supervisor)
+            ),
+            React.createElement('div', { style:{ ...rowStyle2, alignItems:'flex-start', borderBottom:'none' } },
+              React.createElement('span', { style:{ color:'#6B7280', flexShrink:0 } }, '作業内容'),
+              React.createElement('span', { style:{ fontWeight:600, textAlign:'right', whiteSpace:'pre-wrap', lineHeight:1.6 } }, d.tasks || '—')
+            ),
+          ),
+
+          // ── 特記事項（黄色ブロック・値がある場合のみ） ──
+          d.notes && React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', gap:'8px', background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'8px', padding:'10px 12px', marginBottom:'16px' } },
+            React.createElement('i', { className:'ti ti-note', style:{ fontSize:'15px', color:'#B45309', flexShrink:0, marginTop:'1px' } }),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:'#B45309', marginBottom:'2px' } }, '特記事項'),
+              React.createElement('div', { style:{ fontSize:'13px', color:'#78350F', lineHeight:1.6 } }, d.notes)
+            )
+          ),
+
+          // ── ボタン群（削除・編集・閉じる） ──
+          React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+            React.createElement('button', {
+              onClick: () => { setDeleteTarget(d); setSelectedDiary(null) },
+              style:{
+                display:'flex', alignItems:'center', justifyContent:'center', gap:'5px',
+                padding:'9px 14px', borderRadius:'4px', fontSize:'13px', fontWeight:600,
+                cursor:'pointer', border:'1.5px solid #FCA5A5', background:'#FEF2F2', color:'#DC2626'
+              }
+            },
+              React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'13px' } }),
+              '削除'
+            ),
+            React.createElement('button', {
+              onClick: () => { setEditTarget(d); setSelectedDiary(null) },
+              style:{
+                flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'5px',
+                padding:'9px 18px', borderRadius:'4px', fontSize:'13px', fontWeight:600,
+                cursor:'pointer', border:'1.5px solid #93C5FD', background:'#EFF6FF', color:'#1D4ED8'
+              }
+            },
+              React.createElement('i', { className:'ti ti-edit', style:{ fontSize:'13px' } }),
+              '編集'
+            ),
+            React.createElement('button', {
+              onClick: () => setSelectedDiary(null),
+              style:{ flex:1, padding:'9px 18px', borderRadius:'4px', border:'none', background:'#0A6B52', color:'#fff', fontSize:'13px', fontWeight:700, cursor:'pointer' }
+            }, '閉じる')
+          )
+        )
+      )
+    })(),
+
+    // ── 削除確認モーダル ──
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '日誌を削除しますか？',
+      targetName: (() => {
+        const s = (staff||[]).find(x => x.id === deleteTarget.staff_id)
+        return (s ? s.name : `ID:${deleteTarget.staff_id}`) + '　' + deleteTarget.date
+      })(),
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+    }),
+
+    // ── 新規追加モーダル ──
+    showAddModal && React.createElement(DiaryFormModal, {
+      initialValues: emptyForm(),
+      isEdit: false,
+      onClose: () => setShowAddModal(false),
+      onSave: handleAdd
+    }),
+
+    // ── 編集モーダル ──
+    editTarget && React.createElement(DiaryFormModal, {
+      initialValues: editTarget,
+      isEdit: true,
+      onClose: () => setEditTarget(null),
+      onSave: handleEdit
+    })
+  )
+}
+
+function PlanCompareCard() {
+  const [active, setActive] = React.useState(null)
+
+  const plans = [
+    {
+      id: 'A',
+      label: 'プランA',
+      subtitle: '専用カスタム開発モデル',
+      accentColor: CONFIG.COLOR.primary,
+      accentBg: '#ECFDF5',
+      accentBorder: '#6EE7B7',
+      icon: '🏛️',
+      price: '¥500〜700万',
+      priceSub: '農場名の業務に合わせた専用設計',
+      period: '約18週間（4.5ヶ月）',
+      tag: '農場名 専用設計',
+      tagColor: '#065F46',
+      tagBg: '#D1FAE5',
+      features: [
+        { icon: '✅', text: '農場名の業務フローに100%合わせた設計' },
+        { icon: '✅', text: 'スタッフ増員・圃場拡大にも耐える堅牢なインフラ' },
+        { icon: '✅', text: '栽培データ（秘伝レシピ）の完全な知財保護' },
+        { icon: '✅', text: 'GAP更新・大手スーパー取引に必要な監査ログ完備' },
+        { icon: '✅', text: '外国人実習生向け多言語マニュアル機能' },
+      ],
+      summary: '売値を自分たちで決められない業界で、GAP管理を武器に差別化する「攻めの投資」',
+    },
+    {
+      id: 'B',
+      label: 'プランB',
+      subtitle: '共同開発・パッケージ展開モデル',
+      accentColor: '#1D4ED8',
+      accentBg: '#EFF6FF',
+      accentBorder: '#93C5FD',
+      icon: '🤝',
+      price: '¥300万〜',
+      priceSub: '初期費用を大幅に抑えたスタート',
+      period: '約8週間（MVP版）',
+      tag: '千葉県・全国展開 第一号',
+      tagColor: '#1E3A8A',
+      tagBg: '#DBEAFE',
+      features: [
+        { icon: '✅', text: '初期費用を最小化してシステムをスタート' },
+        { icon: '✅', text: '農場名がパッケージ開発の「第一号ユーザー」として参画' },
+        { icon: '✅', text: 'フィードバックにより仕様に優先的に反映' },
+        { icon: '✅', text: 'SaaS横展開後の収益分配モデルを協議可能' },
+        { icon: '⚠️', text: '他農家にも展開する汎用設計（農園独自仕様は制限あり）' },
+        { icon: '⚠️', text: '農場名の栽培データが設計に影響する可能性' },
+      ],
+      summary: 'コストを抑えつつ、将来のSaaS展開で「開発パートナー」として関与する共創モデル',
+    },
+  ]
+
+  const compare = [
+    { label: '初期費用',        A: '500〜700万円', B: '300万円〜' },
+    { label: '開発期間',        A: '約18週間',      B: '約8週間（MVP）' },
+    { label: 'カスタマイズ性',  A: '100%自由',      B: '汎用ベース' },
+    { label: 'データ独占権',    A: '完全に農園が保有', B: '要協議' },
+    { label: '将来の拡張性',    A: '無制限',        B: 'SaaS機能に準拠' },
+    { label: '他農家への展開',  A: 'なし（専用）',  B: 'あり（パッケージ）' },
+  ]
+
+  return React.createElement('div', { style:{marginTop:'32px'} },
+
+    // ── セクションヘッダー
+    React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'6px'} },
+      React.createElement('div', { style:{width:'3px',height:'20px',background:'linear-gradient(180deg,#B8976A,'+CONFIG.COLOR.primary+')',borderRadius:'2px'} }),
+      React.createElement('div', { className:'page-title', style:{margin:0,fontSize:'18px'} }, '開発モデル 比較'),
+    ),
+    React.createElement('div', { className:'page-sub', style:{marginBottom:'20px'} },
+      'プランA（専用カスタム）とプランB（共同開発パッケージ）の特徴・費用・期間を比較します'
+    ),
+
+    // ── 2カラムカード
+    React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'20px'} },
+      ...plans.map(plan =>
+        React.createElement('div', {
+          key: plan.id,
+          onClick: () => setActive(active === plan.id ? null : plan.id),
+          style:{
+            background:'#FFFFFF',
+            border: `1.5px solid ${active===plan.id ? plan.accentColor : '#D8E4D8'}`,
+            borderRadius:'16px',
+            padding:'24px',
+            cursor:'pointer',
+            transition:'all .18s',
+            boxShadow: 'none',
+          }
+        },
+
+          // ヘッダー行
+          React.createElement('div', { style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'16px'} },
+            React.createElement('div', null,
+              React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'} },
+                React.createElement('span', { style:{fontSize:'22px'} }, plan.icon),
+                React.createElement('span', {
+                  style:{fontSize:'18px',fontWeight:700,color:'#111827',letterSpacing:'-.02em'}
+                }, plan.label)
+              ),
+              React.createElement('div', { style:{fontSize:'12px',color:'#64748B',fontWeight:500} }, plan.subtitle)
+            ),
+            React.createElement('span', {
+              style:{
+                fontSize:'10px',fontWeight:700,padding:'3px 9px',borderRadius:'20px',
+                background:plan.tagBg,color:plan.tagColor,border:`1px solid ${plan.accentBorder}`,
+                whiteSpace:'nowrap',flexShrink:0,marginTop:'2px'
+              }
+            }, plan.tag)
+          ),
+
+          // 価格・期間
+          React.createElement('div', {
+            style:{
+              background:plan.accentBg,border:`1px solid ${plan.accentBorder}`,
+              borderRadius:'10px',padding:'14px 16px',marginBottom:'16px'
+            }
+          },
+            React.createElement('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px'} },
+              React.createElement('div', null,
+                React.createElement('div', { style:{fontSize:'11px',fontWeight:700,color:plan.accentColor,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:'4px'} }, '想定費用'),
+                React.createElement('div', { style:{fontSize:'22px',fontWeight:700,color:'#111827',letterSpacing:'-.02em'} }, plan.price),
+                React.createElement('div', { style:{fontSize:'12px',color:'#64748B',marginTop:'3px'} }, plan.priceSub)
+              ),
+              React.createElement('div', { style:{textAlign:'right'} },
+                React.createElement('div', { style:{fontSize:'11px',fontWeight:700,color:plan.accentColor,letterSpacing:'.06em',textTransform:'uppercase',marginBottom:'4px'} }, '開発期間'),
+                React.createElement('div', { style:{fontSize:'18px',fontWeight:700,color:'#111827'} }, plan.period)
+              )
+            )
+          ),
+
+          // 特徴リスト
+          React.createElement('div', { style:{marginBottom:'14px'} },
+            ...plan.features.map((f,i) =>
+              React.createElement('div', {
+                key:i,
+                style:{
+                  display:'flex',alignItems:'flex-start',gap:'8px',
+                  padding:'6px 0',
+                  borderBottom: i < plan.features.length-1 ? '1px solid #F1F5F1' : 'none',
+                  fontSize:'12px',color:'#374151',lineHeight:'1.5'
+                }
+              },
+                React.createElement('span', { style:{fontSize:'13px',flexShrink:0,marginTop:'1px'} }, f.icon),
+                f.text
+              )
+            )
+          ),
+
+          // サマリー
+          React.createElement('div', {
+            style:{
+              fontSize:'11px',color:plan.accentColor,fontWeight:600,
+              background:plan.accentBg,borderRadius:'8px',padding:'10px 12px',
+              lineHeight:'1.6'
+            }
+          }, plan.summary)
+        )
+      )
+    ),
+
+    // ── 比較テーブル
+    React.createElement('div', { className:'card', style:{padding:0,overflow:'hidden'} },
+      React.createElement('div', {
+        style:{
+          padding:'14px 20px',borderBottom:'1px solid #E2E8E2',
+          background:'#F8FAF8',
+          display:'flex',alignItems:'center',gap:'8px'
+        }
+      },
+        React.createElement('span', { style:{fontSize:'14px'} }, '📊'),
+        React.createElement('span', { style:{fontSize:'12px',fontWeight:700,color:'#374151',letterSpacing:'.04em',textTransform:'uppercase'} }, 'プラン比較表')
+      ),
+      React.createElement('table', { className:'table', style:{margin:0} },
+        React.createElement('thead', null,
+          React.createElement('tr', null,
+            React.createElement('th', { style:{width:'160px',background:'#F8FAF8'} }, '比較項目'),
+            React.createElement('th', { style:{textAlign:'center',background:'#ECFDF5',color:'#065F46'} }, '🏛️ プランA（専用）'),
+            React.createElement('th', { style:{textAlign:'center',background:'#EFF6FF',color:'#1E3A8A'} }, '🤝 プランB（共同）'),
+          )
+        ),
+        React.createElement('tbody', null,
+          ...compare.map((row, i) =>
+            React.createElement('tr', { key:i },
+              React.createElement('td', {
+                style:{fontWeight:600,color:'#374151',fontSize:'12px',background:'#FAFBFA'}
+              }, row.label),
+              React.createElement('td', {
+                style:{textAlign:'center',fontSize:'12px',color:'#065F46',fontWeight:500,background: i%2===0?'#F0FDF4':'#FFFFFF'}
+              }, row.A),
+              React.createElement('td', {
+                style:{textAlign:'center',fontSize:'12px',color:'#1E3A8A',fontWeight:500,background: i%2===0?'#EFF6FF22':'#FFFFFF'}
+              }, row.B),
+            )
+          )
+        )
+      )
+    ),
+
+    // ── 推奨メモ
+    React.createElement('div', {
+      style:{
+        marginTop:'16px',
+        background:'#FFFBEB',
+        border:'1px solid #FDE68A',borderRadius:'12px',
+        padding:'16px 20px',display:'flex',alignItems:'flex-start',gap:'12px'
+      }
+    },
+      React.createElement('span', { style:{fontSize:'20px',flexShrink:0} }, '💡'),
+      React.createElement('div', null,
+        React.createElement('div', { style:{fontSize:'14px',fontWeight:700,color:'#78350F',marginBottom:'4px'} }, '開発モデルの選択について'),
+        React.createElement('div', { style:{fontSize:'12px',color:'#92400E',lineHeight:'1.65'} },
+          'グローバルGAP対応の中核データ（農薬散布記録・施肥記録）は農場名の「知的財産」です。' +
+          'プランAは初期投資が大きい一方、データを完全に農園が保有し、GAP更新リスクを排除できます。' +
+          'プランBはスモールスタートに適していますが、汎用設計のため独自業務フローへの対応に限界があります。'
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// ⑤ 多言語マニュアルライブラリ（モック実装）
+// 日本語 / 英語 / ベトナム語 の3言語タブ
+// PDF・動画マニュアルをカード表示
+// =====================================================
+function ManualLibrary() {
+  const [lang,    setLang]    = React.useState('ja')
+  const [preview, setPreview] = React.useState(null)
+  const [search,  setSearch]  = React.useState('')
+
+  const cfg     = LANG_CONFIG.find(l => l.key === lang)
+  const manuals = (MANUAL_DATA[lang] || []).filter(m =>
+    m.title.toLowerCase().includes(search.toLowerCase()) ||
+    m.desc.toLowerCase().includes(search.toLowerCase())
+  )
+  const pdfCount   = (MANUAL_DATA[lang]||[]).filter(m=>m.type==='pdf').length
+  const videoCount = (MANUAL_DATA[lang]||[]).filter(m=>m.type==='video').length
+
+  return React.createElement('div', { className:'page' },
+    // ヘッダー
+    React.createElement('div', { className:'eyebrow' }, 'STAFF MANUAL LIBRARY'),
+    React.createElement('div', { className:'page-title' }, '多言語マニュアルライブラリ'),
+    React.createElement('div', { className:'page-sub' },
+      '外国人実習生・スタッフ向けマニュアルを言語別に管理。PDF・動画を一元管理。'
+    ),
+
+    // 言語タブ
+    React.createElement('div', {
+      style:{ display:'flex', gap:'8px', marginTop:'20px', marginBottom:'16px', flexWrap:'wrap' }
+    },
+      ...LANG_CONFIG.map(l =>
+        React.createElement('button', {
+          key: l.key,
+          onClick: () => { setLang(l.key); setSearch('') },
+          style:{
+            padding:'8px 20px', borderRadius:'24px', border:'none', cursor:'pointer',
+            fontSize:'14px', fontWeight:600, transition:'all .15s',
+            background: lang===l.key ? l.color : '#F1F5F9',
+            color:       lang===l.key ? '#fff'   : '#64748B',
+            boxShadow:   lang===l.key ? '0 2px 8px rgba(0,0,0,.18)' : 'none',
+          }
+        }, l.label)
+      )
+    ),
+
+    // サマリーバー
+    React.createElement('div', {
+      style:{
+        display:'flex', gap:'12px', marginBottom:'16px',
+        background:'#F8FAFC', border:'1px solid #E2E8F0',
+        borderRadius:'10px', padding:'12px 16px', alignItems:'center'
+      }
+    },
+      React.createElement('span', {
+        style:{ fontSize:'11px', fontWeight:700, color:cfg.color,
+                background:cfg.color+'18', padding:'2px 10px', borderRadius:'20px' }
+      }, cfg.badge),
+      React.createElement('span', { style:{ fontSize:'12px', color:'#64748B' } },
+        `PDF ${pdfCount}件  ／  動画 ${videoCount}件`
+      ),
+      React.createElement('div', { style:{ flex:1 } }),
+      // 検索
+      React.createElement('input', {
+        type:'text', placeholder:'マニュアルを検索…', value:search,
+        onChange: e => setSearch(e.target.value),
+        style:{
+          padding:'6px 12px', borderRadius:'8px', border:'1px solid #CBD5E1',
+          fontSize:'12px', color:'#334155', background:'#fff', outline:'none', width:'180px'
+        }
+      })
+    ),
+
+    // マニュアルカード一覧
+    manuals.length === 0
+      ? React.createElement('div', {
+          className:'page-grow',
+          style:{ textAlign:'center', padding:'48px', color:'#94A3B8', fontSize:'14px' }
+        }, '該当するマニュアルが見つかりません')
+      : React.createElement('div', {
+          className:'page-grow',
+          style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:'12px', alignContent:'start' }
+        },
+          ...manuals.map(m =>
+            React.createElement('div', {
+              key: m.id,
+              onClick: () => setPreview(m),
+              className: 'manual-card',
+              style:{ borderColor: cfg ? cfg.color : '#E2E8F0' },
+            },
+              React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', gap:'12px' } },
+                React.createElement('div', {
+                  style:{
+                    width:'44px', height:'44px', borderRadius:'10px',
+                    background: m.type==='pdf' ? '#EFF6FF' : '#FFF7ED',
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:'22px', flexShrink:0,
+                  }
+                }, m.thumb),
+                React.createElement('div', { style:{ flex:1, minWidth:0 } },
+                  React.createElement('div', {
+                    style:{ fontSize:'14px', fontWeight:600, color:'#1E293B', lineHeight:1.4, marginBottom:'4px' }
+                  }, m.title),
+                  React.createElement('div', {
+                    style:{ fontSize:'12px', color:'#64748B', lineHeight:1.5, marginBottom:'8px' }
+                  }, m.desc)
+                )
+              ),
+              React.createElement('div', {
+                style:{ display:'flex', alignItems:'center', gap:'6px', marginTop:'8px' }
+              },
+                React.createElement('span', {
+                  style:{
+                    fontSize:'10px', fontWeight:600, padding:'2px 8px', borderRadius:'20px',
+                    background: m.type==='pdf' ? '#DBEAFE' : '#FED7AA',
+                    color:      m.type==='pdf' ? '#1D4ED8' : '#92400E',
+                  }
+                }, m.type==='pdf' ? 'PDF' : '動画'),
+                React.createElement('span', { style:{ fontSize:'12px', color:'#94A3B8' } },
+                  m.type==='pdf' ? `${m.pages}ページ` : m.duration
+                ),
+                React.createElement('div', { style:{ flex:1 } }),
+                React.createElement('span', { style:{ fontSize:'10px', color:'#CBD5E1' } }, m.updated)
+              )
+            )
+          )
+        ),
+
+    // プレビューモーダル
+    preview && React.createElement('div', {
+      onClick: () => setPreview(null),
+      style:{
+        position:'fixed', inset:0, background:'rgba(0,0,0,.5)',
+        display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000
+      }
+    },
+      React.createElement('div', {
+        onClick: e => e.stopPropagation(),
+        style:{
+          background:'#fff', borderRadius:'16px', padding:'28px',
+          width:'480px', maxWidth:'90vw', boxShadow:'0 20px 60px rgba(0,0,0,.25)'
+        }
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'16px' } },
+          React.createElement('div', {
+            style:{
+              width:'48px', height:'48px', borderRadius:'12px', flexShrink:0,
+              background: preview.type==='pdf' ? '#EFF6FF' : '#FFF7ED',
+              display:'flex', alignItems:'center', justifyContent:'center', fontSize:'24px'
+            }
+          }, preview.thumb),
+          React.createElement('div', null,
+            React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:'#1E293B' } }, preview.title),
+            React.createElement('div', { style:{ fontSize:'12px', color:'#64748B', marginTop:'2px' } }, preview.desc)
+          )
+        ),
+        React.createElement('div', {
+          style:{
+            background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:'10px',
+            padding:'16px', marginBottom:'16px'
+          }
+        },
+          React.createElement('div', { style:{ fontSize:'12px', color:'#64748B', lineHeight:1.8 } },
+            React.createElement('div', null, `📁 種別：${preview.type==='pdf'?'PDFドキュメント':'研修動画'}`),
+            React.createElement('div', null, preview.type==='pdf'
+              ? `📄 ページ数：${preview.pages}ページ`
+              : `⏱ 視聴時間：${preview.duration}`),
+            React.createElement('div', null, `🕐 最終更新：${preview.updated}`),
+            React.createElement('div', null, `🌐 言語：${LANG_CONFIG.find(l=>l.key===lang)?.label}`)
+          )
+        ),
+        // モックプレビューエリア
+        React.createElement('div', {
+          style:{
+            background: preview.type==='pdf' ? '#F0F4FF' : '#FFF3E0',
+            border:`2px dashed ${preview.type==='pdf'?'#93C5FD':'#FCA5A5'}`,
+            borderRadius:'10px', padding:'24px', textAlign:'center',
+            marginBottom:'16px', color:'#64748B', fontSize:'12px'
+          }
+        },
+          React.createElement('div', { style:{ fontSize:'32px', marginBottom:'8px' } },
+            preview.type==='pdf' ? '📄' : '▶️'
+          ),
+          React.createElement('div', { style:{ fontWeight:600, marginBottom:'4px' } },
+            preview.type==='pdf' ? 'PDFビューアー' : '動画プレイヤー'
+          ),
+          React.createElement('div', null, '（本番環境ではSupabase Storageから読み込まれます）')
+        ),
+        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          React.createElement('button', {
+            style:{
+              flex:1, padding:'10px', borderRadius:'8px', border:'none', cursor:'pointer',
+              background:cfg.color, color:'#fff', fontSize:'14px', fontWeight:600
+            }
+          }, preview.type==='pdf' ? '📥 ダウンロード（モック）' : '▶️ 再生（モック）'),
+          React.createElement('button', {
+            onClick: () => setPreview(null),
+            style:{
+              padding:'10px 16px', borderRadius:'8px', cursor:'pointer',
+              background:'#F1F5F9', border:'none', color:'#64748B', fontSize:'14px'
+            }
+          }, '閉じる')
+        )
+      )
+    )
+  )
+}
+
+function Settings() {
+  return React.createElement('div',{className:'page'},
+    React.createElement('div',{className:'eyebrow'},'SYSTEM SETTINGS'),
+    React.createElement('div',{className:'page-title'},'設定'),
+    React.createElement('div',{className:'page-sub'},'農園情報とシステム設定'),
+
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'24px',alignItems:'start'}},
+
+      // 左: 農園情報
+      React.createElement('div',{className:'card'},
+        React.createElement('div',{className:'section-title'},'🌾 農園情報'),
+        ...[['農園名','農場名'],['代表者','中川啓大'],['所在地','神奈川県相模原市'],['連絡先','042-xxx-xxxx'],['メール','nakagawa@farm.example.jp']].map(([k,v])=>
+          React.createElement('div',{key:k,className:'form-group'},
+            React.createElement('label',{className:'form-label'},k),
+            React.createElement('input',{type:'text',className:'form-input',defaultValue:v})
+          )
+        ),
+        React.createElement('button',{className:'btn btn-primary',style:{width:'100%'}},'保存する')
+      ),
+
+      // 右: Supabase設定 + その他
+      React.createElement('div',null,
+        React.createElement('div',{className:'card',style:{marginBottom:'16px'}},
+          React.createElement('div',{className:'section-title'},'🔌 Supabase 接続設定'),
+          React.createElement('div',{className:'sup-note',style:{marginBottom:'16px'}},'現在: モックデータ動作中 — Supabase URL を設定するとリアルDBに切り替わります'),
+          React.createElement('div', { className:'form-group' },
+            React.createElement('label', { className:'form-label' }, 'Supabase URL'),
+            React.createElement('input', { type:'text', className:'form-input', placeholder:'https://xxxx.supabase.co' })
+          ),
+          React.createElement('div', { className:'form-group' },
+            React.createElement('label', { className:'form-label' }, 'Anon Key'),
+            React.createElement('input', { type:'password', className:'form-input', placeholder:'eyJhbGciOiJIUzI1NiIs...' })
+          ),
+          React.createElement('button',{className:'btn btn-primary',style:{width:'100%'}},'接続テスト')
+        ),
+        React.createElement('div',{className:'card'},
+          React.createElement('div',{className:'section-title'},'⚙️ システム'),
+          ...[['GAP認証種別','JGAP'],['データエクスポート形式','PDF + Excel'],['言語','日本語']].map(([k,v])=>
+            React.createElement('div',{key:k,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid #F1F5F9',fontSize:'14px'}},
+              React.createElement('span',{style:{color:'#6B7280'}},k),
+              React.createElement('span',{style:{color:'#374151',fontWeight:600}},v)
+            )
+          )
+        )
+      )
+    ),
+
+    // ── 開発モデル比較カード
+    React.createElement(PlanCompareCard, null)
+  )
+}
+
+// =====================================================
+// 作付計画: モックデータ
+// =====================================================
+// =====================================================
+// 作付計画: PDF出力（html2canvas利用）
+// =====================================================
+async function exportCropPlanPDF(plans, fields) {
+  const el = document.getElementById('crop-plan-pdf-preview')
+  const today = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })
+
+  const rows = fields.map(f => {
+    const fPlans = plans.filter(p => p.field_id === f.id)
+    return { field: f, plans: fPlans }
+  })
+
+  el.innerHTML = `
+    <div style="font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;padding:24px;background:#fff;color:#111;width:900px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <h2 style="font-size:18px;font-weight:700;margin:0 0 4px">栽培計画書</h2>
+          <div style="font-size:11px;color:#555">農園名: 農場名　／　作成日: ${today}</div>
+        </div>
+        <div style="font-size:10px;color:#888;text-align:right">JGAP / GlobalGAP 対応<br>農薬管理・トレーサビリティ用</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="background:#1a5276;color:#fff">
+            <th style="padding:7px 10px;text-align:left;border:1px solid #aaa;width:90px">圃場</th>
+            <th style="padding:7px 10px;text-align:left;border:1px solid #aaa;width:70px">作物</th>
+            ${MONTHS.map(m => `<th style="padding:7px 4px;text-align:center;border:1px solid #aaa;width:56px">${m}</th>`).join('')}
+            <th style="padding:7px 10px;text-align:left;border:1px solid #aaa">備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.flatMap(({field, plans}) => {
+            if (plans.length === 0) {
+              return [`<tr>
+                <td style="padding:6px 10px;border:1px solid #ddd">${field.name}</td>
+                <td style="padding:6px 10px;border:1px solid #ddd;color:#aaa">—</td>
+                ${MONTHS.map(()=>`<td style="border:1px solid #ddd"></td>`).join('')}
+                <td style="border:1px solid #ddd"></td>
+              </tr>`]
+            }
+            return plans.map((plan, pi) => `<tr style="${pi%2===1?'background:#f9f9f9':''}">
+              <td style="padding:6px 10px;border:1px solid #ddd">${pi===0 ? field.name : ''}</td>
+              <td style="padding:6px 10px;border:1px solid #ddd;font-weight:500">${plan.crop}</td>
+              ${MONTHS.map((_,i) => {
+                const m = i + 1
+                const inRange = m >= plan.start_month && m <= plan.end_month
+                return `<td style="border:1px solid #ddd;padding:3px;text-align:center">
+                  ${inRange ? `<div style="background:${plan.color};border-radius:3px;height:18px;font-size:9px;line-height:18px;color:#fff;font-weight:600">${m===plan.start_month?plan.crop:''}</div>` : ''}
+                </td>`
+              }).join('')}
+              <td style="padding:6px 10px;border:1px solid #ddd;font-size:10px;color:#555">${plan.note||''}</td>
+            </tr>`)
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="margin-top:14px;font-size:9px;color:#888;text-align:right">
+        ※ 本栽培計画書はGAP審査提出用に作成　農場名
+      </div>
+    </div>
+  `
+  el.style.display = 'block'
+  const canvas = await html2canvas(el, { scale: 2, useCORS: true, logging: false })
+  el.style.display = 'none'
+  el.innerHTML = ''
+
+  const { jsPDF } = window.jspdf
+  const pdf  = new jsPDF('l', 'mm', 'a4')
+  const imgW = 277
+  const imgH = canvas.height * imgW / canvas.width
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgW, imgH)
+  pdf.save('栽培計画書_農場名.pdf')
+}
+
+// =====================================================
+// 作付計画: CropPlan コンポーネント（シンプルガント）
+// ※ MONTHS / MONTH_LABELS / CROP_COLORS / CROPS_LIST はファイル上部定数セクション参照（C06-3）
+// =====================================================
+function CropPlan({ fields, plans, records, pesticides, onAdd, onDelete }) {
+  const [showForm, setShowForm] = React.useState(false)
+  const [exporting, setExporting]     = React.useState(false)
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+  const [form, setForm]         = React.useState({
+    field_id: '', crop: 'レタス', start_month: 4, end_month: 6, note: ''
+  })
+  const updateField = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  // 収穫前日数違反チェック: 作付期間終了月の前 preharvest_days 日以内に農薬散布があるか
+  const violations = React.useMemo(() => {
+    const result = []
+    plans.forEach(plan => {
+      records
+        .filter(r => r.field_id === plan.field_id && r.work_type === '農薬散布' && r.pesticide_id)
+        .forEach(r => {
+          const pest = pesticides.find(p => p.id === r.pesticide_id)
+          if (!pest) return
+          const harvestDate = new Date(CONFIG.CURRENT_YEAR, plan.end_month, 1) // 収穫月の1日
+          const sprayDate   = new Date(r.date)
+          const diffDays    = Math.ceil((harvestDate - sprayDate) / 86400000)
+          if (diffDays >= 0 && diffDays < pest.preharvest_days) {
+            result.push({
+              planId: plan.id, recordId: r.id,
+              fieldName: fields.find(f=>f.id===plan.field_id)?.name || '?',
+              crop: plan.crop, pestName: pest.name,
+              sprayDate: r.date, preharvest: pest.preharvest_days, diffDays
+            })
+          }
+        })
+    })
+    return result
+  }, [plans, records, pesticides, fields])
+
+  // 重複チェック（C02-4: 共通ユーティリティ使用）
+  const hasOverlap = React.useMemo(() => {
+    if (!form.field_id) return false
+    return hasCropOverlap(plans, form.field_id, form.start_month, form.end_month)
+  }, [form, plans])
+
+  const handleAdd = () => {
+    if (!form.field_id || hasOverlap) return
+    const crop = form.crop
+    onAdd({
+      ...form, id: Date.now(),
+      field_id: Number(form.field_id),
+      start_month: Number(form.start_month),
+      end_month: Number(form.end_month),
+      color: CROP_COLORS[crop] || '#94A3B8'
+    })
+    setForm({ field_id:'', crop:'レタス', start_month:4, end_month:6, note:'' })
+    setShowForm(false)
+  }
+
+  const handleExportPDF = async () => {
+    setExporting(true)
+    try { await exportCropPlanPDF(plans, fields) }
+    catch(e) { alert('PDF出力に失敗しました: '+e.message) }
+    finally { setExporting(false) }
+  }
+
+  // 月幅 (%)
+  const monthW = 100 / 12
+
+  return React.createElement('div', { className:'page' },
+
+    // ヘッダー
+    React.createElement('div', { style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'} },
+      React.createElement('div', null,
+        React.createElement('div', { className:'eyebrow' }, 'CROP PLANNING'),
+        React.createElement('div', { className:'page-title' }, '作付計画'),
+        React.createElement('div', { className:'page-sub', style:{marginBottom:0} }, '年間の圃場別作付スケジュール / GAP栽培計画書として出力できます')
+      ),
+      React.createElement('div', { style:{display:'flex',gap:'8px',flexShrink:0,marginTop:'4px'} },
+        React.createElement('button', {
+          className:'btn btn-primary',
+          onClick: handleExportPDF,
+          disabled: exporting
+        }, exporting ? '⏳ 生成中...' : '📄 栽培計画書 PDF'),
+        React.createElement('button', {
+          className:'btn btn-ghost',
+          onClick: () => setShowForm(s => !s)
+        }, showForm ? '✕ キャンセル' : '+ 作付を追加')
+      )
+    ),
+
+    // 違反アラート
+    violations.length > 0 && React.createElement('div', {
+      style:{background:'#FEF2F2',border:'1px solid #FCA5A5',borderRadius:'8px',padding:'12px 16px',marginBottom:'16px'}
+    },
+      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'} },
+        React.createElement('span', { style:{fontSize:'18px'} }, '🚨'),
+        React.createElement('span', { style:{fontSize:'14px',fontWeight:600,color:'#DC2626'} }, '収穫前日数違反の可能性 (' + violations.length + '件)')
+      ),
+      ...violations.map((v, i) =>
+        React.createElement('div', {
+          key: i,
+          style:{fontSize:'12px',color:'#991B1B',padding:'4px 0',borderTop:i>0?'1px solid #3d1515':'none'}
+        },
+          `⚠️ ${v.fieldName}「${v.crop}」収穫予定 ${v.preharvest}日前以内に「${v.pestName}」散布 (${v.sprayDate}・残${v.diffDays}日)`
+        )
+      )
+    ),
+
+    // 追加フォーム
+    showForm && React.createElement('div', { className:'card', style:{marginBottom:'16px'} },
+      React.createElement(SectionTitle, { icon:'calendar-event' }, '作付を追加'),
+      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'12px',marginBottom:'12px'} },
+        // 圃場（Step0: 元表記でも検索できるコンボボックスに変更）
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '圃場'),
+          React.createElement(FieldSearchSelect, {
+            fields, value: form.field_id, onChange: v => updateField('field_id', v)
+          })
+        ),
+        // 作物
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '作物'),
+          React.createElement('select', {
+            className:'form-select', value:form.crop,
+            onChange:e => updateField('crop', e.target.value)
+          },
+            ...CROPS_LIST.map(c => React.createElement('option', {key:c, value:c}, c))
+          )
+        ),
+        // 開始月
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '開始月'),
+          React.createElement('select', {
+            className:'form-select', value:form.start_month,
+            onChange:e => updateField('start_month', Number(e.target.value))
+          },
+            ...MONTH_LABELS.map((m,i) => React.createElement('option', {key:i, value:i+1}, m))
+          )
+        ),
+        // 終了月
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '終了月'),
+          React.createElement('select', {
+            className:'form-select', value:form.end_month,
+            onChange:e => updateField('end_month', Number(e.target.value))
+          },
+            ...MONTH_LABELS.map((m,i) => React.createElement('option', {key:i, value:i+1}, m))
+          )
+        )
+      ),
+      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'1fr auto',gap:'12px',alignItems:'flex-end'} },
+        React.createElement('div', { className:'form-group', style:{marginBottom:0} },
+          React.createElement('label', { className:'form-label' }, '備考（任意）'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.note,
+            onChange:e => updateField('note', e.target.value), placeholder:'例: 春作・連作注意'
+          })
+        ),
+        React.createElement('div', null,
+          hasOverlap && React.createElement('div', {
+            style:{fontSize:'12px',color:'#DC2626',marginBottom:'6px'}
+          }, '⚠️ 同圃場の期間が重複しています'),
+          React.createElement('button', {
+            className:'btn btn-primary',
+            disabled: !form.field_id || form.start_month > form.end_month || hasOverlap,
+            onClick: handleAdd
+          }, '追加する')
+        )
+      )
+    ),
+
+    // ガントチャート本体
+    React.createElement('div', { className:'card page-grow', style:{padding:'16px 20px'} },
+      // 月ヘッダー
+      React.createElement('div', { style:{display:'grid',gridTemplateColumns:'130px 1fr',gap:0,marginBottom:'8px'} },
+        React.createElement('div', { style:{fontSize:'12px',color:'#6B7280'} }, '圃場'),
+        React.createElement('div', { style:{display:'flex'} },
+          ...MONTH_LABELS.map((m, i) =>
+            React.createElement('div', {
+              key:i,
+              style:{
+                flex:1, fontSize:'11px', fontWeight:600, color:'#6B7280',
+                textAlign:'center', padding:'4px 0',
+                background: i % 2 === 0 ? '#1a1e28' : 'transparent',
+                borderRadius:'4px'
+              }
+            }, m)
+          )
+        )
+      ),
+
+      // 圃場ごとの行（UX-09: 計画 vs 実績バーを重ねて表示）
+      React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:'6px'} },
+        ...fields.map(field => {
+          const fieldPlans = plans.filter(p => p.field_id === field.id)
+          
+          // UX-09: 実績バーの計算関数
+          const getActualCoverage = () => {
+            // この圃場の作付期間内での実績（作業記録）を集計
+            const fieldRecords = records.filter(r => r.field_id === field.id)
+            if (fieldRecords.length === 0) return []
+            
+            // 月ごとに実績があるかを判定（1月=1, 2月=2, ..., 12月=12）
+            const months = {}
+            fieldRecords.forEach(r => {
+              if (r.date) {
+                const month = parseInt(r.date.slice(5, 7), 10)
+                months[month] = true
+              }
+            })
+            
+            // 実績がある連続月の範囲を抽出
+            const sortedMonths = Object.keys(months).map(Number).sort((a,b) => a-b)
+            if (sortedMonths.length === 0) return []
+            
+            const ranges = []
+            let rangeStart = sortedMonths[0]
+            let rangeLast = sortedMonths[0]
+            
+            for (let i = 1; i < sortedMonths.length; i++) {
+              if (sortedMonths[i] - rangeLast === 1) {
+                rangeLast = sortedMonths[i]
+              } else {
+                ranges.push({ start: rangeStart, end: rangeLast })
+                rangeStart = sortedMonths[i]
+                rangeLast = sortedMonths[i]
+              }
+            }
+            ranges.push({ start: rangeStart, end: rangeLast })
+            return ranges
+          }
+          
+          const actualRanges = getActualCoverage()
+          
+          return React.createElement('div', {
+            key: field.id,
+            style:{display:'grid',gridTemplateColumns:'130px 1fr',gap:0,alignItems:'center',minHeight:'40px'}
+          },
+            // 圃場名
+            React.createElement('div', { style:{paddingRight:'12px'} },
+              React.createElement('div', { style:{fontSize:'14px',fontWeight:600,color:'#374151'} }, field.name),
+              React.createElement('div', { style:{fontSize:'12px',color:'#6B7280'} }, field.crop)
+            ),
+            // バー領域
+            React.createElement('div', {
+              style:{position:'relative',height:'36px',background:'#F8FAFF',borderRadius:'6px',overflow:'visible'}
+            },
+              // 月グリッド線
+              ...MONTHS.map((_, i) =>
+                i > 0 ? React.createElement('div', {
+                  key:'grid'+i,
+                  style:{
+                    position:'absolute', left:(i/12*100)+'%', top:0, bottom:0,
+                    width:'1px', background:'#E5E9F0', pointerEvents:'none'
+                  }
+                }) : null
+              ).filter(Boolean),
+
+              // UX-09: 実績バー（背後・薄い色）
+              ...actualRanges.map((range, idx) => {
+                const left  = ((range.start - 1) / 12 * 100)
+                const width = ((range.end - range.start + 1) / 12 * 100)
+                return React.createElement('div', {
+                  key: 'actual-'+idx,
+                  style:{
+                    position:'absolute',
+                    left: left+'%', width: 'calc('+width+'% - 4px)',
+                    top:'8px', bottom:'8px', marginLeft:'2px',
+                    background: '#0A6B5233',  // 薄いフォレストグリーン（背景）
+                    borderRadius:'4px',
+                    border:'1px dashed #0A6B5266',
+                    zIndex:1,
+                    pointerEvents:'none'
+                  },
+                  title: '実績: '+range.start+'月〜'+range.end+'月'
+                })
+              }),
+
+              // 今月マーカー
+              React.createElement('div', {
+                style:{
+                  position:'absolute',
+                  left:((new Date().getMonth()) / 12 * 100)+'%',
+                  top:'-4px', bottom:'-4px', width:'2px',
+                  background:'#DC2626', opacity:.7, borderRadius:'2px',
+                  zIndex:3, pointerEvents:'none'
+                }
+              }),
+
+              // 作付バー（前面・濃い色）
+              ...fieldPlans.map(plan => {
+                const left  = ((plan.start_month - 1) / 12 * 100)
+                const width = ((plan.end_month - plan.start_month + 1) / 12 * 100)
+                const hasViol = violations.some(v => v.planId === plan.id)
+                return React.createElement('div', {
+                  key: plan.id,
+                  title: `${plan.crop} ${plan.start_month}月〜${plan.end_month}月${plan.note?' ('+plan.note+')':''}`,
+                  style:{
+                    position:'absolute',
+                    left: left+'%', width: 'calc('+width+'% - 4px)',
+                    top:'4px', bottom:'4px', marginLeft:'2px',
+                    background: plan.color,
+                    borderRadius:'5px',
+                    display:'flex', alignItems:'center', paddingLeft:'8px',
+                    fontSize:'11px', fontWeight:600, color:'#fff',
+                    overflow:'hidden', whiteSpace:'nowrap',
+                    boxShadow: hasViol ? '0 0 0 2px #ff7070' : 'none',
+                    cursor:'pointer', zIndex:2,
+                    opacity:.9
+                  },
+                  onClick: () => setDeleteTarget(plan)
+                },
+                  React.createElement('span', { style:{overflow:'hidden',textOverflow:'ellipsis'} },
+                    (hasViol ? '⚠️ ' : '') + plan.crop
+                  )
+                )
+              })
+            )
+          )
+        })
+      ),
+
+      // 凡例（UX-09: 実績バーの説明を追加）
+      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'16px',marginTop:'16px',paddingTop:'12px',borderTop:'1px solid #E5E9F0',flexWrap:'wrap'} },
+        React.createElement('div', { style:{fontSize:'12px',color:'#6B7280'} }, '作物:'),
+        ...Object.entries(CROP_COLORS).map(([crop, color]) =>
+          React.createElement('div', { key:crop, style:{display:'flex',alignItems:'center',gap:'5px'} },
+            React.createElement('div', { style:{width:12,height:12,borderRadius:'3px',background:color} }),
+            React.createElement('span', { style:{fontSize:'12px',color:'#6B7280'} }, crop)
+          )
+        ),
+        React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'5px'} },
+          React.createElement('div', { style:{width:16,height:14,borderRadius:'3px',background:'#0A6B5233',border:'1px dashed #0A6B5266'} }),
+          React.createElement('span', { style:{fontSize:'12px',color:'#6B7280'} }, '📊 実績期間')
+        ),
+        React.createElement('div', { style:{marginLeft:'auto',display:'flex',alignItems:'center',gap:'5px'} },
+          React.createElement('div', { style:{width:2,height:14,background:'#DC2626',borderRadius:'2px'} }),
+          React.createElement('span', { style:{fontSize:'12px',color:'#6B7280'} }, '今月')
+        )
+      )
+    ),
+
+    // サマリーテーブル
+    React.createElement('div', { style:{marginTop:'16px'} },
+      React.createElement('div', { className:'section-title' }, '作付一覧'),
+      React.createElement('div', { className:'card card-data' },
+        plans.length === 0
+          ? React.createElement('div', { style:{padding:'24px',color:'#6B7280',fontSize:'14px',textAlign:'center'} }, '作付計画がまだありません。「+ 作付を追加」から登録してください。')
+          : React.createElement('table', { className:'table' },
+              React.createElement('thead', null,
+                React.createElement('tr', null,
+                  ...['圃場', '作物', '期間', '備考', ''].map(h => React.createElement('th', {key:h}, h))
+                )
+              ),
+              React.createElement('tbody', null,
+                ...plans.map(plan => {
+                  const field = fields.find(f => f.id === plan.field_id)
+                  const hasViol = violations.some(v => v.planId === plan.id)
+                  return React.createElement('tr', { key:plan.id },
+                    React.createElement('td', null,
+                      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'8px'} },
+                        React.createElement('div', { style:{width:8,height:8,borderRadius:'50%',background:field?.color||'#9ba4b5'} }),
+                        field?.name || '—'
+                      )
+                    ),
+                    React.createElement('td', null,
+                      React.createElement('span', {
+                        style:{display:'inline-flex',alignItems:'center',gap:'6px',padding:'2px 10px',borderRadius:'20px',background:plan.color+'22',color:plan.color,fontSize:'12px',fontWeight:600,border:'1px solid '+plan.color+'44'}
+                      }, (hasViol?'⚠️ ':'')+plan.crop)
+                    ),
+                    React.createElement('td', null,
+                      React.createElement('span', { style:{color:'#374151'} }, plan.start_month+'月 〜 '+plan.end_month+'月'),
+                      React.createElement('span', { style:{fontSize:'12px',color:'#6B7280',marginLeft:'6px'} }, '('+((plan.end_month-plan.start_month+1))+'ヶ月)')
+                    ),
+                    React.createElement('td', { style:{color:'#6B7280',fontSize:'12px'} }, plan.note || '—'),
+                    React.createElement('td', null,
+                      React.createElement('button', {
+                        style:{padding:'4px 10px',fontSize:'12px',color:'#6B7280',background:'transparent',border:'1px solid #E5E9F0',borderRadius:'6px',cursor:'pointer'},
+                        onClick: () => setDeleteTarget(plan)
+                      }, '削除')
+                    )
+                  )
+                })
+              )
+            )
+      )
+    ),
+
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '作付け計画を削除しますか？',
+      targetName: deleteTarget.crop + '　' + deleteTarget.start_month + '月〜' + deleteTarget.end_month + '月',
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+    })
+  )
+}
+
+// =====================================================
+// LOGIN-01: LoginScreen — モック認証
+// =====================================================
+const DEMO_ACCOUNTS = {
+  'owner@nakagawa.farm':  { pw:'demo1234', role:'経営者', color:'#0A6B52', bg:'#ECFDF5', border:'#6EE7B7', text:'#065F46' },
+  'tanaka@nakagawa.farm': { pw:'demo1234', role:'スタッフ', color:'#1D4ED8', bg:'#EFF6FF', border:'#93C5FD', text:'#1E3A8A' },
+  'nguyen@nakagawa.farm': { pw:'demo1234', role:'実習生', color:'#6D28D9', bg:'#F5F3FF', border:'#C4B5FD', text:'#4C1D95' },
+}
+
+function LoginScreen({ onLogin }) {
+  const [email, setEmail]     = React.useState('')
+  const [pw,    setPw]        = React.useState('')
+  const [showPw, setShowPw]   = React.useState(false)
+  const [role,   setRole]     = React.useState('経営者')
+  const [error,  setError]    = React.useState('')
+  const [loading, setLoading] = React.useState(false)
+
+  const ROLES = [
+    { label:'経営者', icon:'ti-briefcase',  accent:'#0A6B52' },
+    { label:'スタッフ', icon:'ti-hard-hat', accent:'#1D4ED8' },
+    { label:'実習生', icon:'ti-plant-2',    accent:'#6D28D9' },
+  ]
+  const FEATURES = [
+    { icon:'ti-clipboard-check', label:'GAP申請サポート',   sub:'チェックリスト・書類一括出力',     color:'#0A6B52', bg:'#ECFDF5' },
+    { icon:'ti-droplet',         label:'農薬散布記録',       sub:'法定上限チェック・PDF出力',        color:'#B45309', bg:'#FFFBEB' },
+    { icon:'ti-map-pin',         label:'圃場マップ管理',     sub:'畑・畝の2階層管理・ピン登録',      color:'#1D4ED8', bg:'#EFF6FF' },
+    { icon:'ti-calendar-stats',  label:'作付計画',             sub:'記録が溜まるほど来年が楽になる',   color:'#6D28D9', bg:'#F5F3FF' },
+  ]
+
+  function fillDemo(em) {
+    setEmail(em)
+    setPw(DEMO_ACCOUNTS[em].pw)
+    setRole(DEMO_ACCOUNTS[em].role)
+    setError('')
+  }
+
+  function doLogin() {
+    setError('')
+    if (!email) { setError('メールアドレスを入力してください'); return }
+    if (!pw)    { setError('パスワードを入力してください'); return }
+    const acc = DEMO_ACCOUNTS[email]
+    if (!acc || acc.pw !== pw)   { setError('メールアドレスまたはパスワードが正しくありません'); return }
+    if (acc.role !== role)       { setError(`このアカウントのロールは「${acc.role}」です`); return }
+    setLoading(true)
+    setTimeout(() => onLogin({ email, role: acc.role }), 900)
+  }
+
+  const activeAccent = ROLES.find(r => r.label === role)?.accent || '#0A6B52'
+
+  return React.createElement('div', {
+    style:{
+      display:'flex', width:'100vw', height:'100vh', overflow:'hidden',
+      fontFamily:"'Inter',system-ui,sans-serif",
+    }
+  },
+    // ── 左パネル（ブランド） ──
+    React.createElement('div', {
+      style:{
+        width:'320px', flexShrink:0, position:'relative', overflow:'hidden',
+        background:'linear-gradient(160deg, #0B1C15 0%, #0A2E22 40%, #061B14 100%)',
+        display:'flex', flexDirection:'column', padding:'0',
+      }
+    },
+      // ゴールドライン
+      React.createElement('div', { style:{position:'absolute',left:0,top:0,bottom:0,width:'3px',background:'linear-gradient(180deg,#B8976A 0%,#0A6B52 60%,#061B14 100%)'} }),
+      // 背景装飾 — 光のリング
+      React.createElement('div', { style:{position:'absolute',top:'-80px',right:'-80px',width:'300px',height:'300px',borderRadius:'50%',background:'radial-gradient(circle, rgba(10,107,82,0.18) 0%, transparent 70%)',pointerEvents:'none'} }),
+      React.createElement('div', { style:{position:'absolute',bottom:'-60px',left:'-60px',width:'240px',height:'240px',borderRadius:'50%',background:'radial-gradient(circle, rgba(184,151,106,0.12) 0%, transparent 70%)',pointerEvents:'none'} }),
+
+      React.createElement('div', { style:{padding:'40px 36px', display:'flex', flexDirection:'column', height:'100%', position:'relative', zIndex:1} },
+        // ロゴ
+        React.createElement('div', { style:{marginBottom:'48px'} },
+          React.createElement('div', {
+            style:{width:'52px',height:'52px',borderRadius:'14px',background:'linear-gradient(135deg,#0A6B52,#34D399)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'18px',boxShadow:'0 4px 20px rgba(10,107,82,0.4)'}
+          }, React.createElement('i', { className:'ti ti-plant-2', style:{fontSize:'26px',color:'#fff'} })),
+          React.createElement('div', { style:{fontSize:'20px',fontWeight:700,color:'#F8FAFC',letterSpacing:'-.02em',lineHeight:1.2} }, '農場名'),
+          React.createElement('div', { style:{fontSize:'10px',color:'#B8976A',letterSpacing:'.12em',fontWeight:600,textTransform:'uppercase',marginTop:'5px'} }, 'Farm Management System'),
+        ),
+
+        // 区切り
+        React.createElement('div', { style:{height:'1px',background:'linear-gradient(90deg,rgba(184,151,106,0.5),transparent)',marginBottom:'28px'} }),
+
+        // 機能リスト
+        React.createElement('div', { style:{fontSize:'9px',fontWeight:700,color:'rgba(255,255,255,0.3)',letterSpacing:'.12em',textTransform:'uppercase',marginBottom:'16px'} }, '主な機能'),
+        React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:'4px'} },
+          ...FEATURES.map(f =>
+            React.createElement('div', { key:f.label, style:{display:'flex',alignItems:'center',gap:'12px',padding:'11px 14px',borderRadius:'10px',background:'rgba(255,255,255,0.04)',border:'0.5px solid rgba(255,255,255,0.07)'} },
+              React.createElement('div', { style:{width:'34px',height:'34px',borderRadius:'8px',background:f.bg+'22',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0} },
+                React.createElement('i', { className:`ti ${f.icon}`, style:{fontSize:'17px',color:f.color} })
+              ),
+              React.createElement('div', null,
+                React.createElement('div', { style:{fontSize:'12px',fontWeight:600,color:'rgba(255,255,255,0.88)',lineHeight:1.3} }, f.label),
+                React.createElement('div', { style:{fontSize:'10px',color:'rgba(255,255,255,0.38)',marginTop:'1px'} }, f.sub),
+              )
+            )
+          )
+        ),
+
+        // バージョン
+        React.createElement('div', { style:{marginTop:'auto',paddingTop:'24px'} },
+          React.createElement('div', { style:{display:'inline-flex',alignItems:'center',gap:'6px',fontSize:'10px',color:'rgba(255,255,255,0.3)',background:'rgba(255,255,255,0.06)',border:'0.5px solid rgba(255,255,255,0.1)',padding:'5px 12px',borderRadius:'20px'} },
+            React.createElement('i', { className:'ti ti-shield-check', style:{fontSize:'12px',color:'#B8976A'} }),
+            'v1.0.0-beta  © 農場名'
+          )
+        )
+      )
+    ),
+
+    // ── 右パネル（フォーム） ──
+    React.createElement('div', {
+      style:{flex:1,display:'flex',alignItems:'center',justifyContent:'center',background:'#FAFBFA',padding:'40px'}
+    },
+      React.createElement('div', { style:{width:'100%',maxWidth:'380px'} },
+        React.createElement('div', { style:{marginBottom:'8px',fontSize:'26px',fontWeight:700,color:'#111827',letterSpacing:'-.025em'} }, 'おかえりなさい'),
+        React.createElement('div', { style:{marginBottom:'32px',fontSize:'14px',color:'#64748B'} }, 'アカウントにサインインしてください'),
+
+        // ロール選択
+        React.createElement('div', { style:{fontSize:'9px',fontWeight:700,color:'#94A3B8',letterSpacing:'.1em',textTransform:'uppercase',marginBottom:'10px'} }, 'ロール'),
+        React.createElement('div', { style:{display:'flex',gap:'8px',marginBottom:'24px'} },
+          ...ROLES.map(r =>
+            React.createElement('button', {
+              key:r.label,
+              onClick: () => { setRole(r.label); setError('') },
+              style:{
+                flex:1, padding:'10px 4px', borderRadius:'10px', cursor:'pointer',
+                border: role===r.label ? `2px solid ${r.accent}` : '1.5px solid #D8E4D8',
+                background: role===r.label ? r.accent+'12' : '#fff',
+                fontFamily:"'Inter',sans-serif", transition:'all .12s',
+              }
+            },
+              React.createElement('i', { className:`ti ${r.icon}`, style:{fontSize:'18px',color: role===r.label ? r.accent : '#94A3B8',display:'block',marginBottom:'3px'} }),
+              React.createElement('div', { style:{fontSize:'11px',fontWeight:700,color: role===r.label ? r.accent : '#64748B',letterSpacing:'.01em'} }, r.label)
+            )
+          )
+        ),
+
+        // メール
+        React.createElement('div', { style:{marginBottom:'16px'} },
+          React.createElement('label', { style:{fontSize:'11px',fontWeight:700,color:'#374151',letterSpacing:'.06em',textTransform:'uppercase',display:'block',marginBottom:'8px'} }, 'メールアドレス'),
+          React.createElement('div', { style:{position:'relative'} },
+            React.createElement('i', { className:'ti ti-mail', style:{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',fontSize:'16px',color:'#94A3B8',pointerEvents:'none'} }),
+            React.createElement('input', {
+              type:'email', value:email, placeholder:'example@nakagawa.farm',
+              onChange:e=>{setEmail(e.target.value);setError('')},
+              onKeyDown:e=>e.key==='Enter'&&doLogin(),
+              style:{width:'100%',padding:'11px 12px 11px 38px',border:'1.5px solid #D8E4D8',borderRadius:'8px',fontSize:'14px',fontFamily:"'Inter',sans-serif",color:'#111827',background:'#fff',outline:'none',transition:'border-color .15s, box-shadow .15s'},
+              onFocus:e=>{e.target.style.borderColor=activeAccent;e.target.style.boxShadow=`0 0 0 3px ${activeAccent}22`},
+              onBlur:e=>{e.target.style.borderColor='#D8E4D8';e.target.style.boxShadow='none'},
+            })
+          )
+        ),
+
+        // パスワード
+        React.createElement('div', { style:{marginBottom:'8px'} },
+          React.createElement('label', { style:{fontSize:'11px',fontWeight:700,color:'#374151',letterSpacing:'.06em',textTransform:'uppercase',display:'block',marginBottom:'8px'} }, 'パスワード'),
+          React.createElement('div', { style:{position:'relative'} },
+            React.createElement('i', { className:'ti ti-lock', style:{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',fontSize:'16px',color:'#94A3B8',pointerEvents:'none'} }),
+            React.createElement('input', {
+              type:showPw?'text':'password', value:pw, placeholder:'パスワードを入力',
+              onChange:e=>{setPw(e.target.value);setError('')},
+              onKeyDown:e=>e.key==='Enter'&&doLogin(),
+              style:{width:'100%',padding:'11px 40px 11px 38px',border:'1.5px solid #D8E4D8',borderRadius:'8px',fontSize:'14px',fontFamily:"'Inter',sans-serif",color:'#111827',background:'#fff',outline:'none',transition:'border-color .15s, box-shadow .15s'},
+              onFocus:e=>{e.target.style.borderColor=activeAccent;e.target.style.boxShadow=`0 0 0 3px ${activeAccent}22`},
+              onBlur:e=>{e.target.style.borderColor='#D8E4D8';e.target.style.boxShadow='none'},
+            }),
+            React.createElement('button', {
+              onClick:()=>setShowPw(!showPw),
+              style:{position:'absolute',right:'10px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#94A3B8',fontSize:'16px',display:'flex',padding:'2px'}
+            }, React.createElement('i', { className: showPw ? 'ti ti-eye-off' : 'ti ti-eye' }))
+          )
+        ),
+
+        // エラー
+        error && React.createElement('div', {
+          style:{display:'flex',alignItems:'center',gap:'8px',background:'#FFF7ED',border:'1px solid #FDBA74',borderRadius:'7px',padding:'9px 13px',fontSize:'12px',color:'#9A3412',marginBottom:'14px',marginTop:'12px'}
+        }, React.createElement('i', { className:'ti ti-alert-circle', style:{fontSize:'15px',flexShrink:0} }), error),
+
+        // ログインボタン
+        React.createElement('button', {
+          onClick:doLogin,
+          style:{
+            width:'100%',marginTop:'20px',padding:'13px',borderRadius:'9px',border:'none',
+            background: loading ? '#64748B' : `linear-gradient(135deg, ${activeAccent}, ${activeAccent}DD)`,
+            fontSize:'14px',fontWeight:700,color:'#fff',cursor:loading?'not-allowed':'pointer',
+            fontFamily:"'Inter',sans-serif",letterSpacing:'.01em',
+            display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',
+            boxShadow: loading ? 'none' : `0 4px 18px ${activeAccent}44`,
+            transition:'all .15s',
+          }
+        },
+          loading
+            ? React.createElement(React.Fragment, null, React.createElement('i', { className:'ti ti-loader-2', style:{fontSize:'16px',animation:'spin 1s linear infinite'} }), '認証中...')
+            : React.createElement(React.Fragment, null, React.createElement('i', { className:'ti ti-login', style:{fontSize:'16px'} }), 'サインイン')
+        ),
+
+        // デモアカウント
+        React.createElement('div', { style:{marginTop:'28px'} },
+          React.createElement('div', { style:{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px'} },
+            React.createElement('div', { style:{flex:1,height:'0.5px',background:'#DDE8DE'} }),
+            React.createElement('div', { style:{fontSize:'10px',color:'#94A3B8',fontWeight:600,letterSpacing:'.06em'} }, 'デモアカウント'),
+            React.createElement('div', { style:{flex:1,height:'0.5px',background:'#DDE8DE'} }),
+          ),
+          React.createElement('div', { style:{background:'#F8FAF8',border:'0.5px solid #DDE8DE',borderRadius:'10px',padding:'4px',display:'flex',flexDirection:'column',gap:'2px'} },
+            ...Object.entries(DEMO_ACCOUNTS).map(([em, acc]) =>
+              React.createElement('button', {
+                key:em,
+                onClick:()=>fillDemo(em),
+                style:{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',borderRadius:'7px',border:'none',background:email===em?acc.bg:'transparent',cursor:'pointer',textAlign:'left',fontFamily:"'Inter',sans-serif",transition:'background .1s',width:'100%'}
+              },
+                React.createElement('span', {
+                  style:{fontSize:'10px',fontWeight:700,padding:'2px 9px',borderRadius:'20px',background:acc.bg,color:acc.text,border:`1px solid ${acc.border}`,whiteSpace:'nowrap',flexShrink:0}
+                }, acc.role),
+                React.createElement('span', { style:{fontSize:'12px',color:'#374151',fontWeight:500,flex:1} }, em),
+                React.createElement('i', { className:'ti ti-arrow-right', style:{fontSize:'13px',color:'#B8C9B8',flexShrink:0} })
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+}
+
+// ── spin keyframe（ローディング用） ──
+const _spinStyle = document.createElement('style')
+_spinStyle.textContent = '@keyframes spin{to{transform:rotate(360deg)}}'
+document.head.appendChild(_spinStyle)
+
+// =====================================================
+// 農薬マスタ管理ページ（Step①: 新規追加）
+// 農薬の追加・編集・削除と在庫初期値の確認
+// =====================================================
+function PesticideMasterPage({ pesticides, pesticideStock, pesticidePurchases, onAdd, onUpdate, onDelete, onAddPurchase, onUpdateStock, records }) {
+  const EMPTY_FORM = { name:'', reg_no:'', dilution:'', max_times:'', preharvest_days:'', stock_L:'', alert_threshold_L:'' }
+  const [form,       setForm]       = React.useState(EMPTY_FORM)
+  const [editId,     setEditId]     = React.useState(null)  // null = 新規, number = 編集中
+  const [showForm,   setShowForm]   = React.useState(false)
+  const [deleteConf,  setDeleteConf]  = React.useState(null)  // 削除確認対象のid
+  const [detailModalId, setDetailModalId] = React.useState(null)  // 詳細モーダル対象の農薬ID（IDのみ保持して常に最新データを参照）
+  const [activeTab,  setActiveTab]  = React.useState('list')  // 'list' | 'inventory' | 'history'
+
+  const pf = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
+
+  const startEdit = (p) => {
+    const stockEntry = pesticideStock.find(s => s.pesticide_id === p.id)
+    setForm({
+      name:               p.name,
+      reg_no:             p.reg_no,
+      dilution:           String(p.dilution),
+      max_times:          String(p.max_times),
+      preharvest_days:    String(p.preharvest_days),
+      stock_L:            String(stockEntry ? stockEntry.stock_L : (p.stock_L ?? '')),
+      alert_threshold_L:  String(stockEntry ? stockEntry.alert_threshold_L : (p.alert_threshold_L ?? '')),
+    })
+    setEditId(p.id)
+    setShowForm(true)
+  }
+
+  const handleSave = () => {
+    if (!form.name.trim()) return
+    const payload = {
+      name:               form.name.trim(),
+      reg_no:             form.reg_no.trim(),
+      dilution:           Number(form.dilution) || 0,
+      max_times:          Number(form.max_times) || 0,
+      preharvest_days:    Number(form.preharvest_days) || 0,
+      stock_L:            Number(form.stock_L) || 0,
+      alert_threshold_L:  Number(form.alert_threshold_L) || 0,
+    }
+    if (editId !== null) {
+      onUpdate({ ...payload, id: editId })
+    } else {
+      onAdd(payload)
+    }
+    setForm(EMPTY_FORM)
+    setEditId(null)
+    setShowForm(false)
+  }
+
+  const handleCancel = () => {
+    setForm(EMPTY_FORM)
+    setEditId(null)
+    setShowForm(false)
+  }
+
+  // 在庫率（%）
+  const stockRatio = (p) => {
+    const s = pesticideStock.find(s => s.pesticide_id === p.id)
+    if (!s || s.stock_L === 0) return 0
+    const purchases = pesticidePurchases.filter(pu => pu.pesticide_id === p.id)
+    const totalBought = purchases.reduce((a, b) => a + (b.amount_L || 0), 0)
+    if (!totalBought) return 100
+    return Math.min(100, Math.round((s.stock_L / totalBought) * 100))
+  }
+
+  const stockOf = (p) => {
+    const s = pesticideStock.find(s => s.pesticide_id === p.id)
+    return s ? s.stock_L : p.stock_L ?? 0
+  }
+
+  const threshOf = (p) => {
+    const s = pesticideStock.find(s => s.pesticide_id === p.id)
+    return s ? s.alert_threshold_L : p.alert_threshold_L ?? 0
+  }
+
+  const isAlert = (p) => stockOf(p) <= threshOf(p)
+
+  // ── カラーパレット ──
+  const C = {
+    green:  '#0A6B52', greenL: '#E8F5F0', greenM: '#34A87E',
+    amber:  '#B45309', amberL: '#FFFBEB',
+    red:    '#C2410C', redL:   '#FFF1EE',
+    ink:    '#111827', sub:    '#4B5563', muted: '#9CA3AF',
+    border: '#E2E8E2', bg:     '#F8FAF8',
+  }
+
+  const inp = (label, key, type='text', placeholder='') =>
+    React.createElement('div', { style:{ marginBottom:'16px' } },
+      React.createElement('label', {
+        style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'6px' }
+      }, label),
+      React.createElement('input', {
+        type, value: form[key],
+        placeholder,
+        onChange: e => pf(key, e.target.value),
+        style:{
+          width:'100%', padding:'9px 12px', borderRadius:'8px',
+          border: `1.5px solid ${C.border}`, background:'#fff',
+          fontSize:'13px', color:C.ink, outline:'none', fontFamily:"'Inter',sans-serif",
+        },
+        onFocus: e => { e.target.style.borderColor = C.green; e.target.style.boxShadow = '0 0 0 3px rgba(10,107,82,.1)' },
+        onBlur:  e => { e.target.style.borderColor = C.border; e.target.style.boxShadow = 'none' },
+      })
+    )
+
+  return React.createElement('div', { className:'page', style:{ padding:'28px 32px' } },
+
+    // ── ページヘッダー ──
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'28px' } },
+      React.createElement('div', null,
+        React.createElement('p', { className:'eyebrow', style:{ margin:0 } }, 'PESTICIDE MASTER'),
+        React.createElement('h1', { style:{ fontSize:'22px', fontWeight:700, color:C.ink, margin:0, letterSpacing:'-.02em' } }, '農薬マスタ管理'),
+        React.createElement('p',  { style:{ fontSize:'13px', color:C.muted, marginTop:'4px', marginBottom:0 } },
+          '登録農薬の一覧・追加・編集・削除。在庫の初期値もここで設定します。'
+        ),
+      ),
+      !showForm && activeTab === 'list' && React.createElement('button', {
+        onClick: () => { setForm(EMPTY_FORM); setEditId(null); setShowForm(true) },
+        style:{
+          display:'flex', alignItems:'center', gap:'6px',
+          padding:'9px 18px', borderRadius:'8px', border:'none', cursor:'pointer',
+          background:C.green,
+          color:'#fff', fontSize:'13px', fontWeight:600,
+          boxShadow:'none',
+          fontFamily:"'Inter',sans-serif",
+        }
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'15px' } }),
+        '農薬を追加'
+      )
+    ),
+
+    // ── タブ切替（農薬一覧 / 棚卸し入力 / 使用履歴） ──
+    React.createElement('div', { style:{ display:'flex', gap:'4px', marginBottom:'24px', borderBottom:`1px solid ${C.border}`, paddingBottom:'0' } },
+      ...['list','inventory','history'].map(tab => {
+        const labels = { list:'農薬一覧', inventory:'棚卸し入力', history:'使用履歴' }
+        const isActiveTab = activeTab === tab
+        return React.createElement('button', {
+          key: tab,
+          onClick: () => setActiveTab(tab),
+          style:{
+            padding:'8px 18px', border:'none', background:'none', cursor:'pointer',
+            fontSize:'13px', fontWeight: isActiveTab ? 700 : 500,
+            color: isActiveTab ? C.green : C.sub,
+            borderBottom: isActiveTab ? `2px solid ${C.green}` : '2px solid transparent',
+            marginBottom:'-1px', transition:'all .12s',
+            fontFamily:"'Inter',sans-serif",
+          }
+        }, labels[tab])
+      })
+    ),
+
+    // ── 追加・編集モーダル（肥料マスタの登録モーダルとUXを統一） ──
+    showForm && React.createElement('div', {
+      style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+      onClick: handleCancel,
+    },
+      React.createElement('div', {
+        id: 'pesticide-edit-form',
+        style:{ background:'#FFFFFF', borderRadius:'16px', width:'480px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(0,0,0,.22)', padding:'24px' },
+        onClick: e => e.stopPropagation(),
+      },
+        // ── ヘッダー ──
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px' } },
+            React.createElement('div', {
+              style:{ width:40, height:40, borderRadius:'10px', background:C.greenL, display:'flex', alignItems:'center', justifyContent:'center' }
+            }, React.createElement('i', { className:'ti ti-flask', style:{ color:C.green, fontSize:'20px' } })),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'16px', fontWeight:700, color:C.ink } },
+                form.name || (editId !== null ? '農薬を編集' : '新しい農薬を登録')
+              ),
+              React.createElement('div', { style:{ fontSize:'11px', color:C.muted, marginTop:'2px' } },
+                form.reg_no || '農薬登録番号未入力'
+              ),
+            )
+          ),
+          React.createElement('button', {
+            onClick: handleCancel,
+            style:{ background:'none', border:'none', cursor:'pointer', color:'#9CA3AF', fontSize:'20px', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+
+        // フォーム2カラムグリッド
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' } },
+          inp('農薬名（商品名）', 'name',            'text',   'スミチオン乳剤'),
+          inp('農薬登録番号',     'reg_no',           'text',   '農林123号'),
+          inp('希釈倍率',         'dilution',         'number', '1000'),
+          inp('使用上限回数（回/シーズン）', 'max_times', 'number', '3'),
+          inp('収穫前日数（日）', 'preharvest_days',  'number', '7'),
+          inp('現在の在庫量（L）','stock_L',          'number', '20'),
+        ),
+        inp('発注アラート閾値（L）', 'alert_threshold_L', 'number', '4'),
+
+        // ── ボタン ──
+        React.createElement('div', { style:{ display:'flex', gap:'10px', marginTop:'4px' } },
+          React.createElement('button', {
+            onClick: handleCancel,
+            style:{
+              flex:1, padding:'10px', borderRadius:'8px', border:`1.5px solid ${C.border}`,
+              background:'#fff', color:C.sub, fontSize:'13px', fontWeight:600, cursor:'pointer',
+              fontFamily:"'Inter',sans-serif",
+            }
+          }, 'キャンセル'),
+          React.createElement('button', {
+            onClick: handleSave,
+            disabled: !form.name.trim(),
+            style:{
+              flex:2, padding:'10px', borderRadius:'8px', border:'none',
+              cursor: form.name.trim() ? 'pointer' : 'not-allowed',
+              background:C.green,
+              color:'#fff', fontSize:'13px', fontWeight:700,
+              opacity: form.name.trim() ? 1 : .45,
+              fontFamily:"'Inter',sans-serif",
+              display:'flex', alignItems:'center', justifyContent:'center', gap:'6px',
+            }
+          },
+            React.createElement('i', { className: editId !== null ? 'ti ti-device-floppy' : 'ti ti-check' }),
+            editId !== null ? '変更を保存' : '登録する'
+          ),
+        )
+      )
+    ),
+
+    // ── 棚卸し入力タブ ──
+    activeTab === 'inventory' && React.createElement(InventoryCheckPanel, {
+      pesticides,
+      pesticideStock,
+      onUpdateStock,
+    }),
+
+    // ── 使用履歴タブ ──
+    activeTab === 'history' && React.createElement(PesticideHistoryPanel, {
+      pesticides,
+      records: records || [],
+    }),
+
+    // ── 農薬一覧カード ──
+    activeTab === 'list' && (pesticides.length === 0
+      ? React.createElement('div', {
+          style:{
+            background:'#fff', borderRadius:'14px', padding:'60px 0', textAlign:'center',
+            border:`1.5px dashed ${C.border}`,
+          }
+        },
+          React.createElement('i', { className:'ti ti-flask-off', style:{ fontSize:'40px', color:C.border, display:'block', marginBottom:'12px' } }),
+          React.createElement('div', { style:{ color:C.muted, fontSize:'14px' } }, '農薬が登録されていません。「農薬を追加」から登録してください。')
+        )
+      : React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'12px' } },
+          ...pesticides.map(p => {
+            const stock  = stockOf(p)
+            const thresh = threshOf(p)
+            const alert  = isAlert(p)
+            const ratio  = stockRatio(p)
+
+            return React.createElement('div', {
+              key: p.id,
+              onClick: () => setDetailModalId(p.id),
+              style:{
+                background:'#fff', borderRadius:'12px', padding:'16px',
+                boxShadow:'0 1px 3px rgba(10,107,82,.05),0 2px 8px rgba(17,24,39,.06)',
+                border: alert ? '1.5px solid rgba(194,65,12,.25)' : '1px solid '+C.border,
+                cursor:'pointer', transition:'box-shadow .15s, border-color .15s',
+                display:'flex', flexDirection:'column', gap:'10px',
+              },
+              onMouseEnter: e => { e.currentTarget.style.boxShadow='0 4px 16px rgba(10,107,82,.13)'; e.currentTarget.style.borderColor = alert ? 'rgba(194,65,12,.5)' : '#0A6B52' },
+              onMouseLeave: e => { e.currentTarget.style.boxShadow='0 1px 3px rgba(10,107,82,.05),0 2px 8px rgba(17,24,39,.06)'; e.currentTarget.style.borderColor = alert ? 'rgba(194,65,12,.25)' : C.border },
+            },
+              // ── 上段：アイコン + 名前 + アラートバッジ ──
+              React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', gap:'10px' } },
+                React.createElement('div', {
+                  style:{
+                    width:'32px', height:'32px', borderRadius:'8px', flexShrink:0,
+                    background: alert ? '#FFF1EE' : C.greenL,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                  }
+                },
+                  React.createElement('i', { className:'ti ti-flask', style:{ fontSize:'16px', color: alert ? C.red : C.green } })
+                ),
+                React.createElement('div', { style:{ flex:1, minWidth:0 } },
+                  React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:C.ink, lineHeight:1.3, wordBreak:'break-all' } }, p.name),
+                  React.createElement('div', { style:{ fontSize:'10px', color:C.muted, marginTop:'2px' } }, p.reg_no),
+                ),
+                alert && React.createElement('span', {
+                  style:{
+                    fontSize:'9px', fontWeight:700, padding:'2px 6px', borderRadius:'20px', flexShrink:0,
+                    background:'#FFF1EE', color:C.red, border:'1px solid rgba(194,65,12,.2)',
+                  }
+                }, '⚠ 要発注'),
+              ),
+
+              // ── 在庫バー + 数値 ──
+              React.createElement('div', null,
+                React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px' } },
+                  React.createElement('span', { style:{ fontSize:'10px', color:C.sub, fontWeight:600 } }, '在庫'),
+                  React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color: stock < 0 ? C.red : alert ? C.red : C.ink } },
+                    stock+' L',
+                    stock >= 0 && React.createElement('span', { style:{ fontSize:'10px', color:C.muted, fontWeight:400, marginLeft:'3px' } },
+                      '/ 閾値 '+thresh+' L'
+                    )
+                  ),
+                ),
+                React.createElement('div', { style:{ background:'#EDF2ED', borderRadius:'6px', height:'6px', overflow:'hidden' } },
+                  React.createElement('div', {
+                    style:{
+                      height:'100%', borderRadius:'6px',
+                      width: (stock < 0 ? 100 : ratio)+'%',
+                      background: stock < 0 ? C.red : alert ? C.red : ratio > 50 ? C.green : C.amber,
+                      transition:'width .6s ease',
+                      opacity: stock < 0 ? 0.5 : 1,
+                    }
+                  })
+                ),
+                stock < 0 && React.createElement('div', { style:{ fontSize:'10px', color:C.red, fontWeight:600, marginTop:'4px' } }, '⚠ マイナス在庫')
+              ),
+
+              // ── 下段：3バッジ（詳細情報） ──
+              React.createElement('div', { style:{ display:'flex', gap:'5px' } },
+                React.createElement('div', {
+                  style:{
+                    flex:1, textAlign:'center',
+                    background:'#EFF6FF', border:'1px solid #BFDBFE',
+                    borderRadius:'7px', padding:'4px 4px',
+                  }
+                },
+                  React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color:'#1D4ED8', lineHeight:1.2 } },
+                    p.dilution === 1 ? '原液' : p.dilution+'倍'
+                  ),
+                  React.createElement('div', { style:{ fontSize:'9px', color:'#3B82F6', fontWeight:600, marginTop:'2px' } }, '希釈')
+                ),
+                React.createElement('div', {
+                  style:{
+                    flex:1, textAlign:'center',
+                    background: p.preharvest_days <= 3 ? '#FFF7ED' : p.preharvest_days <= 7 ? '#FFFBEB' : '#F0FDF4',
+                    border:'1px solid '+(p.preharvest_days <= 3 ? '#FED7AA' : p.preharvest_days <= 7 ? '#FDE68A' : '#BBF7D0'),
+                    borderRadius:'7px', padding:'4px 4px',
+                  }
+                },
+                  React.createElement('div', {
+                    style:{
+                      fontSize:'12px', fontWeight:700, lineHeight:1.2,
+                      color: p.preharvest_days <= 3 ? C.red : p.preharvest_days <= 7 ? C.amber : C.green,
+                    }
+                  }, p.preharvest_days+'日'),
+                  React.createElement('div', { style:{ fontSize:'9px', fontWeight:600, marginTop:'2px', color: p.preharvest_days <= 3 ? '#EA580C' : p.preharvest_days <= 7 ? '#D97706' : '#059669' } }, '収穫前')
+                ),
+                React.createElement('div', {
+                  style:{
+                    flex:1, textAlign:'center',
+                    background:'#F8FAFC', border:'1px solid #E2E8F0',
+                    borderRadius:'7px', padding:'4px 4px',
+                  }
+                },
+                  React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color:'#475569', lineHeight:1.2 } }, p.max_times+'回'),
+                  React.createElement('div', { style:{ fontSize:'9px', color:'#94A3B8', fontWeight:600, marginTop:'2px' } }, '年間上限')
+                ),
+              )
+            )
+          })
+        )),
+
+    // ── 農薬詳細モーダル ──
+    // detailModalId を元に pesticides から最新オブジェクトを取得することで
+    // 編集・保存後も常に最新データをモーダルに反映する
+    (() => {
+      const detailPesticide = detailModalId !== null ? pesticides.find(p => p.id === detailModalId) : null
+      return detailPesticide ? React.createElement(PesticideDetailModal, {
+        pesticide:    detailPesticide,
+        stock:        stockOf(detailPesticide),
+        thresh:       threshOf(detailPesticide),
+        ratio:        stockRatio(detailPesticide),
+        isAlert:      isAlert(detailPesticide),
+        purchases:    pesticidePurchases.filter(pu => pu.pesticide_id === detailPesticide.id),
+        onAddPurchase: onAddPurchase,
+        onClose:      () => setDetailModalId(null),
+        onEdit:       (p) => { setDetailModalId(null); startEdit(p) },
+        onDelete:     (id) => { onDelete(id); setDetailModalId(null) },
+      }) : null
+    })()
+  )
+}
+
+// ── 農薬詳細モーダル ──────────────────────────────────
+function PesticideDetailModal({ pesticide: p, stock, thresh, ratio, isAlert: alert, purchases, onClose, onEdit, onDelete, onAddPurchase }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
+  // view: 'detail' | 'purchase' | 'history'
+  const [view, setView] = React.useState(alert ? 'detail' : 'detail')
+  const [showPurchaseForm, setShowPurchaseForm] = React.useState(false)
+  const [purchaseForm, setPurchaseForm] = React.useState({
+    date: new Date().toISOString().slice(0,10),
+    amount_L: '',
+    supplier: '',
+    price_yen: '',
+  })
+  const [purchaseDone, setPurchaseDone] = React.useState(false)
+
+  const C = {
+    green:  '#0A6B52', greenL: '#E8F5F0',
+    amber:  '#B45309', amberL: '#FFFBEB',
+    red:    '#C2410C', redL:   '#FFF1EE',
+    ink:    '#111827', sub:    '#4B5563', muted: '#9CA3AF',
+    border: '#E2E8E2', bg:     '#F8FAF8',
+  }
+  const rowStyle = { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 0', borderBottom:'1px solid #F1F5F9', fontSize:'13px' }
+
+  const handlePurchaseSave = () => {
+    if (!purchaseForm.amount_L || Number(purchaseForm.amount_L) <= 0) return
+    onAddPurchase({
+      pesticide_id: p.id,
+      date:         purchaseForm.date,
+      amount_L:     Number(purchaseForm.amount_L),
+      supplier:     purchaseForm.supplier.trim() || '—',
+      price_yen:    Number(purchaseForm.price_yen) || 0,
+    })
+    setPurchaseDone(true)
+    setTimeout(() => {
+      setPurchaseDone(false)
+      setShowPurchaseForm(false)
+      setPurchaseForm({ date: new Date().toISOString().slice(0,10), amount_L:'', supplier:'', price_yen:'' })
+    }, 1800)
+  }
+
+  const inputSt = { width:'100%', padding:'9px 12px', borderRadius:'8px', border:'1.5px solid '+C.border, background:'#fff', fontSize:'13px', color:C.ink, outline:'none', boxSizing:'border-box', fontFamily:"'Inter',sans-serif" }
+
+  // 購入履歴（この農薬のみ・新しい順）
+  const myPurchases = (purchases || [])
+    .filter(pu => pu.pesticide_id === p.id)
+    .sort((a,b) => b.date.localeCompare(a.date))
+
+  return React.createElement('div', {
+    style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+    onClick: onClose,
+  },
+    React.createElement('div', {
+      style:{ background:'#FFFFFF', borderRadius:'16px', width:'460px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(0,0,0,.22)', display:'flex', flexDirection:'column' },
+      onClick: e => e.stopPropagation(),
+    },
+
+      // ── ヘッダー（固定） ──
+      React.createElement('div', {
+        style:{ padding:'20px 24px 0', flexShrink:0 }
+      },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px' } },
+            React.createElement('div', {
+              style:{ width:40, height:40, borderRadius:'10px', flexShrink:0, background: alert ? '#FFF1EE' : C.greenL, display:'flex', alignItems:'center', justifyContent:'center' }
+            },
+              React.createElement('i', { className:'ti ti-flask', style:{ fontSize:'20px', color: alert ? C.red : C.green } })
+            ),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'16px', fontWeight:700, color:C.ink } }, p.name),
+              React.createElement('div', { style:{ fontSize:'11px', color:C.muted, marginTop:'2px' } }, p.reg_no),
+            )
+          ),
+          React.createElement('button', {
+            onClick: onClose,
+            style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+          }, '✕')
+        ),
+
+        // タブ
+        React.createElement('div', { style:{ display:'flex', gap:'2px', background:'#F1F5F1', borderRadius:'10px', padding:'3px', marginBottom:'0' } },
+          [
+            { key:'detail',  label:'詳細', icon:'ti-info-circle' },
+            { key:'purchase', label:'仕入れ登録', icon:'ti-package-import' },
+            { key:'history', label:'仕入れ履歴', icon:'ti-history' },
+          ].map(tab =>
+            React.createElement('button', {
+              key: tab.key,
+              onClick: () => { setView(tab.key); setShowPurchaseForm(false); setPurchaseDone(false) },
+              style:{
+                flex:1, padding:'7px 4px', borderRadius:'8px', border:'none', cursor:'pointer',
+                fontSize:'12px', fontWeight:600,
+                background: view === tab.key ? '#fff' : 'transparent',
+                color: view === tab.key ? C.green : C.muted,
+                boxShadow: view === tab.key ? '0 1px 4px rgba(0,0,0,.08)' : 'none',
+                transition:'all .15s', display:'flex', alignItems:'center', justifyContent:'center', gap:'5px',
+                fontFamily:"'Inter',sans-serif",
+              }
+            },
+              React.createElement('i', { className:'ti '+tab.icon, style:{ fontSize:'13px' } }),
+              tab.label
+            )
+          )
+        ),
+      ),
+
+      // ── コンテンツ ──
+      React.createElement('div', { style:{ padding:'20px 24px 24px', flex:1 } },
+
+        // ========== 詳細タブ ==========
+        view === 'detail' && React.createElement('div', null,
+
+          // 在庫アラートバナー
+          alert && React.createElement('div', {
+            style:{ background:'#FFF1EE', border:'1px solid rgba(194,65,12,.25)', borderRadius:'10px', padding:'12px 14px', marginBottom:'16px', display:'flex', alignItems:'center', gap:'10px' }
+          },
+            React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'18px', color:C.red, flexShrink:0 } }),
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:C.red } }, '在庫がアラート閾値を下回っています'),
+              React.createElement('div', { style:{ fontSize:'12px', color:'#9A3412', marginTop:'2px' } }, '「仕入れ登録」タブから補充を記録できます'),
+            ),
+            React.createElement('button', {
+              onClick: () => setView('purchase'),
+              style:{
+                marginLeft:'auto', padding:'7px 14px', borderRadius:'7px', border:'none',
+                background:C.red, color:'#fff', fontSize:'12px', fontWeight:700, cursor:'pointer', flexShrink:0,
+                fontFamily:"'Inter',sans-serif",
+              }
+            }, '仕入れる →')
+          ),
+
+          // 詳細情報
+          React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'10px', padding:'4px 14px', marginBottom:'16px' } },
+            React.createElement('div', { style:rowStyle },
+              React.createElement('span', { style:{ color:C.sub } }, '希釈倍率'),
+              React.createElement('span', { style:{ fontWeight:700, color:'#1D4ED8' } }, p.dilution === 1 ? '原液（希釈不要）' : p.dilution+'倍')
+            ),
+            React.createElement('div', { style:rowStyle },
+              React.createElement('span', { style:{ color:C.sub } }, '収穫前日数'),
+              React.createElement('span', { style:{ fontWeight:700, color: p.preharvest_days <= 3 ? C.red : p.preharvest_days <= 7 ? C.amber : C.green } }, p.preharvest_days+'日')
+            ),
+            React.createElement('div', { style:rowStyle },
+              React.createElement('span', { style:{ color:C.sub } }, '年間使用上限'),
+              React.createElement('span', { style:{ fontWeight:600, color:C.ink } }, p.max_times+'回')
+            ),
+            React.createElement('div', { style:{ ...rowStyle, borderBottom:'none' } },
+              React.createElement('span', { style:{ color:C.sub } }, '現在の在庫量'),
+              React.createElement('span', { style:{ fontWeight:700, color: stock < 0 ? C.red : alert ? C.red : C.ink } },
+                stock+' L',
+                React.createElement('span', { style:{ fontSize:'11px', color:C.muted, fontWeight:400, marginLeft:'4px' } }, '（閾値: '+thresh+' L）')
+              )
+            ),
+          ),
+
+          // 在庫バー
+          React.createElement('div', { style:{ marginBottom:'22px' } },
+            React.createElement('div', { style:{ background:'#EDF2ED', borderRadius:'6px', height:'8px', overflow:'hidden' } },
+              React.createElement('div', {
+                style:{ height:'100%', borderRadius:'6px', width:(stock < 0 ? 100 : ratio)+'%', background: stock < 0 ? C.red : alert ? C.red : ratio > 50 ? C.green : C.amber, transition:'width .6s ease', opacity: stock < 0 ? 0.5 : 1 }
+              })
+            )
+          ),
+
+          // ボタン群
+          !showDeleteConfirm && React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+            React.createElement('button', {
+              onClick: () => onEdit(p),
+              style:{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'10px', borderRadius:'8px', border:'1.5px solid '+C.border, background:'#fff', color:C.sub, fontSize:'13px', fontWeight:600, cursor:'pointer', fontFamily:"'Inter',sans-serif" }
+            },
+              React.createElement('i', { className:'ti ti-pencil', style:{ fontSize:'14px' } }), '編集'
+            ),
+            React.createElement('button', {
+              onClick: () => setShowDeleteConfirm(true),
+              style:{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:'6px', padding:'10px', borderRadius:'8px', border:'1.5px solid #FCA5A5', background:'#FEF2F2', color:'#DC2626', fontSize:'13px', fontWeight:600, cursor:'pointer', fontFamily:"'Inter',sans-serif" }
+            },
+              React.createElement('i', { className:'ti ti-trash', style:{ fontSize:'14px' } }), '削除'
+            ),
+          ),
+
+          showDeleteConfirm && React.createElement('div', {
+            style:{ background:'#FFF1EE', border:'1px solid rgba(194,65,12,.2)', borderRadius:'10px', padding:'14px 16px' }
+          },
+            React.createElement('div', { style:{ fontSize:'13px', color:C.red, fontWeight:600, marginBottom:'12px' } }, '「'+p.name+'」を削除します。この操作は元に戻せません。'),
+            React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+              React.createElement('button', { onClick:()=>setShowDeleteConfirm(false), style:{ flex:1, padding:'9px', borderRadius:'8px', border:'1.5px solid '+C.border, background:'#fff', color:C.sub, fontSize:'13px', fontWeight:600, cursor:'pointer', fontFamily:"'Inter',sans-serif" } }, 'キャンセル'),
+              React.createElement('button', { onClick:()=>onDelete(p.id), style:{ flex:1, padding:'9px', borderRadius:'8px', border:'none', background:C.red, color:'#fff', fontSize:'13px', fontWeight:700, cursor:'pointer', fontFamily:"'Inter',sans-serif" } }, '削除する'),
+            )
+          )
+        ),
+
+        // ========== 仕入れ登録タブ ==========
+        view === 'purchase' && React.createElement('div', null,
+
+          // 現在の在庫サマリー
+          React.createElement('div', {
+            style:{ background: alert ? '#FFF1EE' : '#F0FDF4', border:'1px solid '+(alert ? 'rgba(194,65,12,.2)' : '#BBF7D0'), borderRadius:'10px', padding:'12px 16px', marginBottom:'20px', display:'flex', justifyContent:'space-between', alignItems:'center' }
+          },
+            React.createElement('div', null,
+              React.createElement('div', { style:{ fontSize:'11px', fontWeight:600, color: alert ? C.red : C.green, letterSpacing:'.06em', textTransform:'uppercase' } }, '現在の在庫'),
+              React.createElement('div', { style:{ fontSize:'22px', fontWeight:700, color: alert ? C.red : C.green, lineHeight:1.2, marginTop:'2px' } }, stock+' L'),
+              React.createElement('div', { style:{ fontSize:'11px', color: alert ? '#9A3412' : '#065F46', marginTop:'2px' } }, 'アラート閾値: '+thresh+' L'),
+            ),
+            alert
+              ? React.createElement('div', { style:{ fontSize:'28px' } }, '⚠️')
+              : React.createElement('i', { className:'ti ti-circle-check', style:{ fontSize:'28px', color:C.green } })
+          ),
+
+          // 成功メッセージ
+          purchaseDone && React.createElement('div', {
+            style:{ background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:'10px', padding:'16px', textAlign:'center', marginBottom:'16px' }
+          },
+            React.createElement('i', { className:'ti ti-circle-check', style:{ fontSize:'28px', color:C.green, display:'block', marginBottom:'6px' } }),
+            React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:C.green } }, '仕入れを登録しました'),
+            React.createElement('div', { style:{ fontSize:'12px', color:'#065F46', marginTop:'4px' } }, '在庫量に反映されました')
+          ),
+
+          // 仕入れフォーム
+          !purchaseDone && React.createElement('div', null,
+            React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'12px' } },
+              React.createElement('div', null,
+                React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'6px' } }, '仕入れ日 *'),
+                React.createElement('input', {
+                  type:'date', value:purchaseForm.date,
+                  onChange: e => setPurchaseForm(f => ({...f, date:e.target.value})),
+                  style: inputSt,
+                  onFocus: e => { e.target.style.borderColor=C.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+                  onBlur:  e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none' },
+                })
+              ),
+              React.createElement('div', null,
+                React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'6px' } }, '仕入れ量 (L) *'),
+                React.createElement('input', {
+                  type:'number', min:'0', step:'0.1', placeholder:'例: 20',
+                  value: purchaseForm.amount_L,
+                  onChange: e => setPurchaseForm(f => ({...f, amount_L:e.target.value})),
+                  style: inputSt,
+                  onFocus: e => { e.target.style.borderColor=C.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+                  onBlur:  e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none' },
+                })
+              ),
+            ),
+            React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'20px' } },
+              React.createElement('div', null,
+                React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'6px' } }, '仕入れ先'),
+                React.createElement('input', {
+                  type:'text', placeholder:'例: JAみどり',
+                  value: purchaseForm.supplier,
+                  onChange: e => setPurchaseForm(f => ({...f, supplier:e.target.value})),
+                  style: inputSt,
+                  onFocus: e => { e.target.style.borderColor=C.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+                  onBlur:  e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none' },
+                })
+              ),
+              React.createElement('div', null,
+                React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'6px' } }, '金額 (円)'),
+                React.createElement('input', {
+                  type:'number', min:'0', placeholder:'例: 8400',
+                  value: purchaseForm.price_yen,
+                  onChange: e => setPurchaseForm(f => ({...f, price_yen:e.target.value})),
+                  style: inputSt,
+                  onFocus: e => { e.target.style.borderColor=C.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+                  onBlur:  e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none' },
+                })
+              ),
+            ),
+
+            // 仕入れ後の在庫プレビュー
+            purchaseForm.amount_L && Number(purchaseForm.amount_L) > 0 && React.createElement('div', {
+              style:{ background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:'10px', padding:'12px 14px', marginBottom:'20px', display:'flex', alignItems:'center', gap:'10px' }
+            },
+              React.createElement('i', { className:'ti ti-calculator', style:{ fontSize:'16px', color:'#1D4ED8', flexShrink:0 } }),
+              React.createElement('div', { style:{ fontSize:'13px', color:'#1E3A8A' } },
+                '登録後の在庫: ',
+                React.createElement('strong', null, Math.round((stock + Number(purchaseForm.amount_L)) * 100) / 100 + ' L'),
+                '（現在 '+stock+' L + 仕入れ '+purchaseForm.amount_L+' L）'
+              )
+            ),
+
+            React.createElement('button', {
+              onClick: handlePurchaseSave,
+              disabled: !purchaseForm.amount_L || Number(purchaseForm.amount_L) <= 0,
+              style:{
+                width:'100%', padding:'12px', borderRadius:'10px', border:'none',
+                background: (!purchaseForm.amount_L || Number(purchaseForm.amount_L) <= 0) ? '#D1FAE5' : C.green,
+                color:'#fff', fontSize:'14px', fontWeight:700, cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:'8px',
+                fontFamily:"'Inter',sans-serif", opacity: (!purchaseForm.amount_L || Number(purchaseForm.amount_L) <= 0) ? 0.5 : 1,
+              }
+            },
+              React.createElement('i', { className:'ti ti-package-import', style:{ fontSize:'16px' } }),
+              '仕入れを登録して在庫に追加'
+            )
+          )
+        ),
+
+        // ========== 仕入れ履歴タブ ==========
+        view === 'history' && React.createElement('div', null,
+          myPurchases.length === 0
+            ? React.createElement('div', { style:{ textAlign:'center', padding:'40px 0', color:C.muted } },
+                React.createElement('i', { className:'ti ti-package-off', style:{ fontSize:'36px', display:'block', marginBottom:'10px' } }),
+                React.createElement('div', { style:{ fontSize:'13px' } }, 'まだ仕入れ記録がありません')
+              )
+            : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'8px' } },
+                ...myPurchases.map((pu, i) =>
+                  React.createElement('div', {
+                    key: pu.id || i,
+                    style:{ background:'#F8FAF8', borderRadius:'10px', padding:'12px 14px', border:'1px solid '+C.border }
+                  },
+                    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'6px' } },
+                      React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color:C.ink } }, pu.date),
+                      React.createElement('span', { style:{ fontSize:'14px', fontWeight:700, color:C.green } }, '+'+pu.amount_L+' L')
+                    ),
+                    React.createElement('div', { style:{ display:'flex', gap:'16px' } },
+                      React.createElement('span', { style:{ fontSize:'11px', color:C.muted } },
+                        React.createElement('i', { className:'ti ti-building-store', style:{ fontSize:'11px', marginRight:'3px' } }),
+                        pu.supplier || '—'
+                      ),
+                      pu.price_yen > 0 && React.createElement('span', { style:{ fontSize:'11px', color:C.muted } },
+                        React.createElement('i', { className:'ti ti-currency-yen', style:{ fontSize:'11px', marginRight:'3px' } }),
+                        pu.price_yen.toLocaleString()+'円'
+                      )
+                    )
+                  )
+                )
+              )
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// 【サンプル農園実データ統合 フェーズ3・Step3-1】肥料マスタ管理ページ
+// PesticideMasterPage（農薬マスタ）と同じ構造・見た目でコピーして作成。
+// 農薬特有の項目（農薬登録番号・希釈倍率・使用上限回数・収穫前日数）の代わりに、
+// 「価格マスタ」シート相当の肥料項目（メーカー・1袋の重さ・1袋の価格・1kg単価）を使用。
+// 単位は「kg単位に統一」という仮ルール（Step3-3で確認事項）。
+// =====================================================
+function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchases, topDressingRecords, fields, onAdd, onUpdate, onDelete, onAddPurchase, onUpdateStock }) {
+  const [showAddModal,   setShowAddModal]   = React.useState(false)
+  const [detailModalId, setDetailModalId] = React.useState(null)
+  const [activeTab, setActiveTab] = React.useState('list')
+
+  const stockOf  = (f) => { const s = fertilizerStock.find(s => s.fertilizer_id === f.id); return s ? s.stock_kg : f.stock_kg ?? 0 }
+  const threshOf = (f) => { const s = fertilizerStock.find(s => s.fertilizer_id === f.id); return s ? s.alert_threshold_kg : f.alert_threshold_kg ?? 0 }
+  const isAlert  = (f) => stockOf(f) <= threshOf(f)
+
+  // ── カラーパレット（農薬マスタと共通トーン） ──
+  const C = {
+    green:  '#0A6B52', greenL: '#E8F5F0', greenM: '#34A87E',
+    amber:  '#B45309', amberL: '#FFFBEB',
+    red:    '#C2410C', redL:   '#FFF1EE',
+    ink:    '#111827', sub:    '#4B5563', muted: '#9CA3AF',
+    border: '#E2E8E2', bg:     '#F8FAF8',
+  }
+
+  return React.createElement('div', { className:'page', style:{ padding:'28px 32px' } },
+
+    // ── ページヘッダー ──
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'28px' } },
+      React.createElement('div', null,
+        React.createElement('p', { className:'eyebrow', style:{ margin:0 } }, 'FERTILIZER MASTER'),
+        React.createElement('h1', { style:{ fontSize:'22px', fontWeight:700, color:C.ink, margin:0, letterSpacing:'-.02em' } }, '肥料マスタ管理'),
+        React.createElement('p',  { style:{ fontSize:'13px', color:C.muted, marginTop:'4px', marginBottom:0 } },
+          '登録肥料の一覧・追加・編集・削除。「価格マスタ」シートの肥料名・価格・重さ・1kg単価をもとにした初期データです。'
+        ),
+      ),
+      React.createElement('button', {
+        onClick: () => setShowAddModal(true),
+        style:{
+          display:'flex', alignItems:'center', gap:'6px',
+          padding:'9px 18px', borderRadius:'8px', border:'none', cursor:'pointer',
+          background:C.green, color:'#fff', fontSize:'13px', fontWeight:600,
+          fontFamily:"'Inter',sans-serif",
+        }
+      },
+        React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'15px' } }),
+        '肥料を追加'
+      )
+    ),
+
+    // ── Step3-3: 単位ルール & 価格マスタ反映バナー ──
+    React.createElement('div', {
+      style:{ background:'#F0F8F4', border:'1px solid #6EE7B7', borderRadius:'8px', padding:'10px 14px', marginBottom:'12px', fontSize:'11px', color:'#065F46' }
+    },
+      React.createElement('div', { style:{ fontWeight:700, marginBottom:'4px' } }, '✅ Step3-3完了 — 単位の整理 & 価格マスタ反映（実データ）'),
+      React.createElement('div', { style:{ lineHeight:1.7 } },
+        '📦 単位ルール（仮）: 在庫台帳で「袋数」「kg」が混在 → 月曜確認まで',
+        React.createElement('strong', null, ' kg単位に統一'),
+        '。weight_per_bag_kg を持つため袋⇔kg変換は常に可能。',
+        React.createElement('br', null),
+        '💴 価格マスタ（レタス管理表 > 肥料.農薬マスタシート）から苦土重焼燐・苦土石灰・ジシアン555・SBXの価格を実データに更新。',
+        React.createElement('br', null),
+        '⚠️ 月曜確認: 袋管理か kg管理かの正式ルール / ⚠️マーク付き品目の重さ（仮置き20kg） / 価格未入力品目。'
+      )
+    ),
+    // ── タブ切替（肥料一覧 / 棚卸し入力 / 使用履歴 / 仕入れ履歴） ──
+    React.createElement('div', { style:{ display:'flex', gap:4, borderBottom:`1px solid ${C.border}`, marginBottom:'16px' } },
+      ...['list','inventory','usage','history'].map(tab => {
+        const labels = { list:'肥料一覧', inventory:'棚卸し入力', usage:'使用履歴', history:'仕入れ履歴' }
+        const isActiveTab = activeTab === tab
+        return React.createElement('button', {
+          key: tab,
+          onClick: () => setActiveTab(tab),
+          style:{
+            padding:'8px 14px', border:'none', background:'none', cursor:'pointer',
+            fontSize:'13px', fontWeight: isActiveTab ? 700 : 500,
+            color: isActiveTab ? C.green : C.sub,
+            borderBottom: isActiveTab ? `2px solid ${C.green}` : '2px solid transparent',
+          }
+        }, labels[tab])
+      })
+    ),
+
+    // ── 棚卸し入力タブ ──
+    activeTab === 'inventory' && React.createElement(FertilizerInventoryCheckPanel, {
+      fertilizers, fertilizerStock, onUpdateStock
+    }),
+    // ── 使用履歴タブ ──
+    activeTab === 'usage' && React.createElement(FertilizerUsageHistoryPanel, {
+      fertilizers, topDressingRecords: topDressingRecords || [], fields: fields || []
+    }),
+    // ── 仕入れ履歴タブ ──
+    activeTab === 'history' && React.createElement(FertilizerPurchaseHistoryPanel, {
+      fertilizers, fertilizerPurchases
+    }),
+
+    // ── 肥料一覧カード ──
+    activeTab === 'list' && (fertilizers.length === 0
+      ? React.createElement('div', {
+          style:{
+            background:'#fff', borderRadius:'14px', padding:'60px 0', textAlign:'center',
+            border:`1.5px dashed ${C.border}`,
+          }
+        },
+          React.createElement('i', { className:'ti ti-leaf-off', style:{ fontSize:'40px', color:C.border, display:'block', marginBottom:'12px' } }),
+          React.createElement('div', { style:{ color:C.muted, fontSize:'14px' } }, '肥料が登録されていません。「肥料を追加」から登録してください。')
+        )
+      : React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'12px' } },
+          ...fertilizers.map(f => {
+            const stock  = stockOf(f)
+            const thresh = threshOf(f)
+            const alert  = isAlert(f)
+            const ratio  = stock <= 0 ? 0 : Math.min(100, Math.round((stock / Math.max(stock, thresh * 2 || stock || 1)) * 100))
+
+            return React.createElement('div', {
+              key: f.id,
+              onClick: () => setDetailModalId(f.id),
+              style:{
+                background:'#fff', borderRadius:'12px', padding:'16px',
+                boxShadow:'0 1px 3px rgba(10,107,82,.05),0 2px 8px rgba(17,24,39,.06)',
+                border: alert ? '1.5px solid rgba(194,65,12,.25)' : '1px solid '+C.border,
+                cursor:'pointer', transition:'box-shadow .15s, border-color .15s',
+                display:'flex', flexDirection:'column', gap:'10px',
+              },
+              onMouseEnter: e => { e.currentTarget.style.boxShadow='0 4px 16px rgba(10,107,82,.13)'; e.currentTarget.style.borderColor = alert ? 'rgba(194,65,12,.5)' : '#0A6B52' },
+              onMouseLeave: e => { e.currentTarget.style.boxShadow='0 1px 3px rgba(10,107,82,.05),0 2px 8px rgba(17,24,39,.06)'; e.currentTarget.style.borderColor = alert ? 'rgba(194,65,12,.25)' : C.border },
+            },
+              // ── 上段：アイコン + 名前 + アラートバッジ ──
+              React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', gap:'10px' } },
+                React.createElement('div', {
+                  style:{
+                    width:'32px', height:'32px', borderRadius:'8px', flexShrink:0,
+                    background: alert ? '#FFF1EE' : C.greenL,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                  }
+                },
+                  React.createElement('i', { className:'ti ti-leaf', style:{ fontSize:'16px', color: alert ? C.red : C.green } })
+                ),
+                React.createElement('div', { style:{ flex:1, minWidth:0 } },
+                  React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:C.ink, lineHeight:1.3, wordBreak:'break-all' } }, f.name),
+                  React.createElement('div', { style:{ fontSize:'10px', color:C.muted, marginTop:'2px' } }, f.maker || '—'),
+                ),
+                alert && React.createElement('span', {
+                  style:{
+                    fontSize:'9px', fontWeight:700, padding:'2px 6px', borderRadius:'20px', flexShrink:0,
+                    background:'#FFF1EE', color:C.red, border:'1px solid rgba(194,65,12,.2)',
+                  }
+                }, '⚠ 要発注'),
+              ),
+
+              // ── 在庫バー + 数値 ──
+              React.createElement('div', null,
+                React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'5px' } },
+                  React.createElement('span', { style:{ fontSize:'10px', color:C.sub, fontWeight:600 } }, '在庫'),
+                  React.createElement('span', { style:{ fontSize:'13px', fontWeight:700, color: stock < 0 ? C.red : alert ? C.red : C.ink } },
+                    stock+' kg',
+                    stock >= 0 && React.createElement('span', { style:{ fontSize:'10px', color:C.muted, fontWeight:400, marginLeft:'3px' } },
+                      '/ 閾値 '+thresh+' kg'
+                    )
+                  ),
+                ),
+                React.createElement('div', { style:{ background:'#EDF2ED', borderRadius:'6px', height:'6px', overflow:'hidden' } },
+                  React.createElement('div', {
+                    style:{
+                      height:'100%', borderRadius:'6px',
+                      width: (stock < 0 ? 100 : ratio)+'%',
+                      background: stock < 0 ? C.red : alert ? C.red : ratio > 50 ? C.green : C.amber,
+                      transition:'width .6s ease',
+                      opacity: stock < 0 ? 0.5 : 1,
+                    }
+                  })
+                ),
+                stock < 0 && React.createElement('div', { style:{ fontSize:'10px', color:C.red, fontWeight:600, marginTop:'4px' } }, '⚠ マイナス在庫')
+              ),
+
+              // ── 下段：3バッジ（価格情報） ──
+              React.createElement('div', { style:{ display:'flex', gap:'5px' } },
+                React.createElement('div', {
+                  style:{
+                    flex:1, textAlign:'center',
+                    background: f.weight_unconfirmed ? '#FFFBEB' : '#EFF6FF',
+                    border: f.weight_unconfirmed ? '1px solid #FDE68A' : '1px solid #BFDBFE',
+                    borderRadius:'7px', padding:'4px 4px',
+                  }
+                },
+                  React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color: f.weight_unconfirmed ? '#B45309' : '#1D4ED8', lineHeight:1.2 } },
+                    (f.weight_unconfirmed ? '⚠ ' : '') + (f.weight_per_bag_kg || 0)+'kg'
+                  ),
+                  React.createElement('div', { style:{ fontSize:'9px', color: f.weight_unconfirmed ? '#92400E' : '#3B82F6', fontWeight:600, marginTop:'2px' } },
+                    f.weight_unconfirmed ? '1袋(要確認)' : '1袋の重さ'
+                  )
+                ),
+                React.createElement('div', {
+                  style:{
+                    flex:1, textAlign:'center',
+                    background: f.price_per_bag_yen == null ? '#F8FAFC' : '#F0FDF4',
+                    border: f.price_per_bag_yen == null ? '1px solid #E2E8F0' : '1px solid #BBF7D0',
+                    borderRadius:'7px', padding:'4px 4px',
+                  }
+                },
+                  React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color: f.price_per_bag_yen == null ? '#94A3B8' : '#059669', lineHeight:1.2 } },
+                    f.price_per_bag_yen == null ? '—' : '¥'+(f.price_per_bag_yen || 0).toLocaleString()
+                  ),
+                  React.createElement('div', { style:{ fontSize:'9px', fontWeight:600, marginTop:'2px', color: f.price_per_bag_yen == null ? '#94A3B8' : '#059669' } },
+                    f.price_per_bag_yen == null ? '要確認' : '1袋の価格'
+                  )
+                ),
+                React.createElement('div', {
+                  style:{
+                    flex:1, textAlign:'center',
+                    background: f.unit_price_yen_per_kg == null ? '#F8FAFC' : '#F8FAFC',
+                    border:'1px solid #E2E8F0',
+                    borderRadius:'7px', padding:'4px 4px',
+                  }
+                },
+                  React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color: f.unit_price_yen_per_kg == null ? '#94A3B8' : '#475569', lineHeight:1.2 } },
+                    f.unit_price_yen_per_kg == null ? '—' : '¥'+f.unit_price_yen_per_kg
+                  ),
+                  React.createElement('div', { style:{ fontSize:'9px', color:'#94A3B8', fontWeight:600, marginTop:'2px' } },
+                    f.unit_price_yen_per_kg == null ? '要確認' : '1kg単価'
+                  )
+                ),
+              )
+            )
+          })
+        )),
+
+    // ── 肥料詳細モーダル（農薬モーダルと同等レベル：タブ + 在庫バー） ──
+    (() => {
+      const detailFertilizer = detailModalId !== null ? fertilizers.find(f => f.id === detailModalId) : null
+      if (!detailFertilizer) return null
+      const stock  = stockOf(detailFertilizer)
+      const thresh = threshOf(detailFertilizer)
+      const alert  = isAlert(detailFertilizer)
+      const ratio  = stock <= 0 ? 0 : Math.min(100, Math.round((stock / Math.max(thresh * 2 || stock || 1, stock)) * 100))
+
+      return React.createElement(FertilizerDetailModal, {
+        f: detailFertilizer, stock, thresh, alert, ratio, C,
+        onClose: () => setDetailModalId(null),
+        onUpdate,
+        onDelete: () => { onDelete(detailFertilizer.id); setDetailModalId(null) },
+        fertilizerPurchases, onAddPurchase,
+        fertilizerStock,
+      })
+    })(),
+
+    // ── 新規追加モーダル ──
+    showAddModal && React.createElement(FertilizerAddModal, {
+      C,
+      onClose: () => setShowAddModal(false),
+      onSave: (payload) => { onAdd(payload); setShowAddModal(false) },
+    })
+  )
+}
+
+// ── 肥料 新規追加モーダル ──
+// 【肥料 希釈倍率 案③】肥料マスタの「基本希釈倍率」＋「作物別の上書き（任意）」を編集する共通UI。
+// 農薬の希釈倍率（マスタ登録時に固定・現場では自動セットのみ）とは異なり、
+// 肥料はメーカー推奨値＋現場調整の「目安」という位置づけのため、常に編集可能な入力として提供する。
+function FertilizerDilutionEditor({ defaultDilution, setDefaultDilution, cropRows, setCropRows, C }) {
+  const updateRow = (idx, patch) => setCropRows(prev => prev.map((r, i) => i === idx ? { ...r, ...patch } : r))
+  const addRow    = () => setCropRows(prev => [...prev, { crop:'', dilution:'' }])
+  const removeRow = (idx) => setCropRows(prev => prev.filter((_, i) => i !== idx))
+
+  const inputStyle = { width:'100%', padding:'9px 12px', borderRadius:'8px', border:`1.5px solid ${C.border}`, background:'#fff', fontSize:'13px', color:C.ink, outline:'none', fontFamily:"'Inter',sans-serif", boxSizing:'border-box' }
+  const labelStyle = { fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:5 }
+
+  return React.createElement('div', { style:{ marginTop:6, marginBottom:14, paddingTop:14, borderTop:`1px dashed ${C.border}` } },
+    React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:C.green, marginBottom:8, display:'flex', alignItems:'center', gap:5 } },
+      React.createElement('i', { className:'ti ti-droplet', style:{ fontSize:'12px' } }),
+      '希釈倍率（任意・農薬と違い法定の固定値ではありません）'
+    ),
+    React.createElement('div', { style:{ marginBottom:10 } },
+      React.createElement('label', { style:labelStyle }, '基本希釈倍率（倍・未設定でも可）'),
+      React.createElement('input', {
+        type:'number', value:defaultDilution, placeholder:'例: 1000',
+        onChange: e => setDefaultDilution(e.target.value),
+        style:inputStyle,
+        onFocus: e => { e.target.style.borderColor=C.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+        onBlur:  e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none' },
+      })
+    ),
+    React.createElement('div', { style:{ fontSize:'10px', color:C.muted, marginBottom:8 } },
+      '作物によって倍率を変えている場合のみ、下に作物名と倍率を登録してください（未登録の作物は基本希釈倍率が使われます）'
+    ),
+    ...cropRows.map((row, idx) =>
+      React.createElement('div', { key:idx, style:{ display:'flex', gap:8, marginBottom:6, alignItems:'center' } },
+        React.createElement('input', {
+          type:'text', value:row.crop, placeholder:'作物名（例: レタス）',
+          onChange: e => updateRow(idx, { crop: e.target.value }),
+          style:{ ...inputStyle, flex:2 },
+        }),
+        React.createElement('input', {
+          type:'number', value:row.dilution, placeholder:'倍率',
+          onChange: e => updateRow(idx, { dilution: e.target.value }),
+          style:{ ...inputStyle, flex:1 },
+        }),
+        React.createElement('span', { style:{ fontSize:'12px', color:C.sub, flexShrink:0 } }, '倍'),
+        React.createElement('button', {
+          onClick: () => removeRow(idx), title:'この行を削除',
+          style:{ background:'none', border:'none', color:'#94A3B8', cursor:'pointer', fontSize:'16px', padding:'4px', flexShrink:0 }
+        }, '✕')
+      )
+    ),
+    React.createElement('button', {
+      onClick: addRow,
+      style:{ display:'flex', alignItems:'center', gap:5, fontSize:'12px', fontWeight:600, color:C.green, background:'none', border:'1.5px dashed #B8D4C0', borderRadius:'7px', padding:'6px 10px', cursor:'pointer' }
+    },
+      React.createElement('i', { className:'ti ti-plus', style:{ fontSize:'13px' } }),
+      '作物別の倍率を追加'
+    )
+  )
+}
+
+// 肥料マスタの crop_dilutions（オブジェクト）と編集用の行配列（cropRows）を相互変換するヘルパー
+function fertilizerCropDilutionsToRows(crop_dilutions) {
+  return Object.entries(crop_dilutions || {}).map(([crop, dilution]) => ({ crop, dilution: String(dilution) }))
+}
+function fertilizerCropRowsToObject(cropRows) {
+  const out = {}
+  cropRows.forEach(r => {
+    const crop = r.crop.trim()
+    const dilution = Number(r.dilution)
+    if (crop && dilution > 0) out[crop] = dilution
+  })
+  return out
+}
+
+function FertilizerAddModal({ C, onClose, onSave }) {
+  const EMPTY = { name:'', maker:'', weight_per_bag_kg:'', price_per_bag_yen:'', unit_price_yen_per_kg:'', stock_kg:'', alert_threshold_kg:'' }
+  const [form, setForm] = React.useState(EMPTY)
+  const [saved, setSaved] = React.useState(false)
+  // 【肥料 希釈倍率 案③】基本希釈倍率＋作物別の上書き（任意）
+  const [defaultDilution, setDefaultDilution] = React.useState('')
+  const [cropRows, setCropRows] = React.useState([])
+
+  const pf = (k, v) => setForm(prev => {
+    const next = { ...prev, [k]: v }
+    if ((k === 'weight_per_bag_kg' || k === 'price_per_bag_yen') && next.weight_per_bag_kg && next.price_per_bag_yen) {
+      const w = Number(next.weight_per_bag_kg), p = Number(next.price_per_bag_yen)
+      if (w > 0) next.unit_price_yen_per_kg = String(Math.round((p / w) * 10) / 10)
+    }
+    return next
+  })
+
+  const handleSave = () => {
+    if (!form.name.trim()) return
+    setSaved(true)
+    setTimeout(() => {
+      onSave({
+        name:                  form.name.trim(),
+        maker:                 form.maker.trim(),
+        weight_per_bag_kg:     Number(form.weight_per_bag_kg) || 0,
+        price_per_bag_yen:     Number(form.price_per_bag_yen) || 0,
+        unit_price_yen_per_kg: Number(form.unit_price_yen_per_kg) || 0,
+        stock_kg:              Number(form.stock_kg) || 0,
+        alert_threshold_kg:    Number(form.alert_threshold_kg) || 0,
+        default_dilution:      Number(defaultDilution) || null,
+        crop_dilutions:        fertilizerCropRowsToObject(cropRows),
+      })
+    }, 600)
+  }
+
+  const fieldInp = (label, key, type='text', placeholder='') =>
+    React.createElement('div', { style:{ marginBottom:14 } },
+      React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:5 } }, label),
+      React.createElement('input', {
+        type, value: form[key], placeholder,
+        onChange: e => pf(key, e.target.value),
+        style:{ width:'100%', padding:'9px 12px', borderRadius:'8px', border:`1.5px solid ${C.border}`, background:'#fff', fontSize:'13px', color:C.ink, outline:'none', fontFamily:"'Inter',sans-serif", boxSizing:'border-box' },
+        onFocus: e => { e.target.style.borderColor=C.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+        onBlur:  e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none' },
+      })
+    )
+
+  return React.createElement('div', {
+    style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+    onClick: onClose,
+  },
+    React.createElement('div', {
+      style:{ background:'#FFFFFF', borderRadius:'16px', width:'480px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(0,0,0,.22)', padding:'24px' },
+      onClick: e => e.stopPropagation(),
+    },
+      // ── ヘッダー ──
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'20px' } },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px' } },
+          React.createElement('div', { style:{ width:40, height:40, borderRadius:'10px', background:C.greenL, display:'flex', alignItems:'center', justifyContent:'center' } },
+            React.createElement('i', { className:'ti ti-leaf', style:{ fontSize:'20px', color:C.green } })
+          ),
+          React.createElement('div', null,
+            React.createElement('div', { style:{ fontSize:'16px', fontWeight:700, color:C.ink } },
+              form.name || '新しい肥料を登録'
+            ),
+            React.createElement('div', { style:{ fontSize:'11px', color:C.muted, marginTop:2 } },
+              form.maker || 'メーカー未入力'
+            ),
+          )
+        ),
+        React.createElement('button', { onClick:onClose, style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' } }, '✕')
+      ),
+
+      // ── フォーム 2カラムグリッド ──
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' } },
+        fieldInp('肥料名',             'name',                  'text',   'IB化成S1'),
+        fieldInp('メーカー',           'maker',                 'text',   'JA'),
+        fieldInp('1袋の重さ（kg）',     'weight_per_bag_kg',     'number', '20'),
+        fieldInp('1袋の価格（円）',     'price_per_bag_yen',     'number', '3200'),
+        fieldInp('1kg単価（円）',       'unit_price_yen_per_kg', 'number', '160'),
+        fieldInp('現在の在庫量（kg）',  'stock_kg',              'number', '0'),
+      ),
+      fieldInp('発注アラート閾値（kg）', 'alert_threshold_kg', 'number', '30'),
+
+      // 1kg単価の自動計算ヒント
+      form.weight_per_bag_kg && form.price_per_bag_yen && React.createElement('div', {
+        style:{ fontSize:'11px', color:C.green, background:C.greenL, borderRadius:6, padding:'6px 10px', marginBottom:14, marginTop:-8 }
+      }, `✓ 1kg単価を自動計算しました: ¥${form.unit_price_yen_per_kg}`),
+
+      // 希釈倍率（基本＋作物別の上書き・任意）
+      React.createElement(FertilizerDilutionEditor, { defaultDilution, setDefaultDilution, cropRows, setCropRows, C }),
+
+      // ── ボタン ──
+      React.createElement('div', { style:{ display:'flex', gap:'10px', marginTop:4 } },
+        React.createElement('button', {
+          onClick: onClose,
+          style:{ flex:1, padding:'10px', borderRadius:'8px', border:`1.5px solid ${C.border}`, background:'#fff', color:C.sub, fontSize:'13px', fontWeight:600, cursor:'pointer' }
+        }, 'キャンセル'),
+        React.createElement('button', {
+          onClick: handleSave,
+          disabled: !form.name.trim() || saved,
+          style:{ flex:2, padding:'10px', borderRadius:'8px', border:'none', cursor: form.name.trim() ? 'pointer' : 'not-allowed', background: saved ? '#059669' : C.green, color:'#fff', fontSize:'13px', fontWeight:700, opacity: form.name.trim() ? 1 : .45, transition:'background .3s', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }
+        },
+          saved
+            ? '✓ 登録しました'
+            : React.createElement(React.Fragment, null, React.createElement('i', { className:'ti ti-check' }), ' 登録する')
+        )
+      )
+    )
+  )
+}
+function FertilizerDetailModal({ f, stock, thresh, alert, ratio, C, onClose, onUpdate, onDelete, fertilizerPurchases, onAddPurchase, fertilizerStock }) {
+  const [modalTab, setModalTab] = React.useState('detail') // 'detail' | 'edit' | 'purchase' | 'history'
+  const [purchaseForm, setPurchaseForm] = React.useState({ date: new Date().toISOString().slice(0,10), amount_kg: '', supplier: '', price_yen: '' })
+  const [purchaseSaved, setPurchaseSaved] = React.useState(false)
+  const [editSaved, setEditSaved] = React.useState(false)
+  const [deleteConfirm, setDeleteConfirm] = React.useState(false)
+
+  // 編集フォーム — f の現在値で初期化
+  const stockEntry = (fertilizerStock || []).find(s => s.fertilizer_id === f.id)
+  const [editForm, setEditForm] = React.useState({
+    name:                  f.name,
+    maker:                 f.maker || '',
+    weight_per_bag_kg:     String(f.weight_per_bag_kg ?? ''),
+    price_per_bag_yen:     String(f.price_per_bag_yen ?? ''),
+    unit_price_yen_per_kg: String(f.unit_price_yen_per_kg ?? ''),
+    stock_kg:              String(stockEntry ? stockEntry.stock_kg : (f.stock_kg ?? '')),
+    alert_threshold_kg:    String(stockEntry ? stockEntry.alert_threshold_kg : (f.alert_threshold_kg ?? '')),
+  })
+  // 【肥料 希釈倍率 案③】基本希釈倍率＋作物別の上書き（任意）— f の現在値で初期化
+  const [defaultDilution, setDefaultDilution] = React.useState(f.default_dilution != null ? String(f.default_dilution) : '')
+  const [cropRows, setCropRows] = React.useState(fertilizerCropDilutionsToRows(f.crop_dilutions))
+
+  const pef = (k, v) => setEditForm(prev => {
+    const next = { ...prev, [k]: v }
+    if ((k === 'weight_per_bag_kg' || k === 'price_per_bag_yen') && next.weight_per_bag_kg && next.price_per_bag_yen) {
+      const w = Number(next.weight_per_bag_kg), p = Number(next.price_per_bag_yen)
+      if (w > 0) next.unit_price_yen_per_kg = String(Math.round((p / w) * 10) / 10)
+    }
+    return next
+  })
+
+  const handleEditSave = () => {
+    if (!editForm.name.trim()) return
+    onUpdate({
+      id: f.id,
+      name:                  editForm.name.trim(),
+      maker:                 editForm.maker.trim(),
+      weight_per_bag_kg:     Number(editForm.weight_per_bag_kg) || 0,
+      price_per_bag_yen:     Number(editForm.price_per_bag_yen) || 0,
+      unit_price_yen_per_kg: Number(editForm.unit_price_yen_per_kg) || 0,
+      stock_kg:              Number(editForm.stock_kg) || 0,
+      alert_threshold_kg:    Number(editForm.alert_threshold_kg) || 0,
+      default_dilution:      Number(defaultDilution) || null,
+      crop_dilutions:        fertilizerCropRowsToObject(cropRows),
+    })
+    setEditSaved(true)
+    setTimeout(() => { setEditSaved(false); setModalTab('detail') }, 900)
+  }
+
+  const myPurchases = (fertilizerPurchases || []).filter(p => p.fertilizer_id === f.id).sort((a,b) => a.date < b.date ? 1 : -1)
+
+  const handlePurchaseSave = () => {
+    if (!purchaseForm.amount_kg) return
+    if (onAddPurchase) onAddPurchase({ fertilizer_id: f.id, ...purchaseForm, amount_kg: Number(purchaseForm.amount_kg), price_yen: Number(purchaseForm.price_yen) || null })
+    setPurchaseSaved(true)
+    setTimeout(() => { setPurchaseSaved(false); setModalTab('history') }, 800)
+    setPurchaseForm({ date: new Date().toISOString().slice(0,10), amount_kg: '', supplier: '', price_yen: '' })
+  }
+
+  const rowStyle = { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:'1px solid #F1F5F9', fontSize:'13px' }
+
+  const tabBtnStyle = (t) => ({
+    flex:1, padding:'8px 2px', border:'none', background:'none', cursor:'pointer',
+    fontSize:'11px', fontWeight: modalTab === t ? 700 : 500,
+    color: modalTab === t ? C.green : C.sub,
+    borderBottom: modalTab === t ? `2px solid ${C.green}` : '2px solid transparent',
+    transition:'all .15s', whiteSpace:'nowrap',
+  })
+
+  const fieldInp = (label, key, type='text', placeholder='') =>
+    React.createElement('div', { style:{ marginBottom:14 } },
+      React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:5 } }, label),
+      React.createElement('input', {
+        type, value: editForm[key], placeholder,
+        onChange: e => pef(key, e.target.value),
+        style:{ width:'100%', padding:'9px 12px', borderRadius:'8px', border:`1.5px solid ${C.border}`, background:'#fff', fontSize:'13px', color:C.ink, outline:'none', fontFamily:"'Inter',sans-serif", boxSizing:'border-box' },
+        onFocus: e => { e.target.style.borderColor=C.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+        onBlur:  e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none' },
+      })
+    )
+
+  return React.createElement('div', {
+    style:{ position:'fixed', inset:0, background:'rgba(17,24,39,.45)', zIndex:2000, display:'flex', alignItems:'center', justifyContent:'center' },
+    onClick: onClose,
+  },
+    React.createElement('div', {
+      style:{ background:'#FFFFFF', borderRadius:'16px', width:'480px', maxWidth:'95vw', maxHeight:'92vh', overflowY:'auto', boxShadow:'0 24px 64px rgba(0,0,0,.22)', padding:'24px' },
+      onClick: e => e.stopPropagation(),
+    },
+      // ── ヘッダー ──
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'12px' } },
+          React.createElement('div', {
+            style:{ width:40, height:40, borderRadius:'10px', flexShrink:0, background: alert ? '#FFF1EE' : C.greenL, display:'flex', alignItems:'center', justifyContent:'center' }
+          }, React.createElement('i', { className:'ti ti-leaf', style:{ fontSize:'20px', color: alert ? C.red : C.green } })),
+          React.createElement('div', null,
+            React.createElement('div', { style:{ fontSize:'16px', fontWeight:700, color:C.ink } },
+              modalTab === 'edit' ? editForm.name || f.name : f.name
+            ),
+            React.createElement('div', { style:{ fontSize:'11px', color:C.muted, marginTop:'2px' } },
+              modalTab === 'edit' ? (editForm.maker || '—') : (f.maker || '—')
+            ),
+          )
+        ),
+        React.createElement('button', {
+          onClick: onClose,
+          style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
+        }, '✕')
+      ),
+
+      // ── タブ切替（4タブ） ──
+      React.createElement('div', { style:{ display:'flex', borderBottom:`1px solid ${C.border}`, marginBottom:'16px' } },
+        React.createElement('button', { style:tabBtnStyle('detail'),   onClick:()=>setModalTab('detail') },
+          React.createElement('i', { className:'ti ti-info-circle', style:{marginRight:3, fontSize:11} }), '詳細'),
+        React.createElement('button', { style:tabBtnStyle('edit'),     onClick:()=>setModalTab('edit') },
+          React.createElement('i', { className:'ti ti-edit', style:{marginRight:3, fontSize:11} }), '編集'),
+        React.createElement('button', { style:tabBtnStyle('purchase'), onClick:()=>setModalTab('purchase') },
+          React.createElement('i', { className:'ti ti-package-import', style:{marginRight:3, fontSize:11} }), '仕入れ登録'),
+        React.createElement('button', { style:tabBtnStyle('history'),  onClick:()=>setModalTab('history') },
+          React.createElement('i', { className:'ti ti-history', style:{marginRight:3, fontSize:11} }), '仕入れ履歴'),
+      ),
+
+      // ── 詳細タブ ──
+      modalTab === 'detail' && React.createElement('div', null,
+
+        // 在庫アラートバナー（農薬モーダルと統一）
+        alert && React.createElement('div', {
+          style:{ background:'#FFF1EE', border:'1px solid rgba(194,65,12,.25)', borderRadius:'10px', padding:'12px 14px', marginBottom:'16px', display:'flex', alignItems:'center', gap:'10px' }
+        },
+          React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'18px', color:C.red, flexShrink:0 } }),
+          React.createElement('div', null,
+            React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:C.red } }, '在庫がアラート閾値を下回っています'),
+            React.createElement('div', { style:{ fontSize:'12px', color:'#9A3412', marginTop:'2px' } }, '「仕入れ登録」タブから補充を記録できます'),
+          ),
+          React.createElement('button', {
+            onClick: () => setModalTab('purchase'),
+            style:{ marginLeft:'auto', padding:'7px 14px', borderRadius:'7px', border:'none', background:C.red, color:'#fff', fontSize:'12px', fontWeight:700, cursor:'pointer', flexShrink:0 }
+          }, '仕入れる →')
+        ),
+
+        // 詳細情報（農薬モーダルと統一：ラベル＋強調値の行リスト。在庫量もこの中に統合）
+        React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'10px', padding:'4px 14px', marginBottom:'16px' } },
+          React.createElement('div', { style:rowStyle },
+            React.createElement('span', {style:{color:C.sub}}, '1袋の重さ'),
+            React.createElement('span', {style:{fontWeight:700, color:C.ink}}, (f.weight_per_bag_kg||0)+' kg')
+          ),
+          React.createElement('div', { style:rowStyle },
+            React.createElement('span', {style:{color:C.sub}}, '1袋の価格'),
+            React.createElement('span', {style:{fontWeight:700, color:C.ink}}, f.price_per_bag_yen!=null ? '¥'+(f.price_per_bag_yen||0).toLocaleString() : '—')
+          ),
+          React.createElement('div', { style:rowStyle },
+            React.createElement('span', {style:{color:C.sub}}, '1kg単価'),
+            React.createElement('span', {style:{fontWeight:700, fontSize:'16px', color:C.amber}}, f.unit_price_yen_per_kg!=null ? '¥'+f.unit_price_yen_per_kg : '—')
+          ),
+          React.createElement('div', { style:{ ...rowStyle, borderBottom:'none' } },
+            React.createElement('span', {style:{color:C.sub}}, '現在の在庫量'),
+            React.createElement('span', { style:{ fontWeight:700, color: stock < 0 ? C.red : alert ? C.red : C.ink } },
+              stock+' kg',
+              React.createElement('span', { style:{ fontSize:'11px', color:C.muted, fontWeight:400, marginLeft:'4px' } }, '（閾値: '+thresh+' kg）')
+            )
+          ),
+        ),
+
+        // 希釈倍率（基本＋作物別の上書き・設定されている場合のみ表示）
+        (f.default_dilution != null || Object.keys(f.crop_dilutions || {}).length > 0) && React.createElement('div', {
+          style:{ background:'#F8FAF8', borderRadius:'10px', padding:'10px 14px', marginBottom:'16px' }
+        },
+          React.createElement('div', { style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:6 } }, '希釈倍率（目安）'),
+          f.default_dilution != null && React.createElement('div', { style:{ fontSize:'13px', color:C.ink, marginBottom:4 } },
+            '基本: ', React.createElement('span', { style:{ fontWeight:700 } }, f.default_dilution + '倍')
+          ),
+          ...Object.entries(f.crop_dilutions || {}).map(([crop, dilution], i) =>
+            React.createElement('div', { key:i, style:{ fontSize:'12px', color:C.sub, marginBottom:2 } },
+              crop + ': ', React.createElement('span', { style:{ fontWeight:700, color:C.ink } }, dilution + '倍')
+            )
+          )
+        ),
+
+        // 在庫バー
+        React.createElement('div', { style:{ marginBottom:'18px' } },
+          React.createElement('div', { style:{ background:'#EDF2ED', borderRadius:'6px', height:'8px', overflow:'hidden' } },
+            React.createElement('div', { style:{ height:'100%', borderRadius:'6px', width:(stock<0?100:ratio)+'%', background: stock<0?C.red:alert?C.red:ratio>50?C.green:C.amber, transition:'width .6s ease', opacity: stock<0?0.5:1 } })
+          )
+        ),
+
+        // 詳細タブからも編集へ誘導 + 削除
+        React.createElement('div', { style:{ display:'flex', gap:'10px' } },
+          React.createElement('button', {
+            onClick: () => setModalTab('edit'),
+            style:{ flex:1, padding:'10px', borderRadius:'8px', border:`1.5px solid ${C.border}`, background:'#fff', color:C.sub, fontSize:'13px', fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }
+          }, React.createElement('i', { className:'ti ti-edit' }), '編集'),
+          !deleteConfirm
+            ? React.createElement('button', {
+                onClick: () => setDeleteConfirm(true),
+                style:{ flex:1, padding:'10px', borderRadius:'8px', border:'1.5px solid rgba(194,65,12,.3)', background:'#FFF8F6', color:C.red, fontSize:'13px', fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }
+              }, React.createElement('i', { className:'ti ti-trash' }), '削除')
+            : React.createElement('div', { style:{ flex:1, display:'flex', gap:6 } },
+                React.createElement('button', { onClick:()=>setDeleteConfirm(false), style:{ flex:1, padding:'10px', borderRadius:'8px', border:`1.5px solid ${C.border}`, background:'#fff', color:C.sub, fontSize:'12px', fontWeight:600, cursor:'pointer' } }, 'キャンセル'),
+                React.createElement('button', { onClick:onDelete, style:{ flex:1, padding:'10px', borderRadius:'8px', border:'none', background:C.red, color:'#fff', fontSize:'12px', fontWeight:700, cursor:'pointer' } }, '本当に削除'),
+              )
+        )
+      ),
+
+      // ── 編集タブ ──
+      modalTab === 'edit' && React.createElement('div', null,
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' } },
+          fieldInp('肥料名',               'name',                  'text',   'IB化成S1'),
+          fieldInp('メーカー',             'maker',                 'text',   'JA'),
+          fieldInp('1袋の重さ（kg）',       'weight_per_bag_kg',     'number', '20'),
+          fieldInp('1袋の価格（円）',       'price_per_bag_yen',     'number', '3200'),
+          fieldInp('1kg単価（円）',         'unit_price_yen_per_kg', 'number', '160'),
+          fieldInp('現在の在庫量（kg）',    'stock_kg',              'number', '120'),
+        ),
+        fieldInp('発注アラート閾値（kg）', 'alert_threshold_kg', 'number', '30'),
+        React.createElement(FertilizerDilutionEditor, { defaultDilution, setDefaultDilution, cropRows, setCropRows, C }),
+        React.createElement('div', { style:{ display:'flex', gap:'10px', marginTop:'4px' } },
+          React.createElement('button', {
+            onClick: () => setModalTab('detail'),
+            style:{ flex:1, padding:'10px', borderRadius:'8px', border:`1.5px solid ${C.border}`, background:'#fff', color:C.sub, fontSize:'13px', fontWeight:600, cursor:'pointer' }
+          }, 'キャンセル'),
+          React.createElement('button', {
+            onClick: handleEditSave,
+            disabled: !editForm.name.trim(),
+            style:{ flex:2, padding:'10px', borderRadius:'8px', border:'none', cursor:'pointer', background: editSaved ? '#059669' : C.green, color:'#fff', fontSize:'13px', fontWeight:700, opacity: editForm.name.trim() ? 1 : .45, transition:'background .3s', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }
+          },
+            editSaved
+              ? '✓ 保存しました'
+              : React.createElement(React.Fragment, null, React.createElement('i', { className:'ti ti-device-floppy' }), ' 変更を保存')
+          )
+        )
+      ),
+
+      // ── 仕入れ登録タブ ──
+      modalTab === 'purchase' && React.createElement('div', null,
+        ['date','amount_kg','supplier','price_yen'].map((key) => {
+          const labels = { date:'仕入れ日', amount_kg:'仕入れ量（kg）', supplier:'仕入れ先', price_yen:'金額（円）' }
+          const types  = { date:'date', amount_kg:'number', supplier:'text', price_yen:'number' }
+          return React.createElement('div', { key, style:{ marginBottom:14 } },
+            React.createElement('label', { style:{ fontSize:'10px', fontWeight:700, color:C.sub, textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:5 } }, labels[key]),
+            React.createElement('input', {
+              type: types[key], value: purchaseForm[key],
+              onChange: e => setPurchaseForm(prev => ({...prev, [key]: e.target.value})),
+              style:{ width:'100%', padding:'9px 12px', borderRadius:'8px', border:`1.5px solid ${C.border}`, background:'#fff', fontSize:'13px', color:C.ink, outline:'none', fontFamily:"'Inter',sans-serif" },
+              onFocus: e => { e.target.style.borderColor=C.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+              onBlur:  e => { e.target.style.borderColor=C.border; e.target.style.boxShadow='none' },
+            })
+          )
+        }),
+        React.createElement('button', {
+          onClick: handlePurchaseSave,
+          disabled: !purchaseForm.amount_kg,
+          style:{ width:'100%', padding:'10px', borderRadius:'8px', border:'none', cursor:'pointer', background: purchaseSaved ? '#059669' : C.green, color:'#fff', fontSize:'13px', fontWeight:700, opacity: purchaseForm.amount_kg ? 1 : .45, transition:'background .3s' }
+        }, purchaseSaved ? '✓ 保存しました' : React.createElement(React.Fragment, null, React.createElement('i', { className:'ti ti-check', style:{marginRight:5} }), '仕入れを登録'))
+      ),
+
+      // ── 仕入れ履歴タブ ──
+      modalTab === 'history' && React.createElement('div', null,
+        myPurchases.length === 0
+          ? React.createElement('div', { style:{ textAlign:'center', padding:'32px 0', color:C.muted, fontSize:'13px' } }, '仕入れ記録がありません')
+          : myPurchases.map((p, i) =>
+              React.createElement('div', { key:i, style:{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 0', borderBottom:`1px solid ${C.border}`, fontSize:'12px' } },
+                React.createElement('div', null,
+                  React.createElement('div', { style:{ fontWeight:600, color:C.ink } }, p.date),
+                  React.createElement('div', { style:{ color:C.muted, marginTop:2 } }, p.supplier || '—')
+                ),
+                React.createElement('div', { style:{ textAlign:'right' } },
+                  React.createElement('div', { style:{ fontWeight:700, color:C.green } }, p.amount_kg+' kg'),
+                  p.price_yen && React.createElement('div', { style:{ color:C.sub } }, '¥'+Number(p.price_yen).toLocaleString())
+                )
+              )
+            )
+      )
+    )
+  )
+}
+
+// ── Step3-2: 肥料 棚卸し入力パネル ──
+function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateStock }) {
+  const [edits, setEdits] = React.useState({})  // { [fertilizer_id]: '入力中の新在庫値(kg)' }
+
+  const stockOf = (f) => {
+    const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
+    return s ? s.stock_kg : (f.stock_kg ?? 0)
+  }
+
+  const handleApply = (f) => {
+    const val = edits[f.id]
+    if (val === undefined || val === '') return
+    onUpdateStock(f.id, Number(val))
+    setEdits(prev => { const next = { ...prev }; delete next[f.id]; return next })
+  }
+
+  const C2 = { green:'#0A6B52', greenL:'#E8F5F0', amber:'#B45309', amberL:'#FFFBEB', red:'#C2410C', ink:'#111827', sub:'#4B5563', muted:'#9CA3AF', border:'#E2E8E2' }
+
+  return React.createElement('div', null,
+    React.createElement('div', { style:{ fontSize:'12px', color:C2.sub, marginBottom:'16px' } },
+      '現在庫を確認し、実際の在庫量(kg)を入力して反映してください。'
+    ),
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:'12px' } },
+      fertilizers.map(f => {
+        const current = stockOf(f)
+        const val = edits[f.id] ?? ''
+        const hasInput = val !== ''
+        const newVal = hasInput ? Number(val) : null
+        const diff = newVal !== null ? newVal - current : null
+        return React.createElement('div', {
+          key: f.id,
+          style:{
+            background:'#fff', borderRadius:'12px', padding:'14px 16px',
+            border: hasInput ? `1.5px solid ${C2.green}` : `1px solid ${C2.border}`,
+            boxShadow: hasInput ? '0 0 0 3px rgba(10,107,82,.07)' : '0 1px 3px rgba(17,24,39,.05)',
+            transition:'border-color .15s, box-shadow .15s',
+            display:'flex', flexDirection:'column', gap:'10px',
+          }
+        },
+          // 肥料名
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+            React.createElement('div', {
+              style:{ width:28, height:28, borderRadius:'7px', background:C2.greenL, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }
+            }, React.createElement('i', { className:'ti ti-leaf', style:{ color:C2.green, fontSize:'14px' } })),
+            React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:C2.ink, lineHeight:1.3, wordBreak:'break-all' } }, f.name)
+          ),
+          // 現在庫表示
+          React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'7px', padding:'7px 10px', display:'flex', justifyContent:'space-between', alignItems:'center' } },
+            React.createElement('span', { style:{ fontSize:'10px', color:C2.sub, fontWeight:600 } }, '現在の在庫'),
+            React.createElement('span', { style:{ fontSize:'15px', fontWeight:700, color:C2.ink } }, current+' kg')
+          ),
+          // 新在庫入力
+          React.createElement('div', null,
+            React.createElement('div', { style:{ fontSize:'10px', fontWeight:600, color:C2.sub, textTransform:'uppercase', letterSpacing:'.06em', marginBottom:'5px' } }, '新しい在庫量（kg）'),
+            React.createElement('input', {
+              type:'number', placeholder:'例: 90',
+              value: val,
+              onChange: e => setEdits(prev => ({ ...prev, [f.id]: e.target.value })),
+              style:{ width:'100%', padding:'8px 10px', border:`1.5px solid ${hasInput ? C2.green : C2.border}`, borderRadius:'7px', fontSize:'13px', fontWeight:600, color:C2.ink, outline:'none', boxSizing:'border-box' },
+              onFocus: e => { e.target.style.borderColor=C2.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
+              onBlur:  e => { e.target.style.borderColor = hasInput ? C2.green : C2.border; e.target.style.boxShadow='none' },
+            })
+          ),
+          // 差分プレビュー + 反映ボタン
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px' } },
+            diff !== null && React.createElement('span', {
+              style:{
+                fontSize:'11px', fontWeight:700, padding:'2px 7px', borderRadius:'20px',
+                background: diff > 0 ? '#F0FDF4' : diff < 0 ? '#FFF1EE' : '#F8FAFC',
+                color: diff > 0 ? '#059669' : diff < 0 ? C2.red : C2.muted,
+                border: `1px solid ${diff > 0 ? '#BBF7D0' : diff < 0 ? 'rgba(194,65,12,.2)' : '#E2E8F0'}`,
+              }
+            }, diff > 0 ? `+${diff} kg` : diff < 0 ? `${diff} kg` : '変更なし'),
+            React.createElement('button', {
+              onClick: () => handleApply(f),
+              disabled: !hasInput,
+              style:{
+                marginLeft:'auto', padding:'7px 14px', background: hasInput ? C2.green : '#E2E8E2',
+                color: hasInput ? '#fff' : C2.muted,
+                border:'none', borderRadius:'7px', fontSize:'12px', cursor: hasInput ? 'pointer' : 'not-allowed', fontWeight:600, transition:'background .15s',
+              }
+            }, '反映')
+          )
+        )
+      })
+    )
+  )
+}
+
+// ── Step3-2: 肥料 仕入れ履歴パネル ──
+function FertilizerPurchaseHistoryPanel({ fertilizers, fertilizerPurchases }) {
+  const nameOf = (id) => (fertilizers.find(f => f.id === Number(id)) || {}).name || '（不明）'
+  const sorted = [...fertilizerPurchases].sort((a, b) => (a.date < b.date ? 1 : -1))
+
+  if (sorted.length === 0) {
+    return React.createElement('div', { style:{ fontSize:'13px', color:'#9CA3AF' } }, 'まだ仕入れ記録がありません')
+  }
+
+  return React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:'12px' } },
+    React.createElement('thead', null,
+      React.createElement('tr', null,
+        ['日付','肥料名','仕入れ量(kg)','仕入れ先','金額(円)'].map((h,i) =>
+          React.createElement('th', { key:i, style:{ textAlign:'left', borderBottom:'1px solid #ddd', padding:'4px 6px', color:'#64748B' } }, h)
+        )
+      )
+    ),
+    React.createElement('tbody', null,
+      sorted.map((p,i) =>
+        React.createElement('tr', { key:i },
+          React.createElement('td', { style:{ padding:'4px 6px', borderBottom:'1px solid #f0f0f0' } }, p.date),
+          React.createElement('td', { style:{ padding:'4px 6px', borderBottom:'1px solid #f0f0f0' } }, nameOf(p.fertilizer_id)),
+          React.createElement('td', { style:{ padding:'4px 6px', borderBottom:'1px solid #f0f0f0' } }, p.amount_kg),
+          React.createElement('td', { style:{ padding:'4px 6px', borderBottom:'1px solid #f0f0f0' } }, p.supplier || '—'),
+          React.createElement('td', { style:{ padding:'4px 6px', borderBottom:'1px solid #f0f0f0' } }, p.price_yen ?? '—'),
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// 肥料の使用履歴パネル（肥料マスタページ用）
+// 追肥記録（topDressingRecords）を肥料ごとに展開・集計し、
+// 農薬マスタの使用履歴タブと同じ構成（サマリーカード＋月別バーチャート＋時系列リスト）で表示する。
+// =====================================================
+function FertilizerUsageHistoryPanel({ fertilizers, topDressingRecords, fields }) {
+  const [selectedId, setSelectedId] = React.useState(
+    fertilizers.length > 0 ? fertilizers[0].id : null
+  )
+
+  const fieldNameOf = (id) => {
+    const f = (fields || []).find(x => x.id === id)
+    return f ? (f.name || f.field_no_raw || ('圃場#' + id)) : ('圃場#' + id)
+  }
+
+  // topDressingRecords は1レコードに複数肥料を含むため、選択中の肥料分だけ展開する
+  const usageRecords = (topDressingRecords || [])
+    .flatMap(r => (r.fertilizers || [])
+      .filter(fe => fe.fertilizer_id === selectedId)
+      .map(fe => ({
+        id:       r.id + '-' + fe.fertilizer_id,
+        date:     r.date,
+        amount:   Number(fe.amount_kg) || 0,
+        field_id: r.field_id,
+        memo:     r.memo,
+      }))
+    )
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  // 今月・先月の判定
+  const now = new Date()
+  const thisYM = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0')
+  const lastDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const lastYM = lastDate.getFullYear() + '-' + String(lastDate.getMonth() + 1).padStart(2, '0')
+
+  const totalUsed = usageRecords.reduce((a, r) => a + r.amount, 0)
+  const thisMonth = usageRecords.filter(r => r.date && r.date.startsWith(thisYM)).reduce((a, r) => a + r.amount, 0)
+  const lastMonth = usageRecords.filter(r => r.date && r.date.startsWith(lastYM)).reduce((a, r) => a + r.amount, 0)
+  const diff      = Math.round((thisMonth - lastMonth) * 100) / 100
+  const diffSign  = diff > 0 ? '+' : ''
+
+  const C = { green:'#0A6B52', blue:'#1D4ED8', blueL:'#EFF6FF', greenL:'#F0FDF4', border:'#E2E8E2', muted:'#9CA3AF', ink:'#111827', sub:'#4B5563' }
+
+  return React.createElement('div', null,
+    // 肥料セレクタ（チップ）
+    React.createElement('div', { style:{ position:'relative', marginBottom:'20px' } },
+      React.createElement('div', { style:{ display:'flex', gap:'8px', overflowX:'auto', paddingBottom:'4px' } },
+        ...fertilizers.map(f => {
+          const isActiveChip = selectedId === f.id
+          return React.createElement('button', {
+            key: f.id,
+            onClick: () => setSelectedId(f.id),
+            style:{
+              padding:'7px 16px', borderRadius:'20px', flexShrink:0, whiteSpace:'nowrap',
+              border:'1.5px solid ' + (isActiveChip ? C.green : C.border),
+              background: isActiveChip ? C.green : '#fff',
+              color: isActiveChip ? '#fff' : C.sub,
+              fontSize:'12px', fontWeight:600, cursor:'pointer',
+              transition:'all .15s', fontFamily:"'Inter',sans-serif",
+            }
+          }, f.name)
+        })
+      ),
+      React.createElement('div', {
+        style:{ position:'absolute', left:0, top:0, bottom:'4px', width:'20px', background:'linear-gradient(90deg, #fff 0%, rgba(255,255,255,0) 100%)', pointerEvents:'none' }
+      }),
+      React.createElement('div', {
+        style:{ position:'absolute', right:0, top:0, bottom:'4px', width:'20px', background:'linear-gradient(270deg, #fff 0%, rgba(255,255,255,0) 100%)', pointerEvents:'none' }
+      })
+    ),
+
+    // 月次サマリーカード（3枚）
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'10px', marginBottom:'20px' } },
+      React.createElement('div', { style:{ background:C.greenL, border:'1px solid #A7F3D0', borderRadius:'10px', padding:'14px 16px' } },
+        React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('i', { className:'ti ti-repeat', style:{ fontSize:'12px' } }), '総使用回数'
+        ),
+        React.createElement('div', { style:{ fontSize:'24px', fontWeight:700, color:C.green } }, usageRecords.length + ' 回')
+      ),
+      React.createElement('div', { style:{ background:C.blueL, border:'1px solid #BFDBFE', borderRadius:'10px', padding:'14px 16px' } },
+        React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('i', { className:'ti ti-calendar-month', style:{ fontSize:'12px' } }), '今月使用量'
+        ),
+        React.createElement('div', { style:{ fontSize:'24px', fontWeight:700, color:C.blue } }, Math.round(thisMonth * 100) / 100 + ' kg')
+      ),
+      React.createElement('div', { style:{ background: diff > 0 ? '#FFF1EE' : diff < 0 ? C.greenL : '#F9FAFB', border:'1px solid ' + (diff > 0 ? '#FECACA' : diff < 0 ? '#A7F3D0' : C.border), borderRadius:'10px', padding:'14px 16px' } },
+        React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginBottom:'4px', display:'flex', alignItems:'center', gap:'4px' } },
+          React.createElement('i', { className:'ti ti-trending-up', style:{ fontSize:'12px' } }), '先月比'
+        ),
+        React.createElement('div', { style:{ fontSize:'24px', fontWeight:700, color: diff > 0 ? '#C2410C' : diff < 0 ? C.green : C.muted } },
+          lastMonth === 0 && thisMonth === 0 ? '—' : diffSign + diff + ' kg'
+        )
+      )
+    ),
+
+    // 月別使用量バーチャート
+    React.createElement(MonthlyUsageBarChart, { records: usageRecords, unit:'kg', color: C.blue }),
+
+    // 時系列リスト
+    React.createElement('div', { style:{ fontSize:'11px', fontWeight:700, color:C.muted, letterSpacing:'.06em', textTransform:'uppercase', marginBottom:'10px' } }, '使用履歴'),
+    usageRecords.length === 0
+      ? React.createElement('div', {
+          style:{ padding:'40px 0', textAlign:'center', color:C.muted, fontSize:'13px', background:'#F9FAFB', borderRadius:'10px', border:'1px dashed ' + C.border }
+        },
+          React.createElement('i', { className:'ti ti-leaf-off', style:{ fontSize:'28px', display:'block', marginBottom:'8px', color:C.border } }),
+          '追肥記録がありません'
+        )
+      : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'6px' } },
+          ...usageRecords.map((r) => React.createElement('div', {
+            key: r.id,
+            style:{
+              display:'flex', alignItems:'center', gap:'12px',
+              padding:'10px 14px', background:'#fff',
+              border:'1px solid ' + C.border, borderRadius:'9px',
+            }
+          },
+            React.createElement('div', { style:{ width:'8px', height:'8px', borderRadius:'50%', background:C.green, flexShrink:0 } }),
+            React.createElement('div', { style:{ flex:1 } },
+              React.createElement('div', { style:{ fontSize:'13px', fontWeight:600, color:C.ink } }, r.date),
+              React.createElement('div', { style:{ fontSize:'11px', color:C.muted, marginTop:'2px', display:'flex', gap:'10px' } },
+                React.createElement('span', null, '📍 ' + fieldNameOf(r.field_id)),
+                r.memo && React.createElement('span', null, r.memo)
+              )
+            ),
+            React.createElement('div', { style:{ fontSize:'14px', fontWeight:700, color:C.blue, flexShrink:0 } }, r.amount + ' kg')
+          ))
+        )
+  )
+}
+
+// =====================================================
+// 作物カテゴリ管理ページ（汎用化）
+// categories: カテゴリ配列, onSave: setCropCategories
+// =====================================================
+
+// 代表的な作物の管理方式・収穫規格テンプレ（農場ごとに自由編集可）
+const CROP_TEMPLATES = {
+  // ── 果菜類 ──
+  'トマト':        { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#DC2626' },
+  'ミニトマト':    { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#EA580C' },
+  'キュウリ':      { ui_mode:'row_map',      harvest_grades:['秀品','優品','2L','L','M','B品'], color:'#65A30D' },
+  'ナス':          { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#7C3AED' },
+  'ピーマン':      { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#16A34A' },
+  'パプリカ':      { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#EA580C' },
+  'ししとう':      { ui_mode:'row_map',      harvest_grades:['秀品','B品'],                     color:'#65A30D' },
+  '唐辛子':        { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#DC2626' },
+  'ズッキーニ':    { ui_mode:'row_map',      harvest_grades:['L','M','S','B品'],               color:'#65A30D' },
+  'ゴーヤ':        { ui_mode:'row_map',      harvest_grades:['L','M','S','B品'],               color:'#0D9972' },
+  'おくら':        { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#0D9972' },
+  'かぼちゃ':      { ui_mode:'standard',     harvest_grades:['規格内','B品'],                   color:'#EA580C' },
+  'スイカ':        { ui_mode:'standard',     harvest_grades:['大','中','小','B品'],             color:'#DC2626' },
+  'メロン':        { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#65A30D' },
+  // ── 葉物・茎葉野菜 ──
+  'レタス':        { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#0D9972' },
+  'ほうれん草':    { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#15803D' },
+  'キャベツ':      { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#65A30D' },
+  'ブロッコリー':  { ui_mode:'row_map',      harvest_grades:['L','M','S','B品'],               color:'#0D9972' },
+  'カリフラワー':  { ui_mode:'row_map',      harvest_grades:['L','M','S','B品'],               color:'#6B7280' },
+  '白菜':          { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#65A30D' },
+  '水菜':          { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#0D9972' },
+  '小松菜':        { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#15803D' },
+  'チンゲン菜':    { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#16A34A' },
+  'ターサイ':      { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#0D9972' },
+  '春菊':          { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#65A30D' },
+  'ルッコラ':      { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#65A30D' },
+  'セロリ':        { ui_mode:'row_map',      harvest_grades:['秀品','B品'],                     color:'#65A30D' },
+  'シソ':          { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#0D9972' },
+  '三つ葉':        { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#65A30D' },
+  'パクチー':      { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#65A30D' },
+  // ── ネギ類 ──
+  'ネギ':          { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#B45309' },
+  '青ネギ':        { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#65A30D' },
+  'にら':          { ui_mode:'row_map',      harvest_grades:['規格内','B品'],                   color:'#15803D' },
+  'アスパラガス':  { ui_mode:'row_map',      harvest_grades:['2L','L','M','S','B品'],          color:'#65A30D' },
+  // ── 根菜類 ──
+  '玉ねぎ':        { ui_mode:'standard',     harvest_grades:['2L','L','M','S','B品'],          color:'#B45309' },
+  'ニンジン':      { ui_mode:'standard',     harvest_grades:['2L','L','M','S','B品'],          color:'#EA580C' },
+  '大根':          { ui_mode:'standard',     harvest_grades:['2L','L','M','S','B品'],          color:'#6B7280' },
+  'かぶ':          { ui_mode:'standard',     harvest_grades:['2L','L','M','B品'],              color:'#6B7280' },
+  'ごぼう':        { ui_mode:'standard',     harvest_grades:['L','M','S','B品'],               color:'#B45309' },
+  'にんにく':      { ui_mode:'standard',     harvest_grades:['2L','L','M','S','B品'],          color:'#6B7280' },
+  'ショウガ':      { ui_mode:'standard',     harvest_grades:['規格内','B品'],                   color:'#B45309' },
+  'れんこん':      { ui_mode:'standard',     harvest_grades:['2L','L','M','S','B品'],          color:'#B45309' },
+  // ── いも類 ──
+  'じゃがいも':    { ui_mode:'standard',     harvest_grades:['2L','L','M','S','B品'],          color:'#B45309' },
+  'サツマイモ':    { ui_mode:'standard',     harvest_grades:['2L','L','M','S','B品'],          color:'#EA580C' },
+  '里芋':          { ui_mode:'standard',     harvest_grades:['2L','L','M','S','B品'],          color:'#B45309' },
+  '長芋':          { ui_mode:'standard',     harvest_grades:['L','M','S','B品'],               color:'#6B7280' },
+  // ── 豆類 ──
+  'えだまめ':      { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#65A30D' },
+  'いんげん':      { ui_mode:'row_map',      harvest_grades:['秀品','B品'],                     color:'#0D9972' },
+  'さやえんどう':  { ui_mode:'row_map',      harvest_grades:['秀品','B品'],                     color:'#0D9972' },
+  'スナップえんどう':{ ui_mode:'row_map',    harvest_grades:['秀品','B品'],                     color:'#65A30D' },
+  'そらまめ':      { ui_mode:'row_map',      harvest_grades:['秀品','優品','B品'],              color:'#65A30D' },
+  '大豆':          { ui_mode:'growth_stage', harvest_grades:['規格内','B品'],                   color:'#B45309' },
+  '黒大豆':        { ui_mode:'growth_stage', harvest_grades:['規格内','B品'],                   color:'#6B7280' },
+  // ── 果樹 ──
+  'イチゴ':        { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#DC2626' },
+  'りんご':        { ui_mode:'standard',     harvest_grades:['特秀','秀品','優品','B品'],       color:'#DC2626' },
+  'みかん':        { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#EA580C' },
+  '梨':            { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#B45309' },
+  '柿':            { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#EA580C' },
+  'ぶどう':        { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#7C3AED' },
+  'もも':          { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#DB2777' },
+  'さくらんぼ':    { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#DC2626' },
+  'ブルーベリー':  { ui_mode:'standard',     harvest_grades:['秀品','B品'],                     color:'#7C3AED' },
+  'キウイ':        { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#65A30D' },
+  'いちじく':      { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#7C3AED' },
+  'プラム':        { ui_mode:'standard',     harvest_grades:['秀品','優品','B品'],              color:'#7C3AED' },
+  // ── 穀物 ──
+  'とうもろこし':  { ui_mode:'row_map',      harvest_grades:['2L','L','M','S','B品'],          color:'#EA580C' },
+  '水稲':          { ui_mode:'growth_stage', harvest_grades:['一等米','二等米','くず米'],       color:'#2563EB' },
+  'もち米':        { ui_mode:'growth_stage', harvest_grades:['一等米','二等米','くず米'],       color:'#0891B2' },
+  '小麦':          { ui_mode:'growth_stage', harvest_grades:['一等','二等','規格外'],           color:'#B45309' },
+  '大麦':          { ui_mode:'growth_stage', harvest_grades:['一等','二等','規格外'],           color:'#B45309' },
+  'そば':          { ui_mode:'growth_stage', harvest_grades:['規格内','B品'],                   color:'#6B7280' },
+  'ライ麦':        { ui_mode:'growth_stage', harvest_grades:['規格内','B品'],                   color:'#6B7280' },
+  // ── ハーブ・香辛料 ──
+  'バジル':        { ui_mode:'standard',     harvest_grades:['規格内','B品'],                   color:'#65A30D' },
+  'パセリ':        { ui_mode:'standard',     harvest_grades:['規格内','B品'],                   color:'#65A30D' },
+  'ミント':        { ui_mode:'standard',     harvest_grades:['規格内','B品'],                   color:'#0D9972' },
+  'ローズマリー':  { ui_mode:'standard',     harvest_grades:['規格内','B品'],                   color:'#0891B2' },
+  // ── その他 ──
+  'お茶':          { ui_mode:'standard',     harvest_grades:['一番茶','二番茶','秋番茶'],       color:'#0D9972' },
+  'ごま':          { ui_mode:'growth_stage', harvest_grades:['規格内','B品'],                   color:'#6B7280' },
+  'なたね':        { ui_mode:'growth_stage', harvest_grades:['規格内','B品'],                   color:'#65A30D' },
+}
+// 完全一致→長いキー優先の順でマッチ（ミニトマト→トマトに引っ張られるバグを防ぐ）
+const findCropTemplate = (name) => {
+  if (!name || name.length < 2) return null
+  if (CROP_TEMPLATES[name]) return CROP_TEMPLATES[name]
+  const keys = Object.keys(CROP_TEMPLATES).sort((a, b) => b.length - a.length)
+  const key = keys.find(k => name.includes(k) || k.includes(name))
+  return key ? CROP_TEMPLATES[key] : null
+}
+
+function CropCategoryPage({ categories, onSave }) {
+  const UI_MODES = [
+    { key:'row_map',      label:'畝マップ',     desc:'畝ごとの播種・収穫・農薬散布を管理' },
+    { key:'growth_stage', label:'生育ステージ', desc:'育苗〜登熟まで時系列で進捗管理（水稲等）' },
+    { key:'standard',     label:'シンプル',     desc:'作業記録のみのシンプルモード' },
+  ]
+  const PALETTE = ['#0D9972','#EA580C','#2563EB','#7C3AED','#B45309','#DC2626','#0891B2','#65A30D','#DB2777','#6B7280']
+  const blank = () => ({ key:'cat_' + Date.now(), name:'', ui_mode:'row_map', harvest_grades:['規格内','B品'], color:'#0D9972', sort_order:(categories.length * 10) })
+  const [editing, setEditing]     = React.useState(null)
+  const [gradesText, setGradesText] = React.useState('')
+  const [suggestion, setSuggestion] = React.useState(null)  // テンプレ候補
+
+  const openNew  = () => { const c = blank(); setEditing(c); setGradesText(c.harvest_grades.join(', ')); setSuggestion(null) }
+  const openEdit = (cat) => { setEditing({...cat}); setGradesText(cat.harvest_grades.join(', ')); setSuggestion(null) }
+  const closeEdit = () => { setEditing(null); setSuggestion(null) }
+
+  const handleNameChange = (name) => {
+    setEditing(p => ({...p, name}))
+    setSuggestion(name.length >= 2 ? findCropTemplate(name) : null)
+  }
+
+  const applySuggestion = () => {
+    if (!suggestion) return
+    setEditing(p => ({...p, ui_mode: suggestion.ui_mode, color: suggestion.color}))
+    setGradesText(suggestion.harvest_grades.join(', '))
+    setSuggestion(null)
+  }
+
+  const saveEdit = () => {
+    if (!editing.name.trim()) return
+    const grades = gradesText.split(',').map(s => s.trim()).filter(Boolean)
+    const updated = { ...editing, name: editing.name.trim(), harvest_grades: grades.length ? grades : ['規格内','B品'] }
+    const exists = categories.find(c => c.key === updated.key)
+    if (exists) {
+      onSave(categories.map(c => c.key === updated.key ? updated : c))
+    } else {
+      onSave([...categories, updated])
+    }
+    closeEdit()
+  }
+
+  const deleteCat = (key) => {
+    if (categories.length <= 1) return
+    onSave(categories.filter(c => c.key !== key))
+  }
+
+  const isBuiltin = (key) => ['leaf_veg','corn','rice','other'].includes(key)
+
+  const L = { fontSize:11, fontWeight:700, color:'#374151', display:'block', marginBottom:4, letterSpacing:'.06em', textTransform:'uppercase' }
+  const I = { width:'100%', padding:'8px 10px', border:'1px solid #D8E0DA', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }
+
+  return React.createElement('div', { className:'page' },
+    // ヘッダー
+    React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:24 } },
+      React.createElement('div', null,
+        React.createElement('div', { className:'eyebrow' }, 'CROP CATEGORIES'),
+        React.createElement('div', { className:'page-title' }, '作物カテゴリ管理'),
+        React.createElement('div', { className:'page-sub', style:{ marginBottom:0 } }, '作物の種類ごとに管理方式と収穫規格を設定します。農場のナレッジに合わせて自由に編集できます。')
+      ),
+      React.createElement('button', { className:'btn btn-primary', onClick:openNew, style:{ flexShrink:0, marginLeft:16 } }, '+ カテゴリを追加')
+    ),
+
+    // カテゴリ一覧グリッド
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:16 } },
+      categories.map(cat =>
+        React.createElement('div', { key:cat.key, style:{ background:'#fff', border:'1.5px solid #E2E8E2', borderRadius:10, padding:16, display:'flex', flexDirection:'column' } },
+          React.createElement('div', { style:{ height:4, background:cat.color, borderRadius:4, marginBottom:14 } }),
+          React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, marginBottom:6 } },
+            React.createElement('div', { style:{ width:10, height:10, borderRadius:'50%', background:cat.color, flexShrink:0 } }),
+            React.createElement('div', { style:{ fontWeight:700, fontSize:14, color:'#111827' } }, cat.name),
+            React.createElement('div', { style:{ fontSize:10, color:'#94A3B8', background:'#F8FAFC', border:'1px solid #E2E8F0', borderRadius:4, padding:'1px 5px', marginLeft:'auto' } }, cat.key)
+          ),
+          React.createElement('div', { style:{ fontSize:12, color:'#64748B', marginBottom:8 } },
+            '管理方式: ',
+            React.createElement('span', { style:{ fontWeight:600, color:'#0A6B52' } },
+              (UI_MODES.find(m => m.key === cat.ui_mode) || UI_MODES[0]).label
+            )
+          ),
+          React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:14, flex:1 } },
+            React.createElement('span', { style:{ fontSize:11, color:'#64748B', marginRight:2 } }, '規格:'),
+            ...(cat.harvest_grades || []).map(g =>
+              React.createElement('span', { key:g, style:{ fontSize:11, background:'#F1F5F9', border:'1px solid #E2E8F0', borderRadius:4, padding:'1px 6px', color:'#374151' } }, g)
+            )
+          ),
+          React.createElement('div', { style:{ display:'flex', gap:6 } },
+            React.createElement('button', { onClick:()=>openEdit(cat), style:{ flex:1, padding:'6px 0', background:'#F0F8F4', border:'1px solid #C6DDD0', borderRadius:6, fontSize:12, fontWeight:600, color:'#0A6B52', cursor:'pointer' } }, '✏ 編集'),
+            !isBuiltin(cat.key) && React.createElement('button', {
+              onClick:()=>{ if(window.confirm(cat.name + 'を削除しますか？')) deleteCat(cat.key) },
+              style:{ padding:'6px 12px', background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:6, fontSize:12, fontWeight:600, color:'#DC2626', cursor:'pointer' }
+            }, '✕')
+          )
+        )
+      )
+    ),
+
+    // ── 編集モーダル ──
+    editing && React.createElement('div', { style:{ position:'fixed', inset:0, background:'rgba(0,0,0,.35)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999 }, onClick:e=>{ if(e.target===e.currentTarget) closeEdit() } },
+      React.createElement('div', { style:{ background:'#fff', borderRadius:12, padding:28, width:460, boxShadow:'0 8px 32px rgba(0,0,0,.18)', maxHeight:'90vh', overflowY:'auto' } },
+        React.createElement('div', { style:{ fontWeight:700, fontSize:16, color:'#111827', marginBottom:20 } },
+          categories.find(c => c.key === editing.key) ? '✏ カテゴリを編集' : '＋ 新しいカテゴリ'
+        ),
+
+        // カテゴリ名（テンプレ候補トリガー）
+        React.createElement('div', { style:{ marginBottom:14 } },
+          React.createElement('span', { style:L }, 'カテゴリ名 *'),
+          React.createElement('input', { style:I, value:editing.name, onChange:e=>handleNameChange(e.target.value), placeholder:'例: トマト, じゃがいも, そば …' }),
+          suggestion && React.createElement('div', {
+            style:{ marginTop:6, padding:'8px 10px', background:'#FFFBEB', border:'1px solid #FCD34D', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }
+          },
+            React.createElement('div', { style:{ fontSize:12, color:'#92400E' } },
+              React.createElement('span', { style:{ fontSize:13 } }, '💡 '),
+              React.createElement('strong', null, 'テンプレ候補: '),
+              (UI_MODES.find(m => m.key === suggestion.ui_mode) || UI_MODES[0]).label,
+              ' / ',
+              suggestion.harvest_grades.join(', ')
+            ),
+            React.createElement('button', { onClick:applySuggestion, style:{ padding:'3px 10px', background:'#D97706', color:'#fff', border:'none', borderRadius:5, fontSize:11, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' } }, '適用')
+          )
+        ),
+
+        // 管理方式
+        React.createElement('label', { style:{ display:'block', marginBottom:14 } },
+          React.createElement('span', { style:L }, '管理方式'),
+          React.createElement('select', { style:I, value:editing.ui_mode, onChange:e=>setEditing(p=>({...p, ui_mode:e.target.value})) },
+            UI_MODES.map(m => React.createElement('option', { key:m.key, value:m.key }, m.label + ' — ' + m.desc))
+          )
+        ),
+
+        // 収穫規格
+        React.createElement('label', { style:{ display:'block', marginBottom:14 } },
+          React.createElement('span', { style:L }, '収穫規格（カンマ区切り）'),
+          React.createElement('input', { style:I, value:gradesText, onChange:e=>setGradesText(e.target.value), placeholder:'例: 2L, L, M, S, B品' })
+        ),
+
+        // カラー
+        React.createElement('div', { style:{ marginBottom:22 } },
+          React.createElement('span', { style:L }, 'カラー'),
+          React.createElement('div', { style:{ display:'flex', gap:8, flexWrap:'wrap', marginTop:4 } },
+            PALETTE.map(c => React.createElement('button', { key:c, onClick:()=>setEditing(p=>({...p, color:c})), style:{ width:30, height:30, borderRadius:'50%', background:c, border: editing.color===c ? '3px solid #111827' : '2px solid #fff', cursor:'pointer', boxShadow:'0 0 0 1.5px #D1D5DB' } }))
+          )
+        ),
+
+        React.createElement('div', { style:{ display:'flex', gap:8 } },
+          React.createElement('button', { onClick:saveEdit, disabled:!editing.name.trim(), style:{ flex:1, padding:10, background: editing.name.trim() ? '#0A6B52' : '#9CA3AF', color:'#fff', border:'none', borderRadius:6, fontSize:14, fontWeight:600, cursor: editing.name.trim() ? 'pointer' : 'default' } }, '保存'),
+          React.createElement('button', { onClick:closeEdit, style:{ padding:'10px 16px', background:'#F1F5F9', border:'1px solid #E2E8F0', borderRadius:6, fontSize:14, color:'#64748B', cursor:'pointer' } }, 'キャンセル')
+        )
+      )
+    )
+  )
+}
+
+// =====================================================
+// A-3: App — useState ルーティング
+// =====================================================
+
+// LS-01: localStorage 永続化ヘルパー
+function usePersistState(key, initial) {
+  const [state, setState] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem(key)
+      return saved ? JSON.parse(saved) : initial
+    } catch { return initial }
+  })
+  const setPersist = React.useCallback(updater => {
+    setState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }, [key])
+  return [state, setPersist]
+}
+

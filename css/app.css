@@ -1,0 +1,390 @@
+﻿    /* ============================================================
+       PREMIUM LIGHT v2 — 農場管理システム
+       ─────────────────────────────────────
+       背景         #F2F5F2  緑みの優しいオフホワイト（農地・自然感）
+       サイドバー   #FFFFFF  純白で清潔感・カードと同トーン
+       カード        #FFFFFF  + 立体感あるシャドウ
+       ─────────────────────────────────────
+       Accent palette (宝石色系 × 高彩度):
+         Forest     #0A6B52  フォレストグリーン（プライマリ）
+         Sapphire   #1D4ED8  サファイアブルー
+         Amber      #B45309  バーントアンバー
+         Coral      #C2410C  コーラルレッド
+         Amethyst   #6D28D9  アメジスト
+         Gold line  #B8976A  ゴールド（ライン装飾）
+       ─────────────────────────────────────
+       テキスト     #111827  深チャコール
+       サブ         #64748B
+       ボーダー     #E2E8E2
+    ============================================================ */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    /* ===== デザイントークン（第1章） ===== */
+    :root{
+      --radius-sm: 4px;   /* 入力欄・小ボタン */
+      --radius-md: 6px;   /* カード・パネル */
+      --radius-lg: 8px;   /* 大きいカード・モーダル上限 */
+      --border-color: #D8E0DA;
+      --shadow-flat: 0 1px 2px rgba(17,24,39,.05);
+    }
+
+    *{box-sizing:border-box}
+    html,body{margin:0;width:100%;height:100%}
+    body{font-family:'Inter',system-ui,sans-serif;background:#FAFBFA;color:#111827;line-height:1.6}
+    #app{width:100%;height:100vh;display:flex;overflow:hidden}
+
+    /* ─── サイドバー（ホワイト・左ゴールドライン） ─── */
+    .sidebar{
+      width:240px;
+      background:#F0F4F1;
+      border-right:1px solid #DDE8DE;
+      display:flex;flex-direction:column;
+      padding:0;flex-shrink:0;
+      box-shadow:1px 0 0 #DDE8DE, 4px 0 24px rgba(10,107,82,.05);
+      overflow-y:auto
+    }
+    .sb-logo{
+      padding:22px 20px 16px;
+      border-bottom:1px solid #DDE8DE;
+      margin-bottom:8px;
+      position:relative
+    }
+    .sb-logo .farm-name{
+      font-size:14px;font-weight:700;color:#111827;
+      letter-spacing:0;padding-left:4px
+    }
+    .sb-logo .farm-sub{
+      font-size:10px;color:#94A3B8;margin-top:3px;
+      letter-spacing:.06em;font-weight:500;padding-left:4px;
+      text-transform:uppercase
+    }
+    .nav-wrap{padding:4px 10px}
+    .nav-section{
+      font-size:11px;font-weight:700;color:#94A3B8;
+      letter-spacing:.06em;text-transform:uppercase;
+      padding:12px 10px 4px
+    }
+    .nav-item{
+      display:flex;align-items:center;gap:10px;
+      padding:9px 10px;border-radius:var(--radius-lg);cursor:pointer;
+      font-size:13px;color:#64748B;margin-bottom:1px;
+      transition:all .12s;border:none;background:none;
+      width:100%;text-align:left;font-weight:600;
+      position:relative
+    }
+    .nav-item:hover{background:#F0F8F4;color:#0A6B52}
+    .nav-item.active{
+      background:#FFFFFF;
+      color:#0A6B52;font-weight:600
+    }
+    .nav-icon{font-size:18px;width:22px;text-align:center;flex-shrink:0;vertical-align:-2px}
+    .nav-item.active .nav-icon{color:#0A6B52}
+
+    /* ─── 圃場展開サブメニュー ─── */
+    .nav-field-group{margin-bottom:2px}
+    .nav-field-parent{
+      display:flex;align-items:center;gap:10px;
+      padding:9px 10px;border-radius:var(--radius-lg);cursor:pointer;
+      font-size:13px;color:#64748B;
+      transition:all .18s;border:none;background:none;
+      width:100%;text-align:left;font-weight:600;position:relative;
+      white-space:nowrap;overflow:hidden
+    }
+    .nav-field-parent:hover{background:#F0F8F4;color:#0A6B52}
+    .nav-field-parent.open{color:#0A6B52;background:#F0F8F4}
+    .nav-field-caret{
+      margin-left:auto;font-size:10px;color:#94A3B8;
+      transition:transform .3s cubic-bezier(.4,0,.2,1);flex-shrink:0
+    }
+    .nav-field-parent.open .nav-field-caret{transform:rotate(90deg)}
+    .nav-field-sub-wrap{
+      overflow:hidden;
+      transition:height .32s cubic-bezier(.4,0,.2,1), opacity .28s ease;
+      opacity:1
+    }
+    .nav-field-sub-wrap.closed{opacity:0}
+    .nav-field-sub{
+      margin-left:14px;padding-left:10px;
+      border-left:2px solid #DDE8DE;
+      display:flex;flex-direction:column;gap:1px;
+      margin-top:2px;margin-bottom:4px;
+    }
+    .nav-sub-item{
+      display:flex;align-items:center;gap:8px;
+      padding:7px 10px;border-radius:7px;cursor:pointer;
+      font-size:11px;color:#64748B;font-weight:500;
+      transition:all .1s;border:none;background:none;
+      width:100%;text-align:left;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+    }
+    .nav-sub-item:hover{background:#F0F8F4;color:#0A6B52}
+    .nav-sub-item.active{
+      background:#FFFFFF;color:#0A6B52;font-weight:600
+    }
+
+    /* ─── メインエリア ─── */
+    .main{flex:1;overflow:auto;background:#FAFBFA;min-width:0;width:0;display:flex;flex-direction:column}
+    .page{padding:28px 32px;box-sizing:border-box;flex:1;display:flex;flex-direction:column}
+    /* 画面いっぱいに伸ばしたい末尾コンテンツに付けるクラス */
+    .page-grow{flex:1;min-height:0}
+    /* グリッドの場合はセルをstretchして中身が伸びるようにする */
+    .page-grow[style*="grid"]{align-items:stretch!important}
+    .page-title{
+      font-size:22px;font-weight:700;color:#111827;
+      margin-bottom:8px;letter-spacing:-.02em;
+      line-height:1.25
+    }
+    .page-sub{font-size:14px;color:#64748B;margin-bottom:28px}
+    .eyebrow{
+      font-size:11px;font-weight:600;letter-spacing:.12em;
+      color:#9CA3AF;text-transform:uppercase;margin-bottom:4px;
+      margin-top:0;line-height:1.4
+    }
+
+    /* ─── カード ─── */
+    .card{
+      background:#FFFFFF;
+      border-radius:var(--radius-md);padding:20px;
+      box-shadow:var(--shadow-flat);border:1px solid var(--border-color)
+    }
+    .card-sm{
+      background:#FFFFFF;
+      border-radius:var(--radius-md);padding:16px;
+      box-shadow:var(--shadow-flat);border:1px solid var(--border-color)
+    }
+    /* ─── データテーブル専用カード（I-04） ─── */
+    .card-data{padding:0}
+    .card-data > .section-title{padding:14px 20px 0;margin-bottom:8px}
+
+    /* ─── 統計カード（カラフル上ボーダー） ─── */
+    .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+    .stat-card{
+      background:#FFFFFF;
+      border-radius:var(--radius-md);padding:16px 18px;
+      box-shadow:var(--shadow-flat);border:1px solid var(--border-color)
+    }
+
+    .stat-n{font-size:28px;font-weight:700;line-height:1;letter-spacing:-.02em;margin-top:4px}
+    .stat-l{font-size:10px;color:#94A3B8;margin-top:8px;font-weight:600;text-transform:uppercase;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .stat-card.green .stat-n{color:#0A6B52}
+    .stat-card.amber .stat-n{color:#B45309}
+    .stat-card.red   .stat-n{color:#C2410C}
+    .stat-card.blue  .stat-n{color:#1D4ED8}
+
+    /* ─── プログレス ─── */
+    .prog-wrap{margin-bottom:24px}
+    .prog-label{font-size:12px;color:#64748B;margin-bottom:6px;display:flex;justify-content:space-between;font-weight:500}
+    .prog-bg{background:#D8E8D8;border-radius:6px;height:8px;overflow:hidden}
+    .prog-fill{height:100%;border-radius:6px;background:#0A6B52;transition:width .6s}
+
+    /* ─── アラート ─── */
+    .alert-card{
+      background:#FFFBEB;border:1px solid #FDE68A;
+      border-radius:var(--radius-lg);
+      padding:11px 14px;margin-bottom:8px;
+      display:flex;align-items:center;gap:10px;
+      font-size:14px;color:#78350F
+    }
+
+    /* ─── バッジ（宝石色） ─── */
+    .badge{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;letter-spacing:.06em}
+    .badge-green{background:#ECFDF5;color:#065F46;border:1px solid #6EE7B7}
+    .badge-amber{background:#FFFBEB;color:#78350F;border:1px solid #FDE68A}
+    .badge-red  {background:#FFF7ED;color:#9A3412;border:1px solid #FDBA74}
+    .badge-blue {background:#EFF6FF;color:#1E3A8A;border:1px solid #93C5FD}
+    .badge-gray {background:#F8FAFC;color:#475569;border:1px solid #CBD5E1}
+
+    /* ─── テーブル ─── */
+    .table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.5}
+    .table th{
+      text-align:left;font-size:10px;font-weight:700;
+      color:#64748B;text-transform:uppercase;letter-spacing:.06em;
+      padding:9px 14px 9px 20px;border-bottom:2px solid #E2E8E2;
+      background:#F8FAF8
+    }
+    .table td{padding:14px 14px 14px 20px;border-bottom:1px solid #EDF2ED;color:#374151;vertical-align:middle}
+    .table tr:last-child td{border-bottom:none}
+    .table tr:hover td{background:#F0FDF4}
+
+    /* ─── フォーム ─── */
+    .form-group{margin-bottom:20px}
+    .form-label{font-size:11px;color:#374151;margin-bottom:8px;display:block;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+    .form-input{
+      width:100%;background:#FFFFFF;border:1.5px solid #D8E4D8;
+      border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;
+      color:#111827;outline:none;transition:all .15s
+    }
+    .form-input:focus{border-color:#0A6B52;box-shadow:0 0 0 3px rgba(10,107,82,.1)}
+    .form-input::placeholder{color:#B8C9B8}
+    .form-select{
+      width:100%;background:#FFFFFF;border:1.5px solid #D8E4D8;
+      border-radius:var(--radius-sm);padding:10px 12px;font-size:14px;
+      color:#111827;outline:none;transition:all .15s
+    }
+    .form-select:focus{border-color:#0A6B52;box-shadow:0 0 0 3px rgba(10,107,82,.1)}
+    select option{background:#fff;color:#111827}
+
+    /* ─── ボタン ─── */
+    .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .15s;letter-spacing:0}
+    .btn-primary{
+      background:#0A6B52;
+      color:#FFFFFF;
+      box-shadow:none
+    }
+    .btn-primary:hover{
+      background:#085A45;
+      box-shadow:none
+    }
+    .btn-primary:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+    .btn-ghost{
+      background:#FFFFFF;color:#374151;
+      border:1.5px solid #D8E4D8;
+      box-shadow:none
+    }
+    .btn-ghost:hover{background:#F6FAF6;color:#111827;border-color:#94A3B8}
+
+    /* ─── ステップUI ─── */
+    .step-indicator{display:flex;gap:8px;margin-bottom:24px}
+    .step-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+    .step-dot.done  {background:#0A6B52;color:#FFFFFF}
+    .step-dot.active{background:#FFFFFF;color:#0A6B52;border:2px solid #0A6B52}
+    .step-dot.pending{background:#F1F5F1;color:#B8C9B8;border:1.5px solid #D8E4D8}
+    .step-line{flex:1;height:1px;background:#D8E4D8;margin-top:14px}
+
+    /* ─── GAP ─── */
+    .gap-check-cat{background:#FFFFFF;border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:8px;overflow:hidden;box-shadow:var(--shadow-flat)}
+    .gap-cat-hdr{padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:600;color:#111827}
+    .gap-cat-hdr:hover{background:#F0FDF4}
+    .gap-item{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid #EDF2ED;font-size:14px;color:#64748B;cursor:pointer}
+    .gap-item:hover{background:#F0FDF4}
+    .gap-item.done{color:#065F46;font-weight:500}
+
+    /* ─── カレンダー ─── */
+    .cal-day{background:#FFFFFF;border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:6px;min-height:60px;font-size:12px;box-shadow:var(--shadow-flat)}
+    .cal-day-num{font-weight:700;color:#64748B;margin-bottom:4px}
+    .cal-event{border-radius:4px;padding:2px 5px;margin-bottom:2px;font-size:10px;font-weight:600}
+    .cal-event.own {background:#ECFDF5;color:#065F46;border:1px solid #6EE7B7}
+    .cal-event.rent{background:#FFFBEB;color:#78350F;border:1px solid #FDE68A}
+
+    /* ─── その他 ─── */
+    .section-title{
+      font-size:10px;font-weight:600;color:#94A3B8;
+      margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em
+    }
+    .field-card{
+      background:#FFFFFF;border:1px solid var(--border-color);
+      border-radius:var(--radius-md);padding:16px;cursor:pointer;
+      transition:all .15s;
+      box-shadow:var(--shadow-flat)
+    }
+    .field-card:hover{
+      border-color:#0A6B52;
+      box-shadow:none
+    }
+    .field-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+    .staff-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+    #field-map{flex:1;min-height:320px;border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--border-color);box-shadow:var(--shadow-flat)}
+    .sup-note{background:#ECFDF5;border:1px solid #6EE7B7;border-radius:var(--radius-lg);padding:10px 12px;font-size:12px;color:#065F46;font-weight:500}
+
+    /* ─── PDF出力用（画面外） ─── */
+    #pdf-preview{
+      position:fixed;left:-9999px;top:0;
+      background:#fff;color:#000;
+      font-family:'Noto Sans JP','Hiragino Sans','Yu Gothic','Meiryo',sans-serif;
+      font-size:11px;padding:28px 32px;width:794px
+    }
+    /* ── GAP様式ヘッダー ── */
+    #pdf-preview .pdf-doc-header{
+      border:2px solid #0A6B52;border-radius:4px;
+      overflow:hidden;margin-bottom:14px
+    }
+    #pdf-preview .pdf-doc-header-top{
+      background:#0A6B52;color:#fff;
+      display:flex;align-items:center;justify-content:space-between;
+      padding:8px 14px
+    }
+    #pdf-preview .pdf-doc-title{
+      font-size:17px;font-weight:700;letter-spacing:.08em
+    }
+    #pdf-preview .pdf-doc-subtitle{
+      font-size:9px;letter-spacing:.05em;opacity:.85;margin-top:2px
+    }
+    #pdf-preview .pdf-doc-cert-badge{
+      text-align:right;font-size:9px;line-height:1.7
+    }
+    #pdf-preview .pdf-doc-header-body{
+      display:grid;grid-template-columns:1fr 1fr 1fr;
+      border-top:1px solid #cde8e0
+    }
+    #pdf-preview .pdf-doc-field{
+      padding:7px 12px;border-right:1px solid #cde8e0;font-size:10px
+    }
+    #pdf-preview .pdf-doc-field:last-child{border-right:none}
+    #pdf-preview .pdf-doc-field-label{
+      font-size:8px;color:#0A6B52;font-weight:700;
+      letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px
+    }
+    #pdf-preview .pdf-doc-field-value{font-weight:600;color:#111}
+    /* 公印スペース */
+    #pdf-preview .pdf-seal-row{
+      display:flex;justify-content:flex-end;margin-bottom:10px
+    }
+    #pdf-preview .pdf-seal-box{
+      width:72px;height:72px;border:1.5px solid #aaa;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:9px;color:#aaa;text-align:center;line-height:1.4;
+      margin-left:10px
+    }
+    #pdf-preview .pdf-seal-label{
+      font-size:9px;color:#888;writing-mode:vertical-rl;
+      margin-right:4px;align-self:center
+    }
+    /* テーブル */
+    #pdf-preview table{width:100%;border-collapse:collapse;font-size:9.5px}
+    #pdf-preview thead tr:first-child th{
+      background:#0A6B52;color:#fff;padding:6px 7px;
+      text-align:center;font-weight:600;border:1px solid #088060;
+      font-size:9px;letter-spacing:.04em
+    }
+    #pdf-preview td{padding:5px 7px;border:1px solid #ccc;vertical-align:middle;text-align:center}
+    #pdf-preview tr:nth-child(even) td{background:#f4faf8}
+    /* フッター */
+    #pdf-preview .pdf-footer-row{
+      display:flex;justify-content:space-between;align-items:flex-end;
+      margin-top:14px;padding-top:8px;border-top:1px solid #ddd
+    }
+    #pdf-preview .pdf-footer-note{font-size:8.5px;color:#777;line-height:1.6}
+    #pdf-preview .pdf-footer-page{font-size:8.5px;color:#aaa}
+
+    /* ─── CAT-03: onMouseEnter/Leave をCSSホバーに統一 ─── */
+    .cal-day:hover{background:#F0FDF4}
+    .manual-card{
+      background:#fff;border:1px solid var(--border-color);border-radius:var(--radius-md);
+      padding:16px;cursor:pointer;transition:all .15s;
+      box-shadow:var(--shadow-flat)
+    }
+    .manual-card:hover{border-color:#0A6B52}
+    /* UX-08: スタッフ追加フォーム アニメーション */
+    @keyframes fadeInDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes fadeInUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes confirmModalIn{from{opacity:0;transform:scale(.94) translateY(6px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+    /* ── スムーズ折りたたみ（grid-template-rows 方式） ──
+       .smooth-collapse-wrap  : display:grid を持つ外枠
+       .smooth-collapse-inner : overflow:hidden を持つ内枠
+       JS側は open ? 'smooth-collapse-wrap open' : 'smooth-collapse-wrap' で制御 */
+    .smooth-collapse-wrap{
+      display:grid;
+      grid-template-rows:0fr;
+      transition:grid-template-rows .32s cubic-bezier(.4,0,.2,1),
+                 opacity .28s ease;
+      opacity:0;
+    }
+    .smooth-collapse-wrap.open{
+      grid-template-rows:1fr;
+      opacity:1;
+    }
+    .smooth-collapse-inner{
+      overflow:hidden;
+      min-height:0;
+    }

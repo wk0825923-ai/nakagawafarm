@@ -532,6 +532,7 @@ const WORK_ICON_MAP = {
   '播種':     { icon:'seeding',      color:'#2563EB', emoji:'🌱' },
   '灌水':     { icon:'droplet',      color:'#2563EB', emoji:'💧' },
   '耕起':     { icon:'tractor',      color:'#854D0E', emoji:'🚜' },
+  '畝づくり': { icon:'shovel',       color:'#B45309', emoji:'⛏️' },
   '定植':     { icon:'plant-2',      color:'#0D9972', emoji:'🌱' },
   '点検':     { icon:'search',       color:'#64748B', emoji:'🔍' },
   'その他':   { icon:'dots',         color:'#6B7280', emoji:'📝' },
@@ -3013,10 +3014,132 @@ function RecordStep3({ form, up, pesticides, records, isOver, selField, handlePe
       ),
       React.createElement('div', { className:'form-group' },
         React.createElement('label', { className:'form-label' }, '単位'),
-        React.createElement('select', { className:'form-select' },
+        React.createElement('select', { className:'form-select', value:form.amount_unit || 'L', onChange:e=>up('amount_unit',e.target.value) },
           React.createElement('option', null, 'L'),
           React.createElement('option', null, 'kg'),
           React.createElement('option', null, 'm²'),
+          React.createElement('option', null, '畝'),
+          React.createElement('option', null, '反'),
+        )
+      )
+    ),
+
+    // ── 畝づくり専用: 作業項目・肥料・マルチ（紙日報「圃場作り」に対応） ──
+    form.work_type === '畝づくり' && React.createElement('div', {
+      style:{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'10px', padding:'16px', marginBottom:'14px' }
+    },
+      React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color:'#B45309', marginBottom:'12px', display:'flex', alignItems:'center', gap:'6px' } },
+        React.createElement('i', { className:'ti ti-shovel', style:{ fontSize:'14px' } }),
+        '畝づくり作業の詳細'
+      ),
+      // 作業項目（紙日報の 1〜8 に対応するボタン選択）
+      React.createElement('div', { className:'form-group', style:{ marginBottom:'12px' } },
+        React.createElement('label', { className:'form-label' }, '作業項目'),
+        React.createElement('div', { style:{ display:'flex', gap:'8px', flexWrap:'wrap' } },
+          ['草刈り・モア', '施肥（ブロキャス）', '施肥（ブレンドキャスター）', '溝切り', '耕耘', '耕耘（ベッド前）', 'ベッド作り', 'その他'].map(itemName =>
+            React.createElement('button', {
+              key: itemName,
+              onClick: () => up('bed_work_item', form.bed_work_item === itemName ? '' : itemName),
+              style:{
+                padding:'6px 14px', borderRadius:'20px', fontSize:'12px', fontWeight:600,
+                cursor:'pointer', border:'1.5px solid', transition:'all .12s',
+                borderColor: form.bed_work_item === itemName ? '#B45309' : '#DDE2EC',
+                background:  form.bed_work_item === itemName ? '#FEF3C7' : '#F8FAFC',
+                color:       form.bed_work_item === itemName ? '#B45309' : '#64748B',
+              }
+            }, itemName)
+          )
+        )
+      ),
+      // 使用した肥料名・袋数
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'2fr 1fr', gap:'12px', marginBottom:'12px' } },
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, '使用した肥料名'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.bed_fertilizer_name || '',
+            placeholder:'例: 苦土重焼燐', onChange:e=>up('bed_fertilizer_name',e.target.value),
+          })
+        ),
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, '使用袋数'),
+          React.createElement('input', {
+            type:'number', className:'form-input', min:0, value:form.bed_fertilizer_bags || '',
+            placeholder:'例: 3', onChange:e=>up('bed_fertilizer_bags',e.target.value),
+          })
+        )
+      ),
+      // マルチ種類・使用本数・機械No.
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px' } },
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, 'マルチ種類'),
+          React.createElement('select', { className:'form-select', value:form.mulch_type || '', onChange:e=>up('mulch_type',e.target.value) },
+            React.createElement('option', { value:'' }, '—'),
+            React.createElement('option', null, 'ビニール'),
+            React.createElement('option', null, '崩壊'),
+          )
+        ),
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, 'マルチ使用本数'),
+          React.createElement('input', {
+            type:'number', className:'form-input', min:0, value:form.mulch_rolls || '',
+            placeholder:'例: 2', onChange:e=>up('mulch_rolls',e.target.value),
+          })
+        ),
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, '機械No.'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.machine_no || '',
+            placeholder:'例: トラクター-01', onChange:e=>up('machine_no',e.target.value),
+          })
+        )
+      )
+    ),
+
+    // ── 播種・定植専用: 品種・枚数・畝数・は種日（紙日報「播種・定植」に対応） ──
+    (form.work_type === '播種' || form.work_type === '定植') && React.createElement('div', {
+      style:{ background:'#F0FDF4', border:'1px solid #BBF7D0', borderRadius:'10px', padding:'16px', marginBottom:'14px' }
+    },
+      React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color:'#0A6B52', marginBottom:'12px', display:'flex', alignItems:'center', gap:'6px' } },
+        React.createElement('i', { className:'ti ti-plant-2', style:{ fontSize:'14px' } }),
+        (form.work_type === '播種' ? '播種' : '定植') + '作業の詳細'
+      ),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'12px' } },
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, '品種・苗の種類'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.variety || '',
+            placeholder:'例: ブルラッシュ', onChange:e=>up('variety',e.target.value),
+          })
+        ),
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, form.work_type === '播種' ? '播種枚数' : '定植枚数'),
+          React.createElement('input', {
+            type:'number', className:'form-input', min:0, value:form.tray_count || '',
+            placeholder:'例: 80', onChange:e=>up('tray_count',e.target.value),
+          })
+        )
+      ),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px' } },
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, '作業畝数'),
+          React.createElement('input', {
+            type:'number', className:'form-input', min:0, value:form.rows_worked || '',
+            placeholder:'例: 7', onChange:e=>up('rows_worked',e.target.value),
+          })
+        ),
+        form.work_type === '定植' && React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, 'は種日'),
+          React.createElement('input', {
+            type:'date', className:'form-input', value:form.seed_date || '',
+            onChange:e=>up('seed_date',e.target.value),
+          })
+        ),
+        React.createElement('div', { className:'form-group', style:{ marginBottom:0 } },
+          React.createElement('label', { className:'form-label' }, '機械No.'),
+          React.createElement('input', {
+            type:'text', className:'form-input', value:form.machine_no || '',
+            placeholder:'例: 定植機45', onChange:e=>up('machine_no',e.target.value),
+          })
         )
       )
     ),
@@ -3115,7 +3238,18 @@ function RecordStep4({ form, dilution, selField, selP, isOver, onPrev, onSave, s
       ['spray',    '農薬',     selP.name,                                       '#DC2626'],
       ['droplet',  '希釈倍率', dilution + '倍',                                 '#2563EB'],
     ] : []),
-    ['chart-bar', '使用量',  form.amount ? form.amount + ' L/kg' : '—',       '#64748B'],
+    ...(form.work_type === '畝づくり' ? [
+      ...(form.bed_work_item ? [['shovel', '作業項目', form.bed_work_item, '#B45309']] : []),
+      ...(form.bed_fertilizer_name ? [['leaf', '肥料', form.bed_fertilizer_name + (form.bed_fertilizer_bags ? '（' + form.bed_fertilizer_bags + '袋）' : ''), '#0D9972']] : []),
+      ...(form.mulch_type ? [['layout-rows', 'マルチ', form.mulch_type + (form.mulch_rolls ? '（' + form.mulch_rolls + '本）' : ''), '#64748B']] : []),
+    ] : []),
+    ...((form.work_type === '播種' || form.work_type === '定植') ? [
+      ...(form.variety ? [['plant-2', '品種・苗', form.variety, '#0D9972']] : []),
+      ...(form.tray_count ? [['stack-2', (form.work_type === '播種' ? '播種枚数' : '定植枚数'), form.tray_count + '枚', '#0D9972']] : []),
+      ...(form.rows_worked ? [['ruler-2', '作業畝数', form.rows_worked + '畝', '#64748B']] : []),
+      ...(form.seed_date ? [['calendar', 'は種日', form.seed_date, '#64748B']] : []),
+    ] : []),
+    ['chart-bar', '使用量',  form.amount ? form.amount + ' ' + (form.amount_unit || 'L/kg') : '—', '#64748B'],
     ...(form.note ? [['notes', '備考', form.note, '#7C3AED']] : []),
   ]
   // 【実装手順書 Step1】転記チェックの状況（チェックが1つも無くてもエラーではない）
@@ -4723,6 +4857,7 @@ function FieldDashboardSection({ field, fieldRecords, fieldRows, pesticides, lot
 // ─────────────────────────────────────────────────────
 function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }) {
   const [date, setDate]               = React.useState(new Date().toISOString().slice(0, 10))
+  const [weather, setWeather]         = React.useState('')  // 天気（薬剤散布記録シートの「天気」列に対応）
   const [selectedRows, setSelectedRows] = React.useState(new Set())  // 畝マップ選択セット
   const [rowRange, setRowRange]       = React.useState('')            // テキスト入力（フォールバック・手動調整用）
   const [sprayVolume, setSprayVolume] = React.useState('')
@@ -4777,6 +4912,7 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }
     onSave({
       field_id: field.id,
       date,
+      weather,
       row_range: rowRange.trim(),
       pesticides: items.map(it => ({
         pesticide_id: Number(it.pesticide_id),
@@ -4792,10 +4928,29 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }
 
   return React.createElement('div', null,
 
-    // ── 散布日（1行） ──
-    React.createElement('div', { style:{ marginBottom:'14px' } },
-      React.createElement('label', { style:labelStyle }, '散布日'),
-      React.createElement('input', { type:'date', value:date, onChange:e=>setDate(e.target.value), style:inputStyle })
+    // ── 散布日・天気（1行） ──
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'14px' } },
+      React.createElement('div', null,
+        React.createElement('label', { style:labelStyle }, '散布日'),
+        React.createElement('input', { type:'date', value:date, onChange:e=>setDate(e.target.value), style:inputStyle })
+      ),
+      React.createElement('div', null,
+        React.createElement('label', { style:labelStyle }, '天気'),
+        React.createElement('div', { style:{ display:'flex', gap:'6px' } },
+          [{ v:'晴', icon:'☀️' }, { v:'曇', icon:'🌤' }, { v:'雨', icon:'🌧' }, { v:'強風', icon:'💨' }].map(w =>
+            React.createElement('button', {
+              key: w.v,
+              onClick: () => setWeather(weather === w.v ? '' : w.v),
+              style:{
+                padding:'7px 10px', borderRadius:'7px', cursor:'pointer', fontSize:'12px', border:'1.5px solid',
+                borderColor: weather === w.v ? '#0A6B52' : '#D8E4D8',
+                background:  weather === w.v ? '#ECFDF5' : '#FFFFFF',
+                color:       weather === w.v ? '#0A6B52' : '#64748B',
+              }
+            }, w.icon + ' ' + w.v)
+          )
+        )
+      )
     ),
 
     // ── 畝範囲（畝マップ or テキスト入力） ──
@@ -5050,6 +5205,10 @@ function LotSprayRecordList({ records, pesticides, onDelete, field, staff }) {
             React.createElement('span', { style:{ color:'#6B7280' } }, '日付'),
             React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.date)
           ),
+          selectedRecord.weather && React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '天気'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.weather)
+          ),
           field && React.createElement('div', { style:rowStyle2 },
             React.createElement('span', { style:{ color:'#6B7280' } }, '圃場'),
             React.createElement('span', { style:{ fontWeight:600 } }, field.name)
@@ -5183,6 +5342,8 @@ function LotSprayRecordSection({ field, lotSprayRecords, pesticides, onSave, onD
 // ─────────────────────────────────────────────────────
 function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, staff }) {
   const [date, setDate]                 = React.useState(new Date().toISOString().slice(0, 10))
+  // 散布区分: 中川農園の記録手順では堆肥・元肥（ベッド前）・追肥がすべて「肥料散布記録」に集約されるため区分で管理
+  const [fertilizingType, setFertilizingType] = React.useState('追肥')
   const [item, setItem]                 = React.useState(lots[0]?.variety || '')   // 品目（作物・品種）
   const [selectedRows, setSelectedRows] = React.useState(new Set())                // 畝マップ選択セット
   const [rowRange, setRowRange]         = React.useState('')                       // テキスト入力（フォールバック・手動調整用）
@@ -5251,6 +5412,7 @@ function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, sta
     onSave({
       field_id: field.id,
       date,
+      fertilizing_type: fertilizingType,
       item: item.trim(),
       row_range: rowRange.trim(),
       row_count: rowCount,
@@ -5268,10 +5430,29 @@ function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, sta
 
   return React.createElement('div', null,
 
-    // ── 追肥日 ──
-    React.createElement('div', { style:{ marginBottom:'14px' } },
-      React.createElement('label', { style:labelStyle }, '追肥日'),
-      React.createElement('input', { type:'date', value:date, onChange:e=>setDate(e.target.value), style:inputStyle })
+    // ── 散布日・散布区分 ──
+    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'14px' } },
+      React.createElement('div', null,
+        React.createElement('label', { style:labelStyle }, '散布日'),
+        React.createElement('input', { type:'date', value:date, onChange:e=>setDate(e.target.value), style:inputStyle })
+      ),
+      React.createElement('div', null,
+        React.createElement('label', { style:labelStyle }, '散布区分'),
+        React.createElement('div', { style:{ display:'flex', gap:'6px' } },
+          ['堆肥', '元肥', '追肥'].map(t =>
+            React.createElement('button', {
+              key: t,
+              onClick: () => setFertilizingType(t),
+              style:{
+                padding:'7px 14px', borderRadius:'7px', cursor:'pointer', fontSize:'12px', fontWeight:600, border:'1.5px solid',
+                borderColor: fertilizingType === t ? '#0A6B52' : '#D8E4D8',
+                background:  fertilizingType === t ? '#ECFDF5' : '#FFFFFF',
+                color:       fertilizingType === t ? '#0A6B52' : '#64748B',
+              }
+            }, t)
+          )
+        )
+      )
     ),
 
     // ── 品目 ──
@@ -5286,7 +5467,7 @@ function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, sta
     // ── 畝範囲（畝マップ or テキスト入力）＋ 追肥畝数の自動表示 ──
     React.createElement('div', { style:{ marginBottom:'14px' } },
       React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'6px' } },
-        React.createElement('label', { style:{ ...labelStyle, marginBottom:0 } }, '畝番号（追肥畝数は自動計算）'),
+        React.createElement('label', { style:{ ...labelStyle, marginBottom:0 } }, '畝番号（散布畝数は自動計算）'),
         rowCount > 0
           ? React.createElement('span', {
               style:{ fontSize:'11px', fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #6EE7B7', borderRadius:'12px', padding:'2px 9px' }
@@ -5463,7 +5644,7 @@ function TopDressingRecordList({ records, fertilizers, onDelete, field, staff })
   if (records.length === 0) {
     return React.createElement('div', { className:'card', style:{ padding:'32px', textAlign:'center', color:'#6B7280', fontSize:'14px' } },
       React.createElement('i', { className:'ti ti-droplet', style:{ fontSize:'28px', display:'block', marginBottom:'8px', color:'#CBD5E1' } }),
-      'この圃場の追肥記録はまだありません'
+      'この圃場の肥料散布記録はまだありません'
     )
   }
   const sorted = [...records].sort((a, b) => b.date.localeCompare(a.date))
@@ -5488,6 +5669,9 @@ function TopDressingRecordList({ records, fertilizers, onDelete, field, staff })
         React.createElement('div', { style:{ flex:1, minWidth:0 } },
           React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'5px', flexWrap:'wrap' } },
             React.createElement('span', { style:{ fontSize:'14px', fontWeight:700, color:'#111827' } }, r.row_range + '畝'),
+            r.fertilizing_type && React.createElement('span', {
+              style:{ fontSize:'10px', fontWeight:700, color:'#B45309', background:'#FEF3C7', border:'1px solid #FDE68A', borderRadius:'10px', padding:'1px 8px' }
+            }, r.fertilizing_type),
             r.item && React.createElement('span', { style:{ fontSize:'12px', color:'#64748B' } }, r.item),
             React.createElement('span', { style:{ fontSize:'12px', color:'#94A3B8' } }, r.date),
             React.createElement(TranscribeStatusBadge, { checks: r.checks, checkKeys:['fert_stock','pesticide_fert','mgmt_table'] })
@@ -5534,7 +5718,7 @@ function TopDressingRecordList({ records, fertilizers, onDelete, field, staff })
               React.createElement('i', { className:'ti ti-droplet', style:{ fontSize:'18px', color:'#FFFFFF' } })
             ),
             React.createElement('div', null,
-              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '追肥記録'),
+              React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '肥料散布記録'),
               React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, selectedRecord.date + (field ? '　' + field.name : ''))
             )
           ),
@@ -5549,6 +5733,10 @@ function TopDressingRecordList({ records, fertilizers, onDelete, field, staff })
           React.createElement('div', { style:rowStyle2 },
             React.createElement('span', { style:{ color:'#6B7280' } }, '日付'),
             React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.date)
+          ),
+          selectedRecord.fertilizing_type && React.createElement('div', { style:rowStyle2 },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '散布区分'),
+            React.createElement('span', { style:{ fontWeight:600 } }, selectedRecord.fertilizing_type)
           ),
           field && React.createElement('div', { style:rowStyle2 },
             React.createElement('span', { style:{ color:'#6B7280' } }, '圃場'),
@@ -5618,7 +5806,7 @@ function TopDressingRecordList({ records, fertilizers, onDelete, field, staff })
     ),
 
     deleteTarget && React.createElement(ConfirmDeleteModal, {
-      title: '追肥記録を削除しますか？',
+      title: '肥料散布記録を削除しますか？',
       targetName: deleteTarget.row_range + '畝　' + deleteTarget.date,
       onCancel: () => setDeleteTarget(null),
       onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
@@ -5637,7 +5825,7 @@ function TopDressingRecordSection({ field, topDressingRecords, fertilizers, onSa
 
   return React.createElement('div', null,
     React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'8px' } },
-      React.createElement(SectionTitle, { icon:'droplet', style:{ marginBottom:0 } }, '追肥記録一覧'),
+      React.createElement(SectionTitle, { icon:'droplet', style:{ marginBottom:0 } }, '肥料散布記録一覧（堆肥・元肥・追肥）'),
       React.createElement('button', {
         className:'btn btn-primary',
         style:{ display:'flex', alignItems:'center', gap:'6px' },
@@ -5659,7 +5847,7 @@ function TopDressingRecordSection({ field, topDressingRecords, fertilizers, onSa
         onClick: e => e.stopPropagation()
       },
         React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'16px' } },
-          React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '追肥記録の新規入力'),
+          React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '肥料散布記録の新規入力'),
           React.createElement('button', {
             onClick: () => setShowAddModal(false),
             style:{ background:'none', border:'none', cursor:'pointer', fontSize:'20px', color:'#9CA3AF', lineHeight:1, padding:'4px' }
@@ -6727,7 +6915,7 @@ function FieldDetailPage({ field, fields, records, pesticides, onSaveRecord, onU
     { id:'daily',        label:'日報入力',           icon:'notebook'  },
     { id:'pesticide',    label:'農薬散布',           icon:'spray'     },
     // 【サンプル農園実データ統合 フェーズ4・Step4-1(画面接続)】追肥記録タブ
-    { id:'topdressing',  label:'追肥記録',           icon:'droplet'   },
+    { id:'topdressing',  label:'肥料散布記録',       icon:'droplet'   },
     { id:'harvest',      label:'収穫・出荷',         icon:'basket'    },
     { id:'field_eval',   label:'実績評価',           icon:'chart-bar' },
   ]
@@ -12773,21 +12961,6 @@ function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchase
       )
     ),
 
-    // ── Step3-3: 単位ルール & 価格マスタ反映バナー ──
-    React.createElement('div', {
-      style:{ background:'#F0F8F4', border:'1px solid #6EE7B7', borderRadius:'8px', padding:'10px 14px', marginBottom:'12px', fontSize:'11px', color:'#065F46' }
-    },
-      React.createElement('div', { style:{ fontWeight:700, marginBottom:'4px' } }, '✅ Step3-3完了 — 単位の整理 & 価格マスタ反映（実データ）'),
-      React.createElement('div', { style:{ lineHeight:1.7 } },
-        '📦 単位ルール（仮）: 在庫台帳で「袋数」「kg」が混在 → 月曜確認まで',
-        React.createElement('strong', null, ' kg単位に統一'),
-        '。weight_per_bag_kg を持つため袋⇔kg変換は常に可能。',
-        React.createElement('br', null),
-        '💴 価格マスタ（レタス管理表 > 肥料.農薬マスタシート）から苦土重焼燐・苦土石灰・ジシアン555・SBXの価格を実データに更新。',
-        React.createElement('br', null),
-        '⚠️ 月曜確認: 袋管理か kg管理かの正式ルール / ⚠️マーク付き品目の重さ（仮置き20kg） / 価格未入力品目。'
-      )
-    ),
     // ── タブ切替（肥料一覧 / 棚卸し入力 / 使用履歴 / 仕入れ履歴） ──
     React.createElement('div', { style:{ display:'flex', gap:4, borderBottom:`1px solid ${C.border}`, marginBottom:'16px' } },
       ...['list','inventory','usage','history'].map(tab => {

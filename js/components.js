@@ -7715,7 +7715,8 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
   const cropOptions = ['all', ...Array.from(new Set(fields.map(cropOf)))]
   // 作物タブで絞り込んだ後の母集合（ステータスごとの件数カウント用）
   const cropFilteredFields = fields.filter(f => cropTab === 'all' || cropOf(f) === cropTab)
-  const statusOptions = Array.from(new Set(fields.map(f => f.status)))
+  // status未設定の圃場（過去データ取り込み等）は絞り込みチップから除外し、keyのundefined重複を防ぐ
+  const statusOptions = Array.from(new Set(fields.map(f => f.status).filter(Boolean)))
   const statusCounts  = Object.fromEntries(
     statusOptions.map(s => [s, cropFilteredFields.filter(f => f.status === s).length])
   )

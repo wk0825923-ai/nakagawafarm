@@ -16,6 +16,7 @@ const NAV_SECTIONS_DATA = [
   { id:'record_list',      label:'日報管理',            icon:'list-details'   },  // 毎日（日報入力の隣）
   { id:'field_summary',    label:'圃場まとめ',          icon:'table'          },  // 週次: ロット別生産履歴
   { id:'harvest_forecast', label:'収穫予測',            icon:'temperature'    },  // 週次: 積算温度
+  { id:'shipment_log',     label:'出荷記録',            icon:'truck-delivery' },  // 収穫→ストック→出荷・ストック残
   { id:'field_performance',label:'圃場実績・評価',      icon:'chart-bar'      },  // 月次
   { id:'crop_plan',        label:'作付計画 / 経営予測', icon:'calendar-event' },  // 季節ごと
   { id:'export',           label:'GAP帳票出力',         icon:'file-export'    },  // 監査時
@@ -30,6 +31,7 @@ const NAV_SECTIONS_SYS = [
   { id:'trainee_diary',    label:'技能実習生 作業日誌', icon:'notebook'    },
   { id:'manual',           label:'多言語マニュアル',    icon:'book-2'      },
   { id:'equipment',        label:'機器予約',             icon:'truck'       },
+  { id:'maintenance_log',  label:'機械整備記録',        icon:'tool'        },
   { id:'simulator',        label:'収益シミュレーター',  icon:'currency-yen'},
   { id:'settings',         label:'設定',                icon:'settings'    },
 ]
@@ -15041,6 +15043,209 @@ function CropCategoryPage({ categories, onSave }) {
       targetName: deleteTarget.name,
       onCancel: () => setDeleteTarget(null),
       onConfirm: () => { deleteCat(deleteTarget.key); setDeleteTarget(null) }
+    })
+  )
+}
+
+// =====================================================
+// 【機械整備記録】MaintenanceLogPage（GAP審査4要件「機械・器具の点検・清掃記録」対応）
+// 紙日報「作業日報(機械)＝機械整備記録」に相当。圃場に依存しない農場全体の記録。
+// 純追加: 専用 localStorage キー(farm_maintenance_records)。既存スキーマ・集計に非依存。
+// =====================================================
+function MaintenanceLogPage({ records, staff, onSave, onDelete }) {
+  const MTYPES  = ['点検', '整備', '清掃']
+  const RESULTS = ['異常なし', '要対応', '対応済']
+  const today = new Date().toISOString().slice(0, 10)
+  const blank = { date: today, machine_name:'', machine_no:'', mtype:'点検', result:'異常なし', worker:'', note:'' }
+  const [form, setForm] = React.useState(blank)
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+  const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const valid = form.machine_name.trim() !== ''
+  const submit = () => {
+    if (!valid) return
+    onSave({ ...form, id: Date.now(), machine_name: form.machine_name.trim(), machine_no: form.machine_no.trim(), worker: form.worker.trim(), note: form.note.trim() })
+    setForm(blank)
+  }
+  const rows = [...(records || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)))
+  const resultColor = (r) => r === '要対応' ? '#DC2626' : (r === '対応済' ? '#B45309' : '#0A6B52')
+  const pill = (opts, cur, onPick) => React.createElement('div', { style:{ display:'flex', gap:'8px', flexWrap:'wrap' } },
+    ...opts.map(o => React.createElement('button', { key:o, onClick:()=>onPick(o),
+      style:{ padding:'6px 14px', borderRadius:'16px', fontSize:'13px', fontWeight:600, cursor:'pointer', border:'1px solid',
+        borderColor: cur===o ? '#0A6B52' : '#DDE2EC', background: cur===o ? '#ECFDF5' : '#F8FAFC', color: cur===o ? '#0A6B52' : '#64748B' } }, o)))
+  const th = { padding:'10px 12px', fontSize:12, fontWeight:700, color:'#6B7280', textAlign:'left', borderBottom:'2px solid #E5E7EB', whiteSpace:'nowrap' }
+  const td = { padding:'10px 12px', fontSize:13, color:'#111827', borderBottom:'1px solid #F1F5F9' }
+
+  return React.createElement('div', { className:'page' },
+    React.createElement('div', { className:'eyebrow' }, 'EQUIPMENT MAINTENANCE'),
+    React.createElement('div', { className:'page-title' }, '機械整備記録'),
+    React.createElement('div', { className:'page-sub' }, 'トラクター・収穫機・コンテナ等の点検/整備/清掃を記録します（GAP審査の機械管理記録に対応）'),
+
+    // 入力フォーム
+    React.createElement('div', { className:'card', style:{ marginBottom:'18px' } },
+      React.createElement(SectionTitle, { icon:'tool' }, '記録を追加'),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'14px' } },
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '日付'),
+          React.createElement('input', { type:'date', className:'form-input', value:form.date, onChange:e=>up('date', e.target.value) })),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '機械名 *'),
+          React.createElement('input', { type:'text', className:'form-input', value:form.machine_name, onChange:e=>up('machine_name', e.target.value), placeholder:'例: トラクター / 定植機45 / コンテナ' })),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '機械No.'),
+          React.createElement('input', { type:'text', className:'form-input', value:form.machine_no, onChange:e=>up('machine_no', e.target.value), placeholder:'例: T-01' })),
+      ),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'14px' } },
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '種別'), pill(MTYPES, form.mtype, v=>up('mtype', v))),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '結果'), pill(RESULTS, form.result, v=>up('result', v))),
+      ),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:'14px' } },
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '作業者'),
+          staff && staff.length > 0
+            ? React.createElement('select', { className:'form-input', value:form.worker, onChange:e=>up('worker', e.target.value) },
+                React.createElement('option', { value:'' }, '（選択）'), ...staff.map(s=>React.createElement('option', { key:s.id, value:s.name }, s.name)))
+            : React.createElement('input', { type:'text', className:'form-input', value:form.worker, onChange:e=>up('worker', e.target.value), placeholder:'作業者名' })),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '内容・備考'),
+          React.createElement('input', { type:'text', className:'form-input', value:form.note, onChange:e=>up('note', e.target.value), placeholder:'例: エンジンオイル交換 / 刃の清掃 / 異常なし' })),
+      ),
+      React.createElement('button', { className:'btn btn-primary', disabled:!valid, onClick:submit, style:{ opacity: valid?1:.6 } }, '記録する')
+    ),
+
+    // 一覧
+    React.createElement('div', { className:'card', style:{ padding:0, overflow:'hidden' } },
+      rows.length === 0
+        ? React.createElement('div', { style:{ padding:'40px', textAlign:'center', color:'#9CA3AF', fontSize:13 } }, 'まだ記録がありません')
+        : React.createElement('div', { style:{ overflowX:'auto' } },
+            React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', minWidth:720 } },
+              React.createElement('thead', null, React.createElement('tr', null,
+                ...['日付','機械名','No.','種別','結果','作業者','内容',''].map((h,i)=>React.createElement('th', { key:i, style:th }, h)))),
+              React.createElement('tbody', null,
+                ...rows.map(r => React.createElement('tr', { key:r.id },
+                  React.createElement('td', { style:td }, r.date),
+                  React.createElement('td', { style:{ ...td, fontWeight:600 } }, r.machine_name),
+                  React.createElement('td', { style:td }, r.machine_no || '—'),
+                  React.createElement('td', { style:td }, r.mtype),
+                  React.createElement('td', { style:{ ...td, fontWeight:700, color:resultColor(r.result) } }, r.result),
+                  React.createElement('td', { style:td }, r.worker || '—'),
+                  React.createElement('td', { style:td }, r.note || '—'),
+                  React.createElement('td', { style:td }, React.createElement('button', { onClick:()=>setDeleteTarget(r),
+                    style:{ background:'none', border:'none', color:'#DC2626', cursor:'pointer', fontSize:13 } }, '削除')),
+                ))))),
+    ),
+
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '整備記録を削除しますか？',
+      targetName: deleteTarget.date + '　' + deleteTarget.machine_name,
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+    })
+  )
+}
+
+// =====================================================
+// 【出荷記録】ShipmentLogPage（収穫→ストック→出荷の分離。ストック残を自動計算）
+// 紙日報「レタス出荷（出荷先・品目・収穫日・コンテナ数・ストック残）」に相当。
+// 安全設計: 既存の収穫記録(harvestRecords)は無傷のまま。出荷は専用キー(farm_shipment_records)に
+// 追記し、ストック残 = Σ収穫(品目別) − Σ出荷(品目別) を計算で表示する。既存集計に非依存。
+// =====================================================
+function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations, onSave, onDelete }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const varieties = [...new Set((harvestRecords || []).map(r => r.variety).filter(Boolean))]
+  const destList = (destinations || []).map(d => d.label)
+
+  // 品目別ストック残
+  const harvBy = {}; (harvestRecords || []).forEach(r => { if (r.variety) harvBy[r.variety] = (harvBy[r.variety] || 0) + (r.total_cases || 0) })
+  const shipBy = {}; (shipmentRecords || []).forEach(r => { if (r.variety) shipBy[r.variety] = (shipBy[r.variety] || 0) + (Number(r.cases) || 0) })
+  const stockRows = [...new Set([...Object.keys(harvBy), ...Object.keys(shipBy)])]
+    .map(v => ({ variety:v, harvested:harvBy[v] || 0, shipped:shipBy[v] || 0, stock:(harvBy[v] || 0) - (shipBy[v] || 0) }))
+    .sort((a, b) => b.stock - a.stock)
+
+  const blank = { date: today, variety: varieties[0] || '', harvest_date:'', dest: destList[0] || '', cases:'', note:'' }
+  const [form, setForm] = React.useState(blank)
+  const [deleteTarget, setDeleteTarget] = React.useState(null)
+  const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const valid = form.variety && form.dest && Number(form.cases) > 0
+  const submit = () => {
+    if (!valid) return
+    onSave({ ...form, id: Date.now(), cases: Number(form.cases), note: form.note.trim() })
+    setForm({ ...blank, variety: form.variety, dest: form.dest })
+  }
+  const rows = [...(shipmentRecords || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)))
+  const th = { padding:'10px 12px', fontSize:12, fontWeight:700, color:'#6B7280', textAlign:'left', borderBottom:'2px solid #E5E7EB', whiteSpace:'nowrap' }
+  const td = { padding:'10px 12px', fontSize:13, color:'#111827', borderBottom:'1px solid #F1F5F9' }
+
+  return React.createElement('div', { className:'page' },
+    React.createElement('div', { className:'eyebrow' }, 'SHIPMENT LOG'),
+    React.createElement('div', { className:'page-title' }, '出荷記録 / ストック残'),
+    React.createElement('div', { className:'page-sub' }, '収穫はそのまま、後日の出荷を記録します。ストック残（=収穫−出荷）は品目別に自動計算されます'),
+
+    // ストック残サマリー
+    React.createElement('div', { className:'card', style:{ marginBottom:'18px', padding:0, overflow:'hidden' } },
+      React.createElement('div', { style:{ padding:'12px 16px', background:'#F0FDF4', borderBottom:'1px solid #E5E7EB', fontWeight:700, color:'#0A6B52', fontSize:14 } }, '📦 品目別ストック残'),
+      stockRows.length === 0
+        ? React.createElement('div', { style:{ padding:'28px', textAlign:'center', color:'#9CA3AF', fontSize:13 } }, '収穫記録がまだありません（先に「収穫・出荷」で収穫を記録してください）')
+        : React.createElement('div', { style:{ overflowX:'auto' } },
+            React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', minWidth:520 } },
+              React.createElement('thead', null, React.createElement('tr', null,
+                ...['品目','収穫計','出荷計','ストック残'].map((h,i)=>React.createElement('th', { key:i, style:{ ...th, textAlign: i===0?'left':'right' } }, h)))),
+              React.createElement('tbody', null,
+                ...stockRows.map(r => React.createElement('tr', { key:r.variety },
+                  React.createElement('td', { style:{ ...td, fontWeight:600 } }, r.variety),
+                  React.createElement('td', { style:{ ...td, textAlign:'right' } }, r.harvested.toLocaleString()),
+                  React.createElement('td', { style:{ ...td, textAlign:'right' } }, r.shipped.toLocaleString()),
+                  React.createElement('td', { style:{ ...td, textAlign:'right', fontWeight:700, color: r.stock < 0 ? '#DC2626' : '#0A6B52' } }, r.stock.toLocaleString()),
+                ))))),
+    ),
+
+    // 出荷入力フォーム
+    React.createElement('div', { className:'card', style:{ marginBottom:'18px' } },
+      React.createElement(SectionTitle, { icon:'truck-delivery' }, '出荷を記録'),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'14px' } },
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '出荷日'),
+          React.createElement('input', { type:'date', className:'form-input', value:form.date, onChange:e=>up('date', e.target.value) })),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '品目 *'),
+          varieties.length > 0
+            ? React.createElement('select', { className:'form-input', value:form.variety, onChange:e=>up('variety', e.target.value) }, ...varieties.map(v=>React.createElement('option', { key:v, value:v }, v)))
+            : React.createElement('input', { type:'text', className:'form-input', value:form.variety, onChange:e=>up('variety', e.target.value), placeholder:'収穫記録が必要です' })),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '収穫日（任意）'),
+          React.createElement('input', { type:'date', className:'form-input', value:form.harvest_date, onChange:e=>up('harvest_date', e.target.value) })),
+      ),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 2fr', gap:'14px' } },
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '出荷先 *'),
+          destList.length > 0
+            ? React.createElement('select', { className:'form-input', value:form.dest, onChange:e=>up('dest', e.target.value) }, ...destList.map(d=>React.createElement('option', { key:d, value:d }, d)))
+            : React.createElement('input', { type:'text', className:'form-input', value:form.dest, onChange:e=>up('dest', e.target.value), placeholder:'出荷先' })),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '数量（コンテナ/ケース） *'),
+          React.createElement('input', { type:'number', className:'form-input', value:form.cases, onChange:e=>up('cases', e.target.value), placeholder:'0', min:0 })),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '備考'),
+          React.createElement('input', { type:'text', className:'form-input', value:form.note, onChange:e=>up('note', e.target.value), placeholder:'例: 朝出し / 直売分' })),
+      ),
+      React.createElement('button', { className:'btn btn-primary', disabled:!valid, onClick:submit, style:{ opacity: valid?1:.6 } }, '出荷を記録する')
+    ),
+
+    // 出荷一覧
+    React.createElement('div', { className:'card', style:{ padding:0, overflow:'hidden' } },
+      React.createElement('div', { style:{ padding:'12px 16px', borderBottom:'1px solid #E5E7EB', fontWeight:700, color:'#111827', fontSize:14 } }, '出荷履歴'),
+      rows.length === 0
+        ? React.createElement('div', { style:{ padding:'32px', textAlign:'center', color:'#9CA3AF', fontSize:13 } }, 'まだ出荷記録がありません')
+        : React.createElement('div', { style:{ overflowX:'auto' } },
+            React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', minWidth:640 } },
+              React.createElement('thead', null, React.createElement('tr', null,
+                ...['出荷日','品目','出荷先','数量','収穫日','備考',''].map((h,i)=>React.createElement('th', { key:i, style:th }, h)))),
+              React.createElement('tbody', null,
+                ...rows.map(r => React.createElement('tr', { key:r.id },
+                  React.createElement('td', { style:td }, r.date),
+                  React.createElement('td', { style:{ ...td, fontWeight:600 } }, r.variety),
+                  React.createElement('td', { style:td }, r.dest),
+                  React.createElement('td', { style:{ ...td, textAlign:'right', fontWeight:700, color:'#0A6B52' } }, (Number(r.cases)||0).toLocaleString()),
+                  React.createElement('td', { style:td }, r.harvest_date || '—'),
+                  React.createElement('td', { style:td }, r.note || '—'),
+                  React.createElement('td', { style:td }, React.createElement('button', { onClick:()=>setDeleteTarget(r),
+                    style:{ background:'none', border:'none', color:'#DC2626', cursor:'pointer', fontSize:13 } }, '削除')),
+                ))))),
+    ),
+
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '出荷記録を削除しますか？',
+      targetName: deleteTarget.date + '　' + deleteTarget.variety + '　' + deleteTarget.dest,
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
     })
   )
 }

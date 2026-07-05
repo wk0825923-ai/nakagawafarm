@@ -106,6 +106,13 @@
   const [cropCategories, setCropCategories] = useFPS('farm_crop_categories', INITIAL_CROP_CATEGORIES)
   // ── 収穫予測: 月別平均気温（平年値・1回設定で永続化） ──
   const [monthlyTemps, setMonthlyTemps] = useFPS('farm_monthly_temps', INITIAL_MONTHLY_TEMPS)
+  // ── 機械整備記録（GAP機械管理）・出荷記録（収穫→ストック→出荷）: いずれも純追加の専用キー ──
+  const [maintenanceRecords, setMaintenanceRecords] = useFPS('farm_maintenance_records', [])
+  const [shipmentRecords, setShipmentRecords] = useFPS('farm_shipment_records', [])
+  const onAddMaintenance    = (r)  => { setMaintenanceRecords(p => [...p, r]); celebrateSave('整備を記録！') }
+  const onDeleteMaintenance = (id) => setMaintenanceRecords(p => p.filter(x => x.id !== id))
+  const onAddShipment       = (r)  => { setShipmentRecords(p => [...p, r]); celebrateSave('出荷を記録！') }
+  const onDeleteShipment    = (id) => setShipmentRecords(p => p.filter(x => x.id !== id))
   // モジュールレベル参照を同期 — グローバル関数 getCropCategory / getHarvestGrades が最新を参照できる
   _CROP_CATEGORIES = cropCategories
 
@@ -421,6 +428,15 @@
     // 【日報入力】全圃場から選択して入力（複数圃場の一括記録に対応する全体入口）
     daily_entry: () => React.createElement(RecordForm, {
       fields, pesticides, records, lotSprayRecords, onSave: onSaveRecordWithStock,
+    }),
+    // 【機械整備記録】GAP機械管理（純追加・専用キー）
+    maintenance_log: () => React.createElement(MaintenanceLogPage, {
+      records: maintenanceRecords, staff, onSave: onAddMaintenance, onDelete: onDeleteMaintenance,
+    }),
+    // 【出荷記録】収穫→ストック→出荷。ストック残は収穫記録との差で自動計算（既存収穫は無傷）
+    shipment_log: () => React.createElement(ShipmentLogPage, {
+      shipmentRecords, harvestRecords, fields, destinations: shipmentDestinations,
+      onSave: onAddShipment, onDelete: onDeleteShipment,
     }),
     // 【フェーズE・E-4 Step6】圃場実績・評価ページ
     field_performance: () => React.createElement(FieldPerformancePage, {

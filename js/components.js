@@ -3822,7 +3822,7 @@ function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycl
         : React.createElement('table', { className:'table' },
             React.createElement('thead', null,
               React.createElement('tr', null,
-                ...['', '日付', '圃場', '作業', '作付け', '天気', '作業者', '転記', ''].map(h => React.createElement('th', { key:h }, h))
+                ...['', '日付', '圃場', '作業', '作付け', '天気', '作業者', '転記', ''].map((h, i) => React.createElement('th', { key:i }, h))
               )
             ),
             React.createElement('tbody', null,

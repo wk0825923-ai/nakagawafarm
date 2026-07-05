@@ -527,22 +527,6 @@ const CROP_PESTICIDE_MAP = {
 }
 const INITIAL_STAFF = []
 const INITIAL_RECORDS = []
-
-// 🧪【動作確認用・一時データ】収穫前日数アラートに「収穫可能日」表示を追加した変更の見え方を
-// 確認するためのテストレコード。圃場1（レタス）に「2日前に農薬散布した」想定の記録を1件だけ追加し、
-// ダッシュボードのアラートカードが「残留○日あります（○月○日〜収穫可能）」と表示されることを確認する。
-// 確認が完了したらこのブロックは削除してください。
-;(function () {
-  const testDate = new Date()
-  testDate.setDate(testDate.getDate() - 2) // 2日前に散布した想定
-  const y = testDate.getFullYear()
-  const m = String(testDate.getMonth() + 1).padStart(2, '0')
-  const d = String(testDate.getDate()).padStart(2, '0')
-  INITIAL_RECORDS.push({
-    id: 9001, date: y + '-' + m + '-' + d, field_id: 1, work_type: '農薬散布',
-    pesticide_id: 2, dilution: 2000, amount: 40, weather: '晴', worker: '（動作確認用テスト）'
-  })
-})()
 const INITIAL_GAP_CHECKS = [
   // ── 農薬管理 ──
   { id:1,  category:'農薬管理', item:'農薬保管庫の施錠確認',                      is_cleared:false },

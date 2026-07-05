@@ -388,10 +388,20 @@
       onAdd:    d => { setTraineeDiaries(p => [...p, d]); celebrateSave('作業日誌を記録！') },
       onDelete: id => setTraineeDiaries(p => p.filter(d => d.id !== id)),
     }),
-    equipment:         () => React.createElement(Equipment,   { rentals, onAdd:r=>{setRentals(p=>[...p,r]);celebrateSave('予約を追加！')}, onUpdate:r=>setRentals(p=>p.map(x=>x.id===r.id?r:x)), onDelete:id=>setRentals(p=>p.filter(r=>r.id!==id)) }),
+    // 【機器管理】機器予約 + 機械整備記録 をタブ統合
+    equipment:         () => React.createElement(TabHubPage, { tabs: [
+      { key:'rental', label:'機器予約', render: () => React.createElement(Equipment, { rentals, onAdd:r=>{setRentals(p=>[...p,r]);celebrateSave('予約を追加！')}, onUpdate:r=>setRentals(p=>p.map(x=>x.id===r.id?r:x)), onDelete:id=>setRentals(p=>p.filter(r=>r.id!==id)) }) },
+      { key:'maint',  label:'整備記録', render: () => React.createElement(MaintenanceLogPage, { records: maintenanceRecords, staff, onSave: onAddMaintenance, onDelete: onDeleteMaintenance }) },
+    ] }),
     simulator:         () => React.createElement(RevenueSimulator, null),
     manual:            () => React.createElement(ManualLibrary,    null),
     settings:          () => React.createElement(Settings,    null),
+    // 【マスタ管理】農薬/肥料/作物カテゴリ をタブ統合（個別pageMapを再利用するので二重定義しない）
+    master_hub:        () => React.createElement(TabHubPage, { tabs: [
+      { key:'pest', label:'農薬マスタ',   render: pageMap.pesticide_master },
+      { key:'fert', label:'肥料マスタ',   render: pageMap.fertilizer_master },
+      { key:'cat',  label:'作物カテゴリ', render: pageMap.crop_categories },
+    ] }),
     crop_categories:   () => React.createElement(CropCategoryPage, { categories: cropCategories, onSave: setCropCategories }),
     pesticide_master:  () => React.createElement(PesticideMasterPage, {
       pesticides,

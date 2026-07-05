@@ -22,16 +22,14 @@ const NAV_SECTIONS_DATA = [
   { id:'export',           label:'GAP帳票出力',         icon:'file-export'    },  // 監査時
   { id:'gap',              label:'GAPチェックリスト',   icon:'checklist'      },  // 監査時
 ]
-// マスタ・設定系をまとめる（見出しは「管理・設定」）。初期設定中心で頻度は低い。
+// マスタ・設定系をまとめる（見出しは「管理・設定」・既定で折りたたみ）。初期設定中心で頻度は低い。
+// 農薬/肥料/作物カテゴリは「マスタ管理」1つに、機器予約と機械整備記録は「機器管理」1つにタブ統合。
 const NAV_SECTIONS_SYS = [
-  { id:'pesticide_master', label:'農薬マスタ管理',      icon:'flask'       },
-  { id:'fertilizer_master',label:'肥料マスタ管理',      icon:'leaf'        },
-  { id:'crop_categories',  label:'作物カテゴリ管理',    icon:'plant-2'     },
+  { id:'master_hub',       label:'マスタ管理',          icon:'database'    },  // 農薬/肥料/作物カテゴリ
   { id:'staff',            label:'スタッフ管理',         icon:'users'       },
   { id:'trainee_diary',    label:'技能実習生 作業日誌', icon:'notebook'    },
   { id:'manual',           label:'多言語マニュアル',    icon:'book-2'      },
-  { id:'equipment',        label:'機器予約',             icon:'truck'       },
-  { id:'maintenance_log',  label:'機械整備記録',        icon:'tool'        },
+  { id:'equipment',        label:'機器管理',            icon:'truck'       },  // 予約 + 整備記録
   { id:'simulator',        label:'収益シミュレーター',  icon:'currency-yen'},
   { id:'settings',         label:'設定',                icon:'settings'    },
 ]
@@ -209,6 +207,9 @@ function FieldAccordionItem({ f, isOpen, onChange, onDeleteTarget }) {
 
 function Sidebar({ current, onChange, fields, onAddField, onDeleteField, currentOrg, currentFarm, availableFarms, onFarmChange, onSignOut, authUser }) {
   const [farmMenuOpen, setFarmMenuOpen] = React.useState(false)
+  // 【メニュー整理】セクションを折りたたみ可能に。普段使わない「管理・設定」は既定で閉じる。
+  const [openSections, setOpenSections] = React.useState({ data: true, sys: false })
+  const toggleSection = (k) => setOpenSections(s => ({ ...s, [k]: !s[k] }))
   const isCorp    = currentOrg && currentOrg.type === 'corp'
   const multiFarm = isCorp && availableFarms && availableFarms.length > 1
   // 現在の圃場IDとサブタブを解析
@@ -228,6 +229,17 @@ function Sidebar({ current, onChange, fields, onAddField, onDeleteField, current
         React.createElement('i', { className:'ti ti-' + item.icon, 'aria-hidden':'true' })
       ),
       item.label
+    )
+
+  // 折りたたみ式セクション見出し（クリックで開閉。シェブロンで状態表示）
+  const SectionHead = ({ label, sectionKey, open, mt='8px' }) =>
+    React.createElement('button', {
+      onClick: () => toggleSection(sectionKey),
+      className: 'nav-section',
+      style:{ marginTop:mt, display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', background:'none', border:'none', cursor:'pointer', padding:'4px 10px' },
+    },
+      React.createElement('span', null, label),
+      React.createElement('i', { className:'ti ti-chevron-' + (open ? 'down' : 'right'), 'aria-hidden':'true', style:{ fontSize:'14px', opacity:.6 } })
     )
 
   return React.createElement('nav', { className:'sidebar', style:{ display:'flex', flexDirection:'column', overflowY:'auto', overflowX:'hidden' } },
@@ -295,13 +307,17 @@ function Sidebar({ current, onChange, fields, onAddField, onDeleteField, current
 
     ),
 
-    // ── 下部：営農データ・システム ──
-    React.createElement('div', { className:'nav-wrap', style:{ flexShrink:0, paddingTop:'14px' } },
-      React.createElement('div', { className:'nav-section', style:{ marginTop:'4px' } }, '営農データ'),
-      ...NAV_SECTIONS_DATA.map(n => React.createElement(NavBtn, { key:n.id, item:n })),
-      React.createElement('div', { className:'nav-section', style:{ marginTop:'8px' } }, '管理・設定'),
-      ...NAV_SECTIONS_SYS.map(n => React.createElement(NavBtn, { key:n.id, item:n })),
-    ),
+    // ── 下部：営農データ・管理設定（折りたたみ式。現在ページを含むセクションは自動で開く） ──
+    (() => {
+      const dataOpen = openSections.data || NAV_SECTIONS_DATA.some(n => n.id === current)
+      const sysOpen  = openSections.sys  || NAV_SECTIONS_SYS.some(n => n.id === current)
+      return React.createElement('div', { className:'nav-wrap', style:{ flexShrink:0, paddingTop:'14px' } },
+        React.createElement(SectionHead, { label:'営農データ', sectionKey:'data', open:dataOpen, mt:'4px' }),
+        ...(dataOpen ? NAV_SECTIONS_DATA.map(n => React.createElement(NavBtn, { key:n.id, item:n })) : []),
+        React.createElement(SectionHead, { label:'管理・設定', sectionKey:'sys', open:sysOpen }),
+        ...(sysOpen ? NAV_SECTIONS_SYS.map(n => React.createElement(NavBtn, { key:n.id, item:n })) : []),
+      )
+    })(),
 
     // ── フッター: ユーザー情報 + サインアウト ──
     React.createElement('div', { style:{ marginTop:'auto', padding:'12px 14px 14px', borderTop:'1px solid #DDE8DE', flexShrink:0 } },
@@ -15044,6 +15060,29 @@ function CropCategoryPage({ categories, onSave }) {
       onCancel: () => setDeleteTarget(null),
       onConfirm: () => { deleteCat(deleteTarget.key); setDeleteTarget(null) }
     })
+  )
+}
+
+// =====================================================
+// 【メニュー整理】TabHubPage — 複数の既存ページをタブでまとめる汎用ハブ。
+// 各タブは { key, label, render:()=>ReactElement }。render は既存ページを返すだけなので
+// 既存ページ自体は無改修（プロップスはapp.js側から渡す）。マスタ管理・機器管理で使用。
+// =====================================================
+function TabHubPage({ tabs }) {
+  const [active, setActive] = React.useState(0)
+  const list = tabs || []
+  const cur = list[active] || list[0]
+  return React.createElement('div', null,
+    React.createElement('div', { style:{ display:'flex', gap:'2px', padding:'18px 28px 0', borderBottom:'1px solid #E5E7EB', background:'#fff', flexWrap:'wrap', position:'sticky', top:0, zIndex:5 } },
+      ...list.map((t, i) => React.createElement('button', {
+        key: t.key,
+        onClick: () => setActive(i),
+        style:{ padding:'10px 20px', border:'none', background:'none', cursor:'pointer', fontSize:'14px',
+          fontWeight: i===active ? 700 : 600, color: i===active ? '#0A6B52' : '#6B7280',
+          borderBottom: i===active ? '3px solid #0A6B52' : '3px solid transparent', marginBottom:'-1px' } },
+        t.label))
+    ),
+    cur ? cur.render() : null
   )
 }
 

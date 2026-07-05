@@ -4002,6 +4002,44 @@ function compressImageFile(file) {
   })
 }
 
+// =====================================================
+// 【記録完了アニメーション】celebrateSave — 保存した瞬間に「丸にチェック＋紙吹雪」を再生。
+// 高齢の利用者が多く、農作業は楽しくないという前提のため、入力し終えた達成感を演出して
+// 「ただのデータ入力」を少しでも報われる体験にする。DOMを直接生成するので全フォームから
+// 1行で呼べる（Reactの状態を各フォームに配線しなくてよい）。CSSは app.css に定義。
+// =====================================================
+function celebrateSave(message) {
+  try {
+    document.querySelectorAll('.sb-celeb-overlay').forEach(n => n.remove())
+    const colors = ['#10B981','#34D399','#FBBF24','#60A5FA','#F472B6','#0A6B52','#F97316']
+    let confetti = ''
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * 2 * Math.PI
+      const dist = 70 + Math.random() * 50
+      const dx = Math.cos(a) * dist
+      const dy = Math.sin(a) * dist - 24
+      const rot = Math.round(Math.random() * 720 - 360)
+      const c = colors[i % colors.length]
+      const delay = (0.48 + Math.random() * 0.25).toFixed(2)
+      confetti += `<span class="sb-confetti" style="left:calc(50% - 4px);background:${c};--dx:${dx.toFixed(0)}px;--dy:${dy.toFixed(0)}px;--rot:${rot}deg;animation-delay:${delay}s"></span>`
+    }
+    const ov = document.createElement('div')
+    ov.className = 'sb-celeb-overlay'
+    ov.innerHTML =
+      '<div class="sb-celeb-card">' +
+        '<div class="sb-celeb-pulse"></div>' +
+        '<svg class="sb-celeb-svg" viewBox="0 0 100 100"><circle class="ring" cx="50" cy="50" r="45"/><path class="check" d="M28 52 L44 67 L73 34"/></svg>' +
+        confetti +
+        '<div class="sb-celeb-title">' + (message || '入力完了！') + '</div>' +
+        '<div class="sb-celeb-sub">おつかれさまです 🌱</div>' +
+      '</div>'
+    document.body.appendChild(ov)
+    const card = ov.querySelector('.sb-celeb-card')
+    setTimeout(() => { if (card) card.classList.add('out'); ov.style.transition = 'opacity .3s ease'; ov.style.opacity = '0' }, 1300)
+    setTimeout(() => { ov.remove() }, 1700)
+  } catch (e) {}
+}
+
 // 現在のlocalStorage使用量(概算バイト・UTF-16換算)。写真追加前の容量ガードに使用。
 function estimateLocalStorageBytes() {
   let total = 0
@@ -4083,6 +4121,7 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
         pesticide_id: form.pesticide_id ? Number(form.pesticide_id) : null,
       })
     })
+    celebrateSave(targetIds.length > 1 ? targetIds.length + '圃場に記録！' : '記録しました！')
     // UX-10: 保存完了後、「続けて入力」ボタンを3秒表示
     setShowContinueButton(true)
     setTimeout(() => setShowContinueButton(false), 3000)
@@ -5300,6 +5339,7 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }
       checks,
       staff_ids: staffIds,
     })
+    celebrateSave('農薬散布を記録！')
   }
 
   return React.createElement('div', null,
@@ -5802,6 +5842,7 @@ function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, sta
       checks,
       staff_ids: staffIds,
     })
+    celebrateSave('肥料散布を記録！')
   }
 
   return React.createElement('div', null,
@@ -6457,6 +6498,7 @@ function HarvestRecordForm({ field, lots, destinations, harvestRecords, onSave, 
       note:        form.note.trim(),
       checks:      form.checks,
     })
+    celebrateSave('収穫を記録！🌾')
     setSaved(true)
     setTimeout(() => { setSaved(false); onCancel() }, 1500)
   }
@@ -12344,10 +12386,7 @@ function Settings() {
           )
         )
       )
-    ),
-
-    // ── 開発モデル比較カード
-    React.createElement(PlanCompareCard, null)
+    )
   )
 }
 

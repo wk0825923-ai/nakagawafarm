@@ -388,3 +388,29 @@
       overflow:hidden;
       min-height:0;
     }
+
+    /* ── 記録完了アニメーション（満足感の演出）──
+       高齢の方も多く、農作業は「楽しくない」という前提。入力し終えた瞬間に
+       丸にチェックが描かれ、紙吹雪がはじける達成感の演出でモチベーションを支える。
+       JS: celebrateSave(message) が overlay を body に生成して再生する。 */
+    @keyframes sbFadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes sbCelebPop{0%{transform:scale(.5);opacity:0}55%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+    @keyframes sbCelebOut{to{opacity:0;transform:scale(.94) translateY(-8px)}}
+    @keyframes sbRingDraw{to{stroke-dashoffset:0}}
+    @keyframes sbCheckDraw{to{stroke-dashoffset:0}}
+    @keyframes sbPulse{0%{transform:scale(.55);opacity:.5}100%{transform:scale(2.2);opacity:0}}
+    @keyframes sbConfetti{0%{transform:translate(0,0) rotate(0);opacity:1}100%{transform:translate(var(--dx),var(--dy)) rotate(var(--rot));opacity:0}}
+
+    .sb-celeb-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;pointer-events:none;background:rgba(6,40,30,.12);animation:sbFadeIn .2s ease}
+    .sb-celeb-card{position:relative;background:#fff;border-radius:22px;padding:30px 44px 26px;box-shadow:0 18px 60px rgba(10,107,82,.30);display:flex;flex-direction:column;align-items:center;animation:sbCelebPop .45s cubic-bezier(.2,.9,.3,1.25) both}
+    .sb-celeb-card.out{animation:sbCelebOut .35s ease forwards}
+    .sb-celeb-pulse{position:absolute;top:30px;width:96px;height:96px;border-radius:50%;background:#10B981;animation:sbPulse .8s ease-out .1s forwards}
+    .sb-celeb-svg{width:96px;height:96px;position:relative;z-index:1}
+    .sb-celeb-svg .ring{fill:none;stroke:#10B981;stroke-width:6;stroke-dasharray:283;stroke-dashoffset:283;animation:sbRingDraw .5s ease forwards .05s}
+    .sb-celeb-svg .check{fill:none;stroke:#10B981;stroke-width:9;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:70;stroke-dashoffset:70;animation:sbCheckDraw .35s ease forwards .48s}
+    .sb-celeb-title{margin-top:16px;font-size:21px;font-weight:800;color:#0A6B52;letter-spacing:.02em}
+    .sb-celeb-sub{margin-top:4px;font-size:13px;color:#6B7280}
+    .sb-confetti{position:absolute;top:56px;width:9px;height:9px;border-radius:2px;z-index:0;animation:sbConfetti .9s ease-out forwards}
+    @media (prefers-reduced-motion: reduce){
+      .sb-celeb-card,.sb-celeb-svg .ring,.sb-celeb-svg .check,.sb-celeb-pulse,.sb-confetti{animation-duration:.01s!important}
+    }

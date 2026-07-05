@@ -10,6 +10,8 @@ const NAV_SECTIONS_TOP = [
   { id:'dashboard', label:'総合ダッシュボード', icon:'home' },
 ]
 const NAV_SECTIONS_DATA = [
+  // 【日報入力】全圃場から選んで入力（複数圃場の一括記録に対応）。圃場詳細内の日報入力とは別の全体入口。
+  { id:'daily_entry',      label:'日報入力',            icon:'notebook'       },
   { id:'crop_plan',        label:'作付計画 / 経営予測', icon:'calendar-event' },
   { id:'export',           label:'GAP帳票出力',          icon:'file-export'    },
   { id:'gap',              label:'GAPチェックリスト',    icon:'checklist'      },
@@ -17,6 +19,10 @@ const NAV_SECTIONS_DATA = [
   { id:'pesticide_master', label:'農薬マスタ管理',        icon:'flask'          },
   // 【サンプル農園実データ統合 フェーズ3・Step3-1】肥料マスタ管理（農薬マスタのコピーで新規作成）
   { id:'fertilizer_master',label:'肥料マスタ管理',        icon:'leaf'           },
+  // 【圃場まとめ】ロット別生産履歴（管理表シート相当の自動再構築）
+  { id:'field_summary',    label:'圃場まとめ',            icon:'table'          },
+  // 【収穫予測】積算温度モデルによる収穫予測日の自動算出
+  { id:'harvest_forecast', label:'収穫予測',              icon:'temperature'    },
   // 【フェーズE・E-4 Step6】年度別の圃場サマリー（全圃場横断、圃場詳細ページの外）
   { id:'field_performance',label:'圃場実績・評価',        icon:'chart-bar'      },
 ]
@@ -2876,26 +2882,35 @@ function RecordStep1({ form, fields, up, onNext, isFieldPreset }) {
         )
       : React.createElement('div', { className:'form-group' },
           React.createElement('label', { className:'form-label' }, '圃場を選択'),
+          React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', margin:'-4px 0 8px' } },
+            '複数選択できます（同じ作業を選んだ圃場すべてに一括記録）。※農薬散布のみ主圃場1つに記録します'),
           React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' } },
-            ...fields.map(f =>
-              React.createElement('button', {
+            ...fields.map(f => {
+              const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids : (form.field_id ? [Number(form.field_id)] : [])
+              const isSel = selectedIds.includes(f.id)
+              const toggle = () => {
+                const next = isSel ? selectedIds.filter(x => x !== f.id) : [...selectedIds, f.id]
+                up('field_ids', next)
+                up('field_id', next.length ? String(next[0]) : '')
+              }
+              return React.createElement('button', {
                 key: f.id,
-                onClick: () => up('field_id', String(f.id)),
+                onClick: toggle,
                 style:{
                   display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px',
                   borderRadius:'8px', cursor:'pointer', border:'1px solid',
-                  borderColor: form.field_id === String(f.id) ? f.color : '#DDE2EC',
-                  background:  form.field_id === String(f.id) ? f.color+'15' : '#F8FAFC',
+                  borderColor: isSel ? f.color : '#DDE2EC',
+                  background:  isSel ? f.color+'15' : '#F8FAFC',
                   textAlign:'left'
                 }
               },
-                React.createElement('div', { style:{ width:10, height:10, borderRadius:'50%', background:f.color, flexShrink:0 } }),
+                React.createElement('div', { style:{ width:16, height:16, borderRadius:'4px', border:'1px solid '+(isSel?f.color:'#CBD5E1'), background: isSel ? f.color : '#fff', color:'#fff', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:700 } }, isSel ? '✓' : ''),
                 React.createElement('div', null,
                   React.createElement('div', { style:{ fontSize:'14px', color:'#374151', fontWeight:600 } }, f.name),
                   React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, f.crop + ' / ' + f.area_are + 'a')
                 )
               )
-            )
+            })
           )
         ),
 
@@ -2967,7 +2982,8 @@ function RecordStep1({ form, fields, up, onNext, isFieldPreset }) {
 }
 
 // ── ステップ2: 作業内容（大ボタン選択）──────────────
-function RecordStep2({ form, up, onPrev, onNext }) {
+function RecordStep2({ form, up, onPrev, onNext, onAddPhoto, onRemovePhoto, photoError }) {
+  const photos = form.photos || []
   return React.createElement('div', null,
     React.createElement(SectionTitle, { icon:'settings' }, '作業内容を選択'),
     React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:'10px', marginBottom:'20px' } },
@@ -2992,6 +3008,35 @@ function RecordStep2({ form, up, onPrev, onNext }) {
         )
       })
     ),
+
+    // ── 写真（任意・最大PHOTO_MAX_PER_RECORD枚） ──
+    onAddPhoto && React.createElement('div', { className:'form-group' },
+      React.createElement('label', { className:'form-label' }, '写真（任意）'),
+      React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'10px', alignItems:'center' } },
+        ...photos.map((src, i) =>
+          React.createElement('div', { key:i, style:{ position:'relative', width:72, height:72, borderRadius:'8px', overflow:'hidden', border:'1px solid #DDE2EC' } },
+            React.createElement('img', { src, style:{ width:'100%', height:'100%', objectFit:'cover', display:'block' } }),
+            React.createElement('button', {
+              onClick:()=>onRemovePhoto(i),
+              style:{ position:'absolute', top:2, right:2, width:20, height:20, borderRadius:'50%', border:'none', background:'rgba(17,24,39,.7)', color:'#fff', cursor:'pointer', fontSize:'12px', lineHeight:'20px', padding:0 }
+            }, '✕')
+          )
+        ),
+        photos.length < PHOTO_MAX_PER_RECORD && React.createElement('label', {
+          style:{ width:72, height:72, borderRadius:'8px', border:'1px dashed #9CA3AF', background:'#F8FAFC', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'4px', color:'#6B7280', fontSize:'11px' }
+        },
+          React.createElement('i', { className:'ti ti-camera', style:{ fontSize:'20px' } }),
+          '追加',
+          React.createElement('input', {
+            type:'file', accept:'image/*', capture:'environment', style:{ display:'none' },
+            onChange:e => { const file = e.target.files && e.target.files[0]; if (file) onAddPhoto(file); e.target.value='' }
+          })
+        )
+      ),
+      photoError && React.createElement('div', { style:{ fontSize:'12px', color:'#B45309', marginTop:'6px' } }, photoError),
+      React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF', marginTop:'4px' } }, '端末に合わせて自動で縮小・圧縮して保存します（作物の状態・病害虫の記録などに）')
+    ),
+
     React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
       React.createElement('button', { className:'btn btn-ghost', onClick:onPrev }, '← 戻る'),
       React.createElement('button', { className:'btn btn-primary', disabled:!form.work_type, onClick:onNext }, '次へ →')
@@ -3258,7 +3303,9 @@ function RecordStep4({ form, dilution, selField, selP, isOver, onPrev, onSave, s
     ] : []),
     ['chart-bar', '使用量',  form.amount ? form.amount + ' ' + (form.amount_unit || 'L/kg') : '—', '#64748B'],
     ...(form.note ? [['notes', '備考', form.note, '#7C3AED']] : []),
+    ...(form.photos && form.photos.length ? [['camera', '写真', form.photos.length + '枚', '#7C3AED']] : []),
   ]
+  const multiFieldCount = (form.field_ids && form.field_ids.length > 1 && form.work_type !== '農薬散布') ? form.field_ids.length : 0
   // 【実装手順書 Step1】転記チェックの状況（チェックが1つも無くてもエラーではない）
   const checkedTranscribe = Object.values(form.checks || {}).filter(Boolean).length
   return React.createElement('div', null,
@@ -3289,7 +3336,9 @@ function RecordStep4({ form, dilution, selField, selP, isOver, onPrev, onSave, s
       style:{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 14px', background:selField.color+'12', border:'1px solid '+selField.color+'40', borderRadius:'8px', marginBottom:'16px', fontSize:'12px', color:'#374151' }
     },
       React.createElement('div', { style:{ width:8, height:8, borderRadius:'50%', background:selField.color } }),
-      '保存すると ' + selField.name + ' の記録に追加されます'
+      multiFieldCount > 0
+        ? ('保存すると ' + multiFieldCount + ' 圃場に同じ内容で一括記録されます（写真は主圃場「' + selField.name + '」に添付）')
+        : ('保存すると ' + selField.name + ' の記録に追加されます')
     ),
     // UX-10: 保存後に「続けて入力」ボタンを表示（3秒で自動非表示）
     showContinueButton && React.createElement('div', {
@@ -3469,6 +3518,17 @@ function RecordDetailModal({ record, fields, pesticides, onClose, onUpdate, onDe
           React.createElement('div', { style:{ ...rowStyle, borderBottom:'none' } },
             React.createElement('span', { style:{ color:'#6B7280' } }, '備考'),
             React.createElement('span', { style:{ color: record.note ? '#374151' : '#9CA3AF' } }, record.note || 'なし')
+          )
+        ),
+        // 【写真】添付写真のサムネイル（クリックで別タブ表示）
+        record.photos && record.photos.length > 0 && React.createElement('div', { style:{ marginBottom:'16px' } },
+          React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', marginBottom:'6px' } }, '写真'),
+          React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'8px' } },
+            ...record.photos.map((src, i) =>
+              React.createElement('a', { key:i, href:src, target:'_blank', rel:'noopener', style:{ display:'block', width:80, height:80, borderRadius:'8px', overflow:'hidden', border:'1px solid #E5E7EB' } },
+                React.createElement('img', { src, style:{ width:'100%', height:'100%', objectFit:'cover', display:'block' } })
+              )
+            )
           )
         ),
         // 【実装手順書 Step1】転記チェック状況
@@ -3908,6 +3968,53 @@ function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycl
   )
 }
 
+// =====================================================
+// 【写真アップロード】端末の画像を縮小・JPEG圧縮してdataURL化するヘルパー。
+// localStorage肥大化を防ぐため、長辺を縮小し画質を落とす。容量ガードと併用し、
+// 上限超過時は写真だけ拒否して記録本体の保存は決して妨げない（データ破損防止）。
+// 将来的に外部ストレージ(Supabase Storage等)へ差し替え可能な独立ユーティリティ。
+// =====================================================
+const PHOTO_MAX_DIM            = 1000        // 長辺の最大px
+const PHOTO_QUALITY            = 0.55        // JPEG品質
+const PHOTO_MAX_PER_RECORD     = 2           // 1記録あたりの最大枚数
+const PHOTO_STORAGE_BUDGET     = 4 * 1024 * 1024  // localStorage(約5MB)に対する安全上限(バイト)
+
+function compressImageFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type || file.type.indexOf('image/') !== 0) { reject(new Error('not-image')); return }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        let w = img.width, h = img.height
+        const scale = Math.min(1, PHOTO_MAX_DIM / Math.max(w, h))
+        w = Math.round(w * scale); h = Math.round(h * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        try { canvas.getContext('2d').drawImage(img, 0, 0, w, h); resolve(canvas.toDataURL('image/jpeg', PHOTO_QUALITY)) }
+        catch (e) { reject(e) }
+      }
+      img.onerror = () => reject(new Error('decode-failed'))
+      img.src = reader.result
+    }
+    reader.onerror = () => reject(new Error('read-failed'))
+    reader.readAsDataURL(file)
+  })
+}
+
+// 現在のlocalStorage使用量(概算バイト・UTF-16換算)。写真追加前の容量ガードに使用。
+function estimateLocalStorageBytes() {
+  let total = 0
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      const v = localStorage.getItem(k) || ''
+      total += (k.length + v.length) * 2
+    }
+  } catch {}
+  return total
+}
+
 // ── RecordForm: フォーム専用ページ（旧 DailyRecord hideList:true）──
 function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayRecords }) {
   const STEPS = ['日付・圃場', '作業内容', '農薬/施肥', '確認・保存']
@@ -3918,16 +4025,18 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   const presetFieldId = isFieldPreset ? String(fields[0].id) : ''
   const [form, setForm]         = React.useState({
     date: new Date().toISOString().slice(0,10),
-    field_id: presetFieldId, work_type: '', pesticide_id: '',
+    field_id: presetFieldId, field_ids: [], work_type: '', pesticide_id: '',
     amount: '', weather: '晴', worker: '', note: '', checks: {},
     start_time: '08:00', end_time: '17:00', break_minutes: 60,
     spray_method: '',       // 使用方法（散布・株元散布・土壌混和・灌注）
     machine_no: '',         // 使用機械No.
     spray_made_L: '',       // 作った散布液量（L）
     spray_discarded_L: '',  // 廃棄した散布液量（L）
+    photos: [],             // 【写真】圧縮済みdataURL（最大PHOTO_MAX_PER_RECORD枚）
   })
   // UX-10: 保存後の「続けて入力」ボタン用 state
   const [showContinueButton, setShowContinueButton] = React.useState(false)
+  const [photoError, setPhotoError] = React.useState('')
   
   const updateField = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -3943,12 +4052,36 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
     updateField('spray_volume_L', v)   // 散布液量（L）
   }, [])
 
+  // 【写真】選択画像を圧縮→容量ガード→formに追加（超過時は写真だけ拒否し記録保存は妨げない）
+  const handleAddPhoto = (file) => {
+    setPhotoError('')
+    const cur = form.photos || []
+    if (cur.length >= PHOTO_MAX_PER_RECORD) { setPhotoError('写真は最大' + PHOTO_MAX_PER_RECORD + '枚までです'); return }
+    compressImageFile(file).then(dataUrl => {
+      const curBytes  = cur.reduce((a, p) => a + p.length * 2, 0)
+      const projected = estimateLocalStorageBytes() + curBytes + dataUrl.length * 2
+      if (projected > PHOTO_STORAGE_BUDGET) { setPhotoError('空き容量が不足しているため写真を追加できません（記録は保存できます）'); return }
+      setForm(f => ({ ...f, photos: [...(f.photos || []), dataUrl] }))
+    }).catch(() => setPhotoError('画像を処理できませんでした'))
+  }
+  const handleRemovePhoto = (idx) => setForm(f => ({ ...f, photos: (f.photos || []).filter((_, i) => i !== idx) }))
+
   const handleSave = () => {
     if (!form.field_id || !form.work_type) return
-    onSave({
-      ...form, id: Date.now(), dilution,
-      field_id: Number(form.field_id),
-      pesticide_id: form.pesticide_id ? Number(form.pesticide_id) : null
+    // 【複数圃場同時記録】農薬散布は圃場ごとに使用回数・希釈が異なるため主圃場のみ。
+    // それ以外の作業は選択圃場ぶんの単一field_id記録へ展開（読み取り側は既存のまま）。
+    const isPesticide = form.work_type === '農薬散布'
+    const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids.map(Number) : [Number(form.field_id)]
+    const targetIds   = isPesticide ? [Number(form.field_id)] : selectedIds
+    const { field_ids, ...base } = form
+    targetIds.forEach((fid, i) => {
+      onSave({
+        ...base, id: Date.now() + i, dilution,
+        field_id: fid,
+        // 写真は容量肥大を避けるため、複数展開時は主圃場(先頭)の記録のみに添付
+        photos: i === 0 ? (form.photos || []) : [],
+        pesticide_id: form.pesticide_id ? Number(form.pesticide_id) : null,
+      })
     })
     // UX-10: 保存完了後、「続けて入力」ボタンを3秒表示
     setShowContinueButton(true)
@@ -3962,9 +4095,10 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
       date: f.date,
       weather: f.weather,
       work_type: f.work_type,
-      field_id: '', pesticide_id: '', amount: '', worker: '', note: '', checks: {}
+      field_id: '', field_ids: [], pesticide_id: '', amount: '', worker: '', note: '', checks: {}, photos: []
     }))
     setDilution(1000)
+    setPhotoError('')
     setShowContinueButton(false)
     setStep(1) // ステップ1（圃場選択）から再開
   }
@@ -3973,10 +4107,10 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   // → step/form/fields 等が変わった時だけ再生成され、無関係な再レンダーで再マウントされない
   const stepComponents = React.useMemo(() => [null,
     () => React.createElement(RecordStep1, { form, fields, up:updateField, onNext:()=>setStep(2), isFieldPreset }),
-    () => React.createElement(RecordStep2, { form, up:updateField, onPrev:()=>setStep(1), onNext:()=>setStep(3) }),
+    () => React.createElement(RecordStep2, { form, up:updateField, onPrev:()=>setStep(1), onNext:()=>setStep(3), onAddPhoto:handleAddPhoto, onRemovePhoto:handleRemovePhoto, photoError }),
     () => React.createElement(RecordStep3, { form, up:updateField, pesticides, records, lotSprayRecords, isOver, selField, handlePesticideUpdate, onPrev:()=>setStep(2), onNext:()=>setStep(4) }),
     () => React.createElement(RecordStep4, { form, dilution, selField, selP, isOver, onPrev:()=>setStep(3), onSave:handleSave, showContinueButton, onContinue:handleContinueInput }),
-  ], [step, form, fields, pesticides, records, isOver, dilution, selField, selP, handlePesticideUpdate, showContinueButton])
+  ], [step, form, fields, pesticides, records, isOver, dilution, selField, selP, handlePesticideUpdate, showContinueButton, photoError])
 
   return React.createElement('div', { className: inModal ? '' : 'page' },
     !inModal && React.createElement('div', { className:'eyebrow' }, 'DAILY WORK LOG'),
@@ -7827,6 +7961,478 @@ function FieldMapPage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCat
 }
 function FieldTablePage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories }) {
   return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'list', cropCycles, onNavigate, cropCategories })
+}
+
+// =====================================================
+// 【圃場まとめ / ロット別生産履歴】FieldSummaryPage
+// aKnow（エイノウ）の「作付別の生産履歴」に相当する、Google Drive管理表
+// （レタス/とうもろこし管理表）シートをロット単位で自動再構築するページ。
+// farmLots（動的ロット）を軸に、農薬散布・施肥・収穫の各記録を
+// 「同一圃場 × 畝範囲の重なり」で自動的に紐付け、1ロット=1行として一覧する。
+// records（日報）とは別テーブルのため、field_id + row_range の重なりで突合する。
+// 畝未指定（row_range空）の記録はどのロットにも属さないため、末尾に「畝未指定」件数を明示。
+// =====================================================
+function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides, fertilizers, pesticidePurchases }) {
+  farmLots = farmLots || {}
+  const [season, setSeason]       = React.useState('all')
+  const [fieldFilter, setFieldFilter] = React.useState('all')
+  const [expanded, setExpanded]   = React.useState(null)
+
+  // 9月以降を新シーズン起点として "YYYY-YYYY" を導出（FieldPerformancePageと同一基準）
+  const seasonOf = (dateStr) => {
+    if (!dateStr) return null
+    const d = new Date(dateStr); if (isNaN(d)) return null
+    const y = d.getFullYear(), m = d.getMonth() + 1
+    return m >= 9 ? `${y}-${y+1}` : `${y-1}-${y}`
+  }
+  const fmtDate = (s) => s ? String(s).slice(0, 10) : '—'
+  const fieldLabel = (f) => f ? (f.name + (f.field_no ? `（${f.field_no}）` : '')) : '（不明な圃場）'
+
+  // 畝範囲の重なり判定（どちらか空なら重なり無しとして扱う → 畝未指定記録は紐付かない）
+  const overlaps = (rangeStr, lotSet) => {
+    const set = parseRowRange(rangeStr)
+    if (set.size === 0 || lotSet.size === 0) return false
+    for (const n of set) if (lotSet.has(n)) return true
+    return false
+  }
+
+  // マスタ名の逆引き
+  const pestName = (id) => (pesticides || []).find(p => p.id === Number(id))?.name || '農薬'
+  const fertName = (id) => (fertilizers || []).find(p => p.id === Number(id))?.name || '肥料'
+
+  // ── 資材原価の単価ソース（既存「圃場実績・評価」原価タブと同一の単価定義で揃える） ──
+  // 農薬: マスタに単価が無いため pesticidePurchases の購入実績から平均単価(円/L)を算出
+  const pestAvg = {}
+  ;(pesticidePurchases || []).forEach(pu => {
+    if (!pestAvg[pu.pesticide_id]) pestAvg[pu.pesticide_id] = { amount:0, price:0 }
+    pestAvg[pu.pesticide_id].amount += Number(pu.amount_L) || 0
+    pestAvg[pu.pesticide_id].price  += Number(pu.price_yen) || 0
+  })
+  const priceOfPesticide  = (id) => { const a = pestAvg[id]; return (a && a.amount > 0) ? a.price / a.amount : null }
+  // 肥料: マスタの unit_price_yen_per_kg（null=価格未確定）
+  const priceOfFertilizer = (id) => { const f = (fertilizers || []).find(x => x.id === id); return (f && f.unit_price_yen_per_kg != null) ? f.unit_price_yen_per_kg : null }
+
+  // 農薬の原液使用量(L) = 散布液量(L) ÷ 希釈倍率（在庫減算ロジックと同一の消費モデル）。
+  // 希釈倍率が無い記録は消費量を確定できないため0扱い。
+  const pesticideUsedL = (rec, pe) =>
+    (Number(rec.spray_volume_L) > 0 && Number(pe.dilution) > 0) ? Number(rec.spray_volume_L) / Number(pe.dilution) : 0
+  // 肥料の使用量(kg) = amount_kg 優先、無ければ 散布液量 ÷ 希釈倍率（実データは両パターン混在）
+  const fertilizerUsedKg = (rec, fe) =>
+    (Number(fe.amount_kg) > 0) ? Number(fe.amount_kg)
+      : (Number(rec.spray_volume_L) > 0 && Number(fe.dilution) > 0) ? Number(rec.spray_volume_L) / Number(fe.dilution) : 0
+
+  // 全ロットをフラット化して記録を集計
+  const allLots = []
+  ;(fields || []).forEach(f => {
+    ;(farmLots[f.id] || []).forEach(lot => allLots.push({ ...lot, field: f, fieldId: f.id }))
+  })
+
+  const enriched = allLots.map(lot => {
+    const lotSet = parseRowRange(lot.row_range)
+    const sprays = (lotSprayRecords || []).filter(r => r.field_id === lot.fieldId && overlaps(r.row_range, lotSet))
+    const ferts  = (topDressingRecords || []).filter(r => r.field_id === lot.fieldId && overlaps(r.row_range, lotSet))
+    const harvs  = (harvestRecords || []).filter(r => r.field_id === lot.fieldId && overlaps(r.row_range, lotSet))
+    const totalCases   = harvs.reduce((a, r) => a + (r.total_cases || 0), 0)
+    const harvestDates = harvs.map(r => r.date).filter(Boolean).sort()
+    const s = seasonOf(lot.transplant_date) || seasonOf(lot.seed_date) || seasonOf(harvestDates[0]) || '未設定'
+
+    // ── 資材原価: 使用量×単価。単価未確定の品目はコストに含めずフラグを立てる（隠さない） ──
+    let pesticideCost = 0, fertilizerCost = 0, unknownPrice = false, hasMaterial = false
+    sprays.forEach(rec => (rec.pesticides || []).forEach(pe => {
+      hasMaterial = true
+      const price = priceOfPesticide(pe.pesticide_id)
+      if (price == null) { unknownPrice = true; return }
+      pesticideCost += pesticideUsedL(rec, pe) * price
+    }))
+    ferts.forEach(rec => (rec.fertilizers || []).forEach(fe => {
+      hasMaterial = true
+      const price = priceOfFertilizer(fe.fertilizer_id)
+      if (price == null) { unknownPrice = true; return }
+      fertilizerCost += fertilizerUsedKg(rec, fe) * price
+    }))
+    const totalCost   = pesticideCost + fertilizerCost
+    const costPerCase = (totalCases > 0 && totalCost > 0) ? totalCost / totalCases : null
+
+    return {
+      lot, fieldId: lot.fieldId, sprays, ferts, harvs, totalCases,
+      firstHarvest: harvestDates[0] || null,
+      lastHarvest:  harvestDates[harvestDates.length - 1] || null,
+      season: s,
+      pesticideCost, fertilizerCost, totalCost, costPerCase, unknownPrice, hasMaterial,
+    }
+  })
+
+  // 畝未指定（どのロットにも紐付かない）記録件数 — データ欠落を隠さない
+  const unmatched =
+    (lotSprayRecords || []).filter(r => parseRowRange(r.row_range).size === 0).length +
+    (topDressingRecords || []).filter(r => parseRowRange(r.row_range).size === 0).length +
+    (harvestRecords || []).filter(r => parseRowRange(r.row_range).size === 0).length
+
+  // フィルタ選択肢
+  const allSeasons = [...new Set(enriched.map(e => e.season))].sort().reverse()
+  const usedFieldIds = [...new Set(enriched.map(e => e.fieldId))]
+
+  const visible = enriched
+    .filter(e => season === 'all' || e.season === season)
+    .filter(e => fieldFilter === 'all' || e.fieldId === Number(fieldFilter))
+
+  // サマリー集計
+  const sumCases = visible.reduce((a, e) => a + e.totalCases, 0)
+  const sumCost  = visible.reduce((a, e) => a + e.totalCost, 0)
+  const anyUnknownPrice = visible.some(e => e.unknownPrice)
+  const cnt = { growing:0, ready:0, harvested:0, fallow:0 }
+  visible.forEach(e => { cnt[e.lot.status] = (cnt[e.lot.status] || 0) + 1 })
+
+  // 圃場ごとにグループ化（表示順は圃場ID昇順）
+  const groups = {}
+  visible.forEach(e => { (groups[e.fieldId] = groups[e.fieldId] || []).push(e) })
+  const groupIds = Object.keys(groups).map(Number).sort((a, b) => a - b)
+
+  // ── CSV出力（管理表シート相当・Excel向けにBOM付与） ──
+  const csvCell = (v) => {
+    const s = v == null ? '' : String(v)
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+  }
+  const downloadCsv = () => {
+    const header = ['圃場','畝範囲','品種','は種日','定植日','育苗日数','状態','農薬散布(回)','施肥(回)','収穫(回)','収穫ケース計','農薬原価(円)','肥料原価(円)','資材原価計(円)','円/ケース','初回収穫','最終収穫','シーズン']
+    const lines = [header.map(csvCell).join(',')]
+    visible.forEach(e => {
+      lines.push([
+        fieldLabel(e.lot.field), e.lot.row_range, e.lot.variety,
+        fmtDate(e.lot.seed_date), fmtDate(e.lot.transplant_date),
+        e.lot.seedling_period_days != null ? e.lot.seedling_period_days : '',
+        (ROW_STATUS_CONFIG[e.lot.status] || {}).label || e.lot.status,
+        e.sprays.length, e.ferts.length, e.harvs.length, e.totalCases,
+        Math.round(e.pesticideCost), Math.round(e.fertilizerCost), Math.round(e.totalCost),
+        e.costPerCase != null ? Math.round(e.costPerCase) : '',
+        fmtDate(e.firstHarvest), fmtDate(e.lastHarvest), e.season,
+      ].map(csvCell).join(','))
+    })
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type:'text/csv;charset=utf-8;' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `圃場まとめ_${season === 'all' ? '全シーズン' : season}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  // ── スタイル ──
+  const wrap = { padding:'28px 32px', maxWidth:'1200px', margin:'0 auto' }
+  const card = { background:'#fff', border:'1px solid #E5E7EB', borderRadius:12, padding:'16px 18px' }
+  const th = { padding:'10px 12px', fontSize:12, fontWeight:700, color:'#6B7280', textAlign:'left', whiteSpace:'nowrap', borderBottom:'2px solid #E5E7EB' }
+  const td = { padding:'10px 12px', fontSize:13, color:'#111827', borderBottom:'1px solid #F1F5F9', verticalAlign:'middle' }
+  const selectStyle = { padding:'7px 10px', border:'1px solid #D1D5DB', borderRadius:8, fontSize:13, background:'#fff', cursor:'pointer' }
+  const statusChip = (st) => {
+    const c = ROW_STATUS_CONFIG[st] || { label:st, color:'#6B7280', bg:'#F8FAFC' }
+    return React.createElement('span', { style:{ display:'inline-block', padding:'2px 8px', borderRadius:6, fontSize:11, fontWeight:700, color:c.color, background:c.bg } }, c.label)
+  }
+  const statCard = (label, value, color) => React.createElement('div',
+    { style:{ ...card, flex:1, textAlign:'center', padding:'14px 10px' } },
+    React.createElement('div', { style:{ fontSize:24, fontWeight:800, color, lineHeight:1.1 } }, value),
+    React.createElement('div', { style:{ fontSize:12, color:'#6B7280', marginTop:4 } }, label),
+  )
+
+  // ── ヘッダ ──
+  const headerEl = React.createElement('div', { style:{ marginBottom:20 } },
+    React.createElement('div', { style:{ fontSize:12, fontWeight:700, color:'#0A6B52', letterSpacing:'.04em' } }, 'ロット別 生産履歴'),
+    React.createElement('h1', { style:{ fontSize:22, fontWeight:800, color:'#111827', margin:'2px 0 4px' } }, '圃場まとめ'),
+    React.createElement('p', { style:{ fontSize:13, color:'#6B7280', margin:0 } },
+      'は種・定植・農薬・施肥・収穫の記録をロット単位で自動集約した、管理表シート相当の一覧です。'),
+  )
+
+  // ── 空状態 ──
+  if (allLots.length === 0) {
+    return React.createElement('div', { style:wrap },
+      headerEl,
+      React.createElement('div', { style:{ ...card, textAlign:'center', padding:'56px 24px' } },
+        React.createElement('div', { style:{ fontSize:40, marginBottom:12 } }, '🌱'),
+        React.createElement('div', { style:{ fontSize:15, fontWeight:700, color:'#374151', marginBottom:6 } }, 'まだロットがありません'),
+        React.createElement('div', { style:{ fontSize:13, color:'#6B7280', lineHeight:1.7, maxWidth:520, margin:'0 auto' } },
+          '圃場詳細から定植日報を入力するとロットが自動生成され、以降の農薬散布・施肥・収穫記録がこのページにロット単位で自動集約されます。'),
+      ),
+    )
+  }
+
+  // ── フィルタ行 ──
+  const filterBar = React.createElement('div', { style:{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap', marginBottom:16 } },
+    React.createElement('select', { style:selectStyle, value:season, onChange:e => setSeason(e.target.value) },
+      React.createElement('option', { value:'all' }, '全シーズン'),
+      ...allSeasons.map(s => React.createElement('option', { key:s, value:s }, s + ' シーズン')),
+    ),
+    React.createElement('select', { style:selectStyle, value:fieldFilter, onChange:e => setFieldFilter(e.target.value) },
+      React.createElement('option', { value:'all' }, '全圃場'),
+      ...usedFieldIds.map(id => {
+        const f = fields.find(x => x.id === id)
+        return React.createElement('option', { key:id, value:id }, fieldLabel(f))
+      }),
+    ),
+    React.createElement('div', { style:{ flex:1 } }),
+    React.createElement('button', {
+      style:{ padding:'8px 14px', border:'1px solid #0A6B52', background:'#0A6B52', color:'#fff', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' },
+      onClick: downloadCsv, disabled: visible.length === 0,
+    }, '⬇ CSVダウンロード'),
+  )
+
+  // ── サマリーカード ──
+  const summaryRow = React.createElement('div', { style:{ display:'flex', gap:12, marginBottom:16 } },
+    statCard('対象ロット', visible.length + ' 件', '#111827'),
+    statCard('栽培中', (cnt.growing || 0) + ' 件', '#0D9972'),
+    statCard('収穫待ち', (cnt.ready || 0) + ' 件', '#B45309'),
+    statCard('収穫済', (cnt.harvested || 0) + ' 件', '#1D4ED8'),
+    statCard('収穫ケース計', sumCases.toLocaleString(), '#0A6B52'),
+    statCard('資材原価計', '¥' + Math.round(sumCost).toLocaleString(), '#B45309'),
+  )
+
+  // ── ロット明細（展開時のタイムライン） ──
+  const detailRow = (e) => {
+    const events = [
+      ...e.sprays.map(r => ({ date:r.date, kind:'農薬', color:'#B91C1C', text:(r.pesticides || []).map(p => pestName(p.pesticide_id)).join('・') + (r.weather ? `（${r.weather}）` : '') })),
+      ...e.ferts.map(r => ({ date:r.date, kind:'施肥', color:'#B45309', text:(r.fertilizing_type ? r.fertilizing_type + '：' : '') + (r.fertilizers || []).map(p => fertName(p.fertilizer_id)).join('・') })),
+      ...e.harvs.map(r => ({ date:r.date, kind:'収穫', color:'#0A6B52', text:`${r.total_cases || 0} ケース` + (r.shipments && r.shipments.length ? `（${r.shipments.length}出荷先）` : '') })),
+    ].filter(ev => ev.date).sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    return React.createElement('tr', { key:e.lot.id + '_d' },
+      React.createElement('td', { style:{ ...td, background:'#F8FAFC', padding:'12px 16px' }, colSpan:11 },
+        events.length === 0
+          ? React.createElement('div', { style:{ fontSize:12, color:'#9CA3AF' } }, '紐付く作業記録はまだありません（は種・定植のみ）')
+          : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:6 } },
+              ...events.map((ev, i) => React.createElement('div', { key:i, style:{ display:'flex', gap:10, alignItems:'center', fontSize:12 } },
+                React.createElement('span', { style:{ color:'#6B7280', width:88, flexShrink:0 } }, fmtDate(ev.date)),
+                React.createElement('span', { style:{ color:ev.color, fontWeight:700, width:44, flexShrink:0 } }, ev.kind),
+                React.createElement('span', { style:{ color:'#374151' } }, ev.text || '—'),
+              )),
+            ),
+      ),
+    )
+  }
+
+  // ── 圃場グループごとのテーブル ──
+  const tables = groupIds.map(fid => {
+    const f = fields.find(x => x.id === fid)
+    const list = (groups[fid] || []).slice().sort((a, b) => String(a.lot.transplant_date || '').localeCompare(String(b.lot.transplant_date || '')))
+    return React.createElement('div', { key:fid, style:{ ...card, padding:0, marginBottom:18, overflow:'hidden' } },
+      React.createElement('div', { style:{ padding:'12px 16px', background:'#F0FDF4', borderBottom:'1px solid #E5E7EB', display:'flex', alignItems:'center', gap:10 } },
+        React.createElement('span', { style:{ fontSize:14, fontWeight:800, color:'#0A6B52' } }, fieldLabel(f)),
+        f && f.crop ? React.createElement('span', { style:{ fontSize:12, color:'#6B7280' } }, f.crop) : null,
+        React.createElement('span', { style:{ fontSize:12, color:'#9CA3AF', marginLeft:'auto' } }, list.length + ' ロット'),
+      ),
+      React.createElement('div', { style:{ overflowX:'auto' } },
+        React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', minWidth:900 } },
+          React.createElement('thead', null,
+            React.createElement('tr', null,
+              ['畝範囲','品種','は種日','定植日','育苗日数','状態','農薬','施肥','収穫ケース','資材原価','最終収穫'].map((h, i) =>
+                React.createElement('th', { key:i, style:{ ...th, textAlign: i >= 6 && i <= 9 ? 'right' : 'left' } }, h)),
+            ),
+          ),
+          React.createElement('tbody', null,
+            ...list.flatMap(e => {
+              const isOpen = expanded === e.lot.id
+              const mainTr = React.createElement('tr', {
+                key:e.lot.id,
+                style:{ cursor:'pointer', background: isOpen ? '#F8FAFC' : '#fff' },
+                onClick: () => setExpanded(isOpen ? null : e.lot.id),
+              },
+                React.createElement('td', { style:{ ...td, fontWeight:700 } },
+                  React.createElement('span', { style:{ color:'#9CA3AF', marginRight:6, fontSize:11 } }, isOpen ? '▼' : '▶'),
+                  e.lot.row_range || '—'),
+                React.createElement('td', { style:td }, e.lot.variety || '（品種未入力）'),
+                React.createElement('td', { style:td }, fmtDate(e.lot.seed_date)),
+                React.createElement('td', { style:td }, fmtDate(e.lot.transplant_date)),
+                React.createElement('td', { style:td }, e.lot.seedling_period_days != null ? e.lot.seedling_period_days + '日' : '—'),
+                React.createElement('td', { style:td }, statusChip(e.lot.status)),
+                React.createElement('td', { style:{ ...td, textAlign:'right' } }, e.sprays.length ? e.sprays.length + '回' : '—'),
+                React.createElement('td', { style:{ ...td, textAlign:'right' } }, e.ferts.length ? e.ferts.length + '回' : '—'),
+                React.createElement('td', { style:{ ...td, textAlign:'right', fontWeight:700, color: e.totalCases ? '#0A6B52' : '#9CA3AF' } }, e.totalCases ? e.totalCases.toLocaleString() : '—'),
+                React.createElement('td', { style:{ ...td, textAlign:'right' } },
+                  e.totalCost > 0
+                    ? React.createElement('div', null,
+                        React.createElement('div', { style:{ fontWeight:700, color:'#B45309' } }, '¥' + Math.round(e.totalCost).toLocaleString() + (e.unknownPrice ? '＋' : '')),
+                        e.costPerCase != null ? React.createElement('div', { style:{ fontSize:11, color:'#9CA3AF' } }, '¥' + Math.round(e.costPerCase).toLocaleString() + '/ケース') : null,
+                      )
+                    : (e.hasMaterial ? React.createElement('span', { style:{ color:'#B45309', fontSize:11 } }, '単価未確定') : '—')),
+                React.createElement('td', { style:td }, fmtDate(e.lastHarvest)),
+              )
+              return isOpen ? [mainTr, detailRow(e)] : [mainTr]
+            }),
+          ),
+        ),
+      ),
+    )
+  })
+
+  const noteStyle = { fontSize:12, color:'#B45309', background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:8, padding:'10px 14px', marginTop:8 }
+  const notes = []
+  if (unmatched > 0) notes.push(React.createElement('div', { key:'unmatched', style:noteStyle },
+    `⚠️ 畝範囲が未指定の作業記録が ${unmatched} 件あります。これらはロットに自動紐付けできないため、この一覧には集計されていません。記録時に畝範囲を入力すると反映されます。`))
+  if (anyUnknownPrice) notes.push(React.createElement('div', { key:'price', style:noteStyle },
+    '⚠️ 資材原価は「使用量×単価」の参考値です。農薬は購入実績（円/L）、肥料はマスタ単価（円/kg）を使用し、単価未確定の品目はコストに含めていません（金額末尾の「＋」は未確定品目を含むロット）。'))
+  const footNote = notes.length ? React.createElement('div', null, ...notes) : null
+
+  return React.createElement('div', { style:wrap },
+    headerEl,
+    filterBar,
+    summaryRow,
+    ...tables,
+    visible.length === 0
+      ? React.createElement('div', { style:{ ...card, textAlign:'center', color:'#9CA3AF', fontSize:13, padding:'32px' } }, '該当するロットがありません（フィルタ条件を変更してください）')
+      : null,
+    footNote,
+  )
+}
+
+// =====================================================
+// 【収穫予測 / 積算温度】HarvestForecastPage
+// aKnow（エイノウ）の収穫予測に相当。月別平均気温（1回だけ設定・永続化）と、
+// 作物カテゴリの基準温度・必要積算温度（同じく1回設定）だけで、栽培中の各ロットの
+// 予測収穫日を computeHarvestForecast で自動算出する。ロットごとの追加入力は不要。
+// 簡易版（月別平均気温は手入力）→ 将来は気象庁アメダス実測へ差し替え予定。
+// =====================================================
+function HarvestForecastPage({ fields, farmLots, harvestRecords, cropCategories, monthlyTemps, onSaveMonthlyTemps }) {
+  farmLots = farmLots || {}
+  const MONTHS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
+  const [temps, setTemps] = React.useState(() => (Array.isArray(monthlyTemps) && monthlyTemps.length === 12) ? monthlyTemps.map(String) : (INITIAL_MONTHLY_TEMPS.map(String)))
+  const [tempOpen, setTempOpen] = React.useState(false)
+  const [saved, setSaved] = React.useState(false)
+
+  const fieldLabel = (f) => f ? (f.name + (f.field_no ? `（${f.field_no}）` : '')) : '（不明な圃場）'
+  const fmtDate = (d) => {
+    if (!d) return '—'
+    const x = (d instanceof Date) ? d : new Date(d)
+    if (isNaN(x)) return '—'
+    return `${x.getFullYear()}/${String(x.getMonth()+1).padStart(2,'0')}/${String(x.getDate()).padStart(2,'0')}`
+  }
+  const numericTemps = temps.map(t => Number(t))
+
+  // カテゴリ逆引き（field.crop → category）— cropCategoriesは_CROP_CATEGORIESに同期済み
+  const catOf = (crop) => getCropCategoryObj(getCropCategory(crop))
+
+  // 栽培中（収穫前）ロットを集約して予測
+  const rows = []
+  ;(fields || []).forEach(f => {
+    ;(farmLots[f.id] || []).forEach(lot => {
+      if (lot.status === 'harvested' || lot.status === 'fallow') return
+      const start = lot.transplant_date || lot.seed_date || null
+      const cat = catOf(f.crop)
+      const fc = computeHarvestForecast(start, numericTemps, cat ? cat.base_temp_c : null, cat ? cat.required_gdd : null)
+      rows.push({ field:f, lot, start, cat, fc })
+    })
+  })
+  // 予測日が近い順（予測不可は末尾）
+  rows.sort((a, b) => {
+    const ad = a.fc && a.fc.predictedDate ? a.fc.predictedDate.getTime() : Infinity
+    const bd = b.fc && b.fc.predictedDate ? b.fc.predictedDate.getTime() : Infinity
+    return ad - bd
+  })
+
+  const saveTemps = () => {
+    const arr = temps.map(t => { const n = Number(t); return isNaN(n) ? 0 : n })
+    onSaveMonthlyTemps(arr)
+    setSaved(true); setTimeout(() => setSaved(false), 1600)
+  }
+
+  // ── スタイル ──
+  const wrap = { padding:'28px 32px', maxWidth:'1200px', margin:'0 auto' }
+  const card = { background:'#fff', border:'1px solid #E5E7EB', borderRadius:12, padding:'16px 18px' }
+  const th = { padding:'10px 12px', fontSize:12, fontWeight:700, color:'#6B7280', textAlign:'left', whiteSpace:'nowrap', borderBottom:'2px solid #E5E7EB' }
+  const td = { padding:'10px 12px', fontSize:13, color:'#111827', borderBottom:'1px solid #F1F5F9', verticalAlign:'middle' }
+
+  const headerEl = React.createElement('div', { style:{ marginBottom:20 } },
+    React.createElement('div', { style:{ fontSize:12, fontWeight:700, color:'#0A6B52', letterSpacing:'.04em' } }, '積算温度モデル'),
+    React.createElement('h1', { style:{ fontSize:22, fontWeight:800, color:'#111827', margin:'2px 0 4px' } }, '収穫予測'),
+    React.createElement('p', { style:{ fontSize:13, color:'#6B7280', margin:0 } },
+      '月別平均気温と作物ごとの基準温度・必要積算温度から、栽培中ロットの収穫予測日を自動算出します。'),
+  )
+
+  // ── 月別平均気温エディタ（1回設定すれば永続化） ──
+  const tempEditor = React.createElement('div', { style:{ ...card, marginBottom:18 } },
+    React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }, onClick:() => setTempOpen(o => !o) },
+      React.createElement('span', { style:{ fontSize:14, fontWeight:700, color:'#111827' } }, '🌡 月別平均気温（平年値）'),
+      React.createElement('span', { style:{ fontSize:12, color:'#6B7280' } }, '一度設定すると保存され、以降の予測に使われます'),
+      React.createElement('span', { style:{ marginLeft:'auto', color:'#9CA3AF', fontSize:12 } }, tempOpen ? '閉じる ▲' : '編集する ▼'),
+    ),
+    tempOpen ? React.createElement('div', { style:{ marginTop:14 } },
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(6, 1fr)', gap:10 } },
+        ...MONTHS.map((m, i) => React.createElement('label', { key:i, style:{ display:'block' } },
+          React.createElement('span', { style:{ fontSize:11, color:'#6B7280', display:'block', marginBottom:3 } }, m),
+          React.createElement('input', {
+            type:'number', step:'0.1', value:temps[i],
+            onChange:e => setTemps(prev => prev.map((v, j) => j === i ? e.target.value : v)),
+            style:{ width:'100%', padding:'7px 8px', border:'1px solid #D1D5DB', borderRadius:6, fontSize:13, boxSizing:'border-box', textAlign:'right' },
+          }),
+        )),
+      ),
+      React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:12, marginTop:14 } },
+        React.createElement('button', {
+          onClick:saveTemps,
+          style:{ padding:'8px 16px', background:'#0A6B52', color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer' },
+        }, '気温を保存'),
+        saved ? React.createElement('span', { style:{ fontSize:12, color:'#0A6B52', fontWeight:700 } }, '✓ 保存しました') : null,
+        React.createElement('span', { style:{ fontSize:11, color:'#9CA3AF' } }, '※ 単位は℃。将来的に気象庁アメダスの実測値へ自動連携予定'),
+      ),
+    ) : null,
+  )
+
+  // ── 予測テーブル ──
+  const progressBar = (pct, color) => React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, minWidth:120 } },
+    React.createElement('div', { style:{ flex:1, height:8, background:'#F1F5F9', borderRadius:4, overflow:'hidden' } },
+      React.createElement('div', { style:{ height:'100%', width:pct + '%', background:color, borderRadius:4 } })),
+    React.createElement('span', { style:{ fontSize:11, color:'#6B7280', width:34, textAlign:'right' } }, pct + '%'),
+  )
+
+  let body
+  if (rows.length === 0) {
+    body = React.createElement('div', { style:{ ...card, textAlign:'center', padding:'56px 24px' } },
+      React.createElement('div', { style:{ fontSize:40, marginBottom:12 } }, '🌾'),
+      React.createElement('div', { style:{ fontSize:15, fontWeight:700, color:'#374151', marginBottom:6 } }, '栽培中のロットがありません'),
+      React.createElement('div', { style:{ fontSize:13, color:'#6B7280', lineHeight:1.7, maxWidth:520, margin:'0 auto' } },
+        '定植日報を入力するとロットが自動生成され、収穫前（栽培中・収穫待ち）のロットがここに予測付きで並びます。'),
+    )
+  } else {
+    body = React.createElement('div', { style:{ ...card, padding:0, overflow:'hidden' } },
+      React.createElement('div', { style:{ overflowX:'auto' } },
+        React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', minWidth:940 } },
+          React.createElement('thead', null,
+            React.createElement('tr', null,
+              ['圃場','品種','起算日','作物カテゴリ','基準/必要','積算温度','進捗','予測収穫日','残り'].map((h, i) =>
+                React.createElement('th', { key:i, style:th }, h)),
+            ),
+          ),
+          React.createElement('tbody', null,
+            ...rows.map(r => {
+              const fc = r.fc
+              const noThreshold = !fc
+              const predicted = fc && fc.predictedDate
+              const color = !predicted ? '#9CA3AF' : (fc.daysToHarvest != null && fc.daysToHarvest <= 7 ? '#B45309' : '#0A6B52')
+              return React.createElement('tr', { key:r.lot.id },
+                React.createElement('td', { style:td }, fieldLabel(r.field)),
+                React.createElement('td', { style:{ ...td, fontWeight:600 } }, r.lot.variety || '（品種未入力）'),
+                React.createElement('td', { style:td }, fmtDate(r.start)),
+                React.createElement('td', { style:td }, r.cat ? r.cat.name : '—'),
+                React.createElement('td', { style:td }, (r.cat && r.cat.base_temp_c != null && r.cat.required_gdd != null) ? `${r.cat.base_temp_c}℃ / ${r.cat.required_gdd}` : React.createElement('span', { style:{ color:'#B45309', fontSize:12 } }, '未設定')),
+                React.createElement('td', { style:td }, noThreshold ? '—' : `${fc.currentGdd} / ${fc.requiredGdd}`),
+                React.createElement('td', { style:td }, noThreshold ? '—' : progressBar(fc.progressPct, color)),
+                React.createElement('td', { style:{ ...td, fontWeight:700, color } },
+                  noThreshold
+                    ? React.createElement('span', { style:{ color:'#B45309', fontSize:12, fontWeight:600 } }, 'しきい値未設定')
+                    : (predicted ? fmtDate(fc.predictedDate) : React.createElement('span', { style:{ color:'#9CA3AF', fontSize:12 } }, '気温不足で未到達'))),
+                React.createElement('td', { style:td },
+                  (fc && fc.daysToHarvest != null)
+                    ? (fc.daysToHarvest <= 0 ? React.createElement('span', { style:{ color:'#B45309', fontWeight:700 } }, '収穫適期') : `あと${fc.daysToHarvest}日`)
+                    : '—'),
+              )
+            }),
+          ),
+        ),
+      ),
+    )
+  }
+
+  const anyNoThreshold = rows.some(r => !r.fc)
+  const note = anyNoThreshold
+    ? React.createElement('div', { style:{ fontSize:12, color:'#B45309', background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:8, padding:'10px 14px', marginTop:12 } },
+        '⚠️ 「しきい値未設定」の作物は、作物カテゴリ管理で基準温度・必要積算温度を入力すると予測されます（一度設定すれば以降は自動）。')
+    : null
+
+  return React.createElement('div', { style:wrap }, headerEl, tempEditor, body, note)
 }
 
 // =====================================================
@@ -14222,7 +14828,7 @@ function CropCategoryPage({ categories, onSave }) {
     { key:'standard',     label:'シンプル',     desc:'作業記録のみのシンプルモード' },
   ]
   const PALETTE = ['#0D9972','#EA580C','#2563EB','#7C3AED','#B45309','#DC2626','#0891B2','#65A30D','#DB2777','#6B7280']
-  const blank = () => ({ key:'cat_' + Date.now(), name:'', ui_mode:'row_map', harvest_grades:['規格内','B品'], color:'#0D9972', sort_order:(categories.length * 10) })
+  const blank = () => ({ key:'cat_' + Date.now(), name:'', ui_mode:'row_map', harvest_grades:['規格内','B品'], color:'#0D9972', sort_order:(categories.length * 10), base_temp_c:null, required_gdd:null })
   const [editing, setEditing]     = React.useState(null)
   const [gradesText, setGradesText] = React.useState('')
   const [suggestion, setSuggestion] = React.useState(null)  // テンプレ候補
@@ -14246,7 +14852,9 @@ function CropCategoryPage({ categories, onSave }) {
   const saveEdit = () => {
     if (!editing.name.trim()) return
     const grades = gradesText.split(',').map(s => s.trim()).filter(Boolean)
-    const updated = { ...editing, name: editing.name.trim(), harvest_grades: grades.length ? grades : ['規格内','B品'] }
+    const numOrNull = (v) => (v === '' || v == null || isNaN(Number(v))) ? null : Number(v)
+    const updated = { ...editing, name: editing.name.trim(), harvest_grades: grades.length ? grades : ['規格内','B品'],
+      base_temp_c: numOrNull(editing.base_temp_c), required_gdd: numOrNull(editing.required_gdd) }
     const exists = categories.find(c => c.key === updated.key)
     if (exists) {
       onSave(categories.map(c => c.key === updated.key ? updated : c))
@@ -14292,6 +14900,12 @@ function CropCategoryPage({ categories, onSave }) {
             React.createElement('span', { style:{ fontWeight:600, color:'#0A6B52' } },
               (UI_MODES.find(m => m.key === cat.ui_mode) || UI_MODES[0]).label
             )
+          ),
+          React.createElement('div', { style:{ fontSize:11, color:'#64748B', marginBottom:8 } },
+            '🌡 収穫予測: ',
+            (cat.base_temp_c != null && cat.required_gdd != null)
+              ? React.createElement('span', { style:{ fontWeight:600, color:'#B45309' } }, `基準${cat.base_temp_c}℃ / 必要${cat.required_gdd}℃・日`)
+              : React.createElement('span', { style:{ color:'#B45309' } }, '未設定')
           ),
           React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:14, flex:1 } },
             React.createElement('span', { style:{ fontSize:11, color:'#64748B', marginRight:2 } }, '規格:'),
@@ -14347,6 +14961,23 @@ function CropCategoryPage({ categories, onSave }) {
         React.createElement('label', { style:{ display:'block', marginBottom:14 } },
           React.createElement('span', { style:L }, '収穫規格（カンマ区切り）'),
           React.createElement('input', { style:I, value:gradesText, onChange:e=>setGradesText(e.target.value), placeholder:'例: 2L, L, M, S, B品' })
+        ),
+
+        // 収穫予測（積算温度）のしきい値 — 一度入力すれば以降の予測は自動
+        React.createElement('div', { style:{ marginBottom:14, padding:'12px 12px 4px', background:'#F0FDF4', border:'1px solid #C6DDD0', borderRadius:8 } },
+          React.createElement('div', { style:{ fontSize:11, fontWeight:700, color:'#0A6B52', marginBottom:8, letterSpacing:'.04em' } }, '🌡 収穫予測（積算温度）'),
+          React.createElement('div', { style:{ display:'flex', gap:12 } },
+            React.createElement('label', { style:{ display:'block', flex:1 } },
+              React.createElement('span', { style:L }, '基準温度（℃）'),
+              React.createElement('input', { style:I, type:'number', step:'0.5', value: editing.base_temp_c == null ? '' : editing.base_temp_c, onChange:e=>setEditing(p=>({...p, base_temp_c:e.target.value})), placeholder:'例: 4' })
+            ),
+            React.createElement('label', { style:{ display:'block', flex:1 } },
+              React.createElement('span', { style:L }, '必要積算温度（℃・日）'),
+              React.createElement('input', { style:I, type:'number', step:'10', value: editing.required_gdd == null ? '' : editing.required_gdd, onChange:e=>setEditing(p=>({...p, required_gdd:e.target.value})), placeholder:'例: 900' })
+            )
+          ),
+          React.createElement('div', { style:{ fontSize:10.5, color:'#64748B', margin:'6px 2px 8px', lineHeight:1.5 } },
+            '定植/は種日からの日々の（平均気温−基準温度）の積算が必要積算温度に達した日を収穫予測日とします。空欄なら予測しません。')
         ),
 
         // カラー

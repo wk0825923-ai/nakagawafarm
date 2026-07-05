@@ -104,6 +104,8 @@
 
   // ── 作物カテゴリ（汎用化）──
   const [cropCategories, setCropCategories] = useFPS('farm_crop_categories', INITIAL_CROP_CATEGORIES)
+  // ── 収穫予測: 月別平均気温（平年値・1回設定で永続化） ──
+  const [monthlyTemps, setMonthlyTemps] = useFPS('farm_monthly_temps', INITIAL_MONTHLY_TEMPS)
   // モジュールレベル参照を同期 — グローバル関数 getCropCategory / getHarvestGrades が最新を参照できる
   _CROP_CATEGORIES = cropCategories
 
@@ -402,6 +404,18 @@
       onDelete: onDeleteFertilizer,
       onAddPurchase: onAddFertilizerPurchase,
       onUpdateStock: onUpdateFertilizerStock,
+    }),
+    // 【圃場まとめ】ロット別生産履歴（管理表シート相当の自動再構築）
+    field_summary: () => React.createElement(FieldSummaryPage, {
+      fields, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides, fertilizers, pesticidePurchases,
+    }),
+    // 【収穫予測】積算温度モデルによる収穫予測
+    harvest_forecast: () => React.createElement(HarvestForecastPage, {
+      fields, farmLots, harvestRecords, cropCategories, monthlyTemps, onSaveMonthlyTemps: setMonthlyTemps,
+    }),
+    // 【日報入力】全圃場から選択して入力（複数圃場の一括記録に対応する全体入口）
+    daily_entry: () => React.createElement(RecordForm, {
+      fields, pesticides, records, lotSprayRecords, onSave: onSaveRecordWithStock,
     }),
     // 【フェーズE・E-4 Step6】圃場実績・評価ページ
     field_performance: () => React.createElement(FieldPerformancePage, {

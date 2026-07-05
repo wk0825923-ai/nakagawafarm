@@ -28,12 +28,20 @@ const INITIAL_FIELDS = []
 // ── 作物カテゴリマスタ（汎用化済み）──
 // ui_mode: 'row_map'=畝マップ管理 | 'growth_stage'=生育ステージ | 'standard'=シンプル
 // =====================================================
+// base_temp_c=生育起算の基準温度(℃), required_gdd=定植/は種〜収穫までの必要積算温度(℃・日)。
+// 収穫予測(積算温度モデル)で使用。値は目安の初期値で、作物カテゴリ管理からいつでも上書き可能。
+// 一度設定すれば永続化され、以降の収穫予測は各ロットで自動計算される（追加入力不要）。
 const INITIAL_CROP_CATEGORIES = [
-  { key:'leaf_veg', name:'葉物野菜',     ui_mode:'row_map',      harvest_grades:['規格内','B品'],             color:'#0D9972', sort_order:0 },
-  { key:'corn',     name:'とうもろこし', ui_mode:'row_map',      harvest_grades:['2L','L','M','S','B品'],     color:'#EA580C', sort_order:1 },
-  { key:'rice',     name:'水稲',         ui_mode:'growth_stage', harvest_grades:['一等米','二等米','くず米'],  color:'#2563EB', sort_order:2 },
-  { key:'other',    name:'その他',       ui_mode:'standard',     harvest_grades:['規格内','B品'],             color:'#6B7280', sort_order:9 },
+  { key:'leaf_veg', name:'葉物野菜',     ui_mode:'row_map',      harvest_grades:['規格内','B品'],             color:'#0D9972', sort_order:0, base_temp_c:4,  required_gdd:900  },
+  { key:'corn',     name:'とうもろこし', ui_mode:'row_map',      harvest_grades:['2L','L','M','S','B品'],     color:'#EA580C', sort_order:1, base_temp_c:10, required_gdd:850  },
+  { key:'rice',     name:'水稲',         ui_mode:'growth_stage', harvest_grades:['一等米','二等米','くず米'],  color:'#2563EB', sort_order:2, base_temp_c:10, required_gdd:1000 },
+  { key:'other',    name:'その他',       ui_mode:'standard',     harvest_grades:['規格内','B品'],             color:'#6B7280', sort_order:9, base_temp_c:null, required_gdd:null },
 ]
+
+// ── 月別平均気温の初期値（℃）: 収穫予測の簡易版で使う平年値。中信〜長野の内陸目安。
+// 「収穫予測」ページで1回だけ設定すれば永続化され、以降は各ロットの収穫予測が自動算出される。
+// 将来的に気象庁アメダスの実測値へ差し替え予定（簡易版→自動化）。index0=1月 … index11=12月。
+const INITIAL_MONTHLY_TEMPS = [1, 2, 6, 12, 17, 21, 25, 26, 21, 15, 9, 3]
 
 // モジュールレベル参照 — Appが毎レンダー同期するのでグローバル関数が常に最新カテゴリを参照できる
 let _CROP_CATEGORIES = INITIAL_CROP_CATEGORIES
@@ -51,6 +59,45 @@ const getCropCategory = (cropName) => {
 INITIAL_FIELDS.forEach(f => {
   if (!f.crop_category) f.crop_category = getCropCategory(f.crop)
 })
+
+// =====================================================
+// 【収穫予測 / 積算温度モデル】computeHarvestForecast
+// 起算日(定植日 or は種日)から、月別平均気温(monthlyTemps)を使って日々の
+// 有効積算温度 = Σ max(0, その日の平均気温 − 基準温度) を足し込み、
+// 必要積算温度(requiredGdd)に到達した日を「予測収穫日」とする簡易モデル。
+// 起算日〜今日 までの積算(currentGdd)と進捗率も返す。
+// ・monthlyTemps: 長さ12（index0=1月 … index11=12月）の平均気温配列
+// ・しきい値未設定(baseTemp/requiredGdd が null)の場合は null を返す（予測不可）
+// ・到達しない場合(最長730日)は predictedDate=null（気温不足）
+// =====================================================
+function computeHarvestForecast(startDateStr, monthlyTemps, baseTemp, requiredGdd, today) {
+  if (!startDateStr || baseTemp == null || requiredGdd == null || !(requiredGdd > 0)) return null
+  if (!Array.isArray(monthlyTemps) || monthlyTemps.length !== 12) return null
+  const start = new Date(startDateStr)
+  if (isNaN(start)) return null
+  const ref = today ? new Date(today) : new Date()
+  ref.setHours(0, 0, 0, 0)
+
+  let cumulative = 0
+  let currentGdd = 0
+  let predicted = null
+  const cursor = new Date(start)
+  cursor.setHours(0, 0, 0, 0)
+  for (let i = 0; i < 730; i++) {
+    const t = Number(monthlyTemps[cursor.getMonth()])
+    const dayGdd = Math.max(0, (isNaN(t) ? 0 : t) - baseTemp)
+    cumulative += dayGdd
+    if (cursor <= ref) currentGdd = cumulative
+    if (predicted == null && cumulative >= requiredGdd) {
+      predicted = new Date(cursor)
+      if (cursor > ref) break   // 予測日が未来なら currentGdd は確定済み
+    }
+    cursor.setDate(cursor.getDate() + 1)
+  }
+  const progressPct   = Math.min(100, Math.round(currentGdd / requiredGdd * 100))
+  const daysToHarvest = predicted ? Math.round((predicted - ref) / 86400000) : null
+  return { predictedDate: predicted, currentGdd: Math.round(currentGdd), requiredGdd, progressPct, daysToHarvest }
+}
 
 // =====================================================
 // 【サンプル農園実データ統合 フェーズ2・Step2-1】圃場まとめ系シート 実データ参照テーブル

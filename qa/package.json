@@ -1,0 +1,14 @@
+{
+  "name": "syatyo-suport-qa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "農場管理システムのE2E回帰テスト（puppeteer-core + 既存Chrome + 実Supabase認証）",
+  "scripts": {
+    "test:basic": "node qa.js",
+    "test:farm": "node qa_farm.js",
+    "test:category": "node qa_cat.js"
+  },
+  "dependencies": {
+    "puppeteer-core": "^23.11.1"
+  }
+}

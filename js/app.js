@@ -212,6 +212,7 @@
         ? { ...s, stock_L: Math.round((s.stock_L + Number(purchase.amount_L)) * 100) / 100 }
         : s
     ))
+    celebrateSave('仕入れを登録！')
   }
 
   // 農薬マスタ CRUD
@@ -234,6 +235,7 @@
         color: CROP_COLORS[cycle.crop] || '#94A3B8',
       }]
     })
+    celebrateSave('作付けを追加！')
   }
   const onUpdateCropCycle = (cycle) =>
     setCropCycles(prev => prev.map(c => c.id === cycle.id ? cycle : c))
@@ -254,6 +256,7 @@
       stock_L:            Number(p.stock_L) || 0,
       alert_threshold_L:  Number(p.alert_threshold_L) || 0,
     }])
+    celebrateSave('農薬を登録！')
   }
   const onUpdatePesticide = (p) => setPesticides(prev => prev.map(x => x.id === p.id ? p : x))
   const onDeletePesticide = (id) => {
@@ -282,6 +285,7 @@
       stock_kg:           Number(f.stock_kg) || 0,
       alert_threshold_kg: Number(f.alert_threshold_kg) || 0,
     }])
+    celebrateSave('肥料を登録！')
   }
   const onUpdateFertilizer = (f) => setFertilizers(prev => prev.map(x => x.id === f.id ? f : x))
   const onDeleteFertilizer = (id) => {
@@ -298,6 +302,7 @@
         ? { ...s, stock_kg: Math.round((s.stock_kg + Number(purchase.amount_kg)) * 100) / 100 }
         : s
     ))
+    celebrateSave('仕入れを登録！')
   }
 
   // 肥料棚卸し: 在庫量を直接更新（onUpdateStockと同パターン）
@@ -362,21 +367,21 @@
     dashboard:         () => React.createElement(Dashboard,   { fields, records, staff, gap, todayTasks, onToggleTodayTask:toggleTodayTask, onAddTodayTask:addTodayTask, cropPlans, pesticides, pesticideStock, fertilizers, fertilizerStock, lotSprayRecords, onNavigate: p => setPage(p), onSaveRecord: onSaveRecordWithStock, onUpdateRecord: onUpdateRecordWithStock, onDeleteRecord: onDeleteRecordWithStock }),
     record_list:       () => React.createElement(RecordTablePage, { records, fields, pesticides, onUpdate: onUpdateRecordWithStock, onDelete: onDeleteRecordWithStock, cropCycles, onUpdateRecordCycle }),
     export:            () => React.createElement(GapExport,  { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides }),
-    field_map:         () => React.createElement(FieldMapPage,   { fields, onAdd:f=>setFields(p=>[...p,f]), onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage, cropCategories }),
-    fields:            () => React.createElement(FieldTablePage, { fields, onAdd:f=>setFields(p=>[...p,f]), onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage, cropCategories }),
-    crop_plan:         () => React.createElement(CropPlan,    { fields, plans:cropPlans, records, pesticides, onAdd:p=>setCropPlans(prev=>[...prev,p]), onDelete:id=>setCropPlans(prev=>prev.filter(p=>p.id!==id)) }),
+    field_map:         () => React.createElement(FieldMapPage,   { fields, onAdd:f=>{setFields(p=>[...p,f]);celebrateSave('圃場を追加！')}, onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage, cropCategories }),
+    fields:            () => React.createElement(FieldTablePage, { fields, onAdd:f=>{setFields(p=>[...p,f]);celebrateSave('圃場を追加！')}, onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage, cropCategories }),
+    crop_plan:         () => React.createElement(CropPlan,    { fields, plans:cropPlans, records, pesticides, onAdd:p=>{setCropPlans(prev=>[...prev,p]);celebrateSave('作付計画を追加！')}, onDelete:id=>setCropPlans(prev=>prev.filter(p=>p.id!==id)) }),
     gap:               () => React.createElement(GapChecklist, { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)) }),
     gap_package:       () => React.createElement(GapExport,   { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides }),
-    staff:             () => React.createElement(StaffList,   { staff, onAdd:s=>setStaff(p=>[...p,s]), onDelete:id=>setStaff(p=>p.filter(s=>s.id!==id)), onUpdate:s=>setStaff(p=>p.map(x=>x.id===s.id?s:x)) }),
+    staff:             () => React.createElement(StaffList,   { staff, onAdd:s=>{setStaff(p=>[...p,s]);celebrateSave('スタッフを追加！')}, onDelete:id=>setStaff(p=>p.filter(s=>s.id!==id)), onUpdate:s=>setStaff(p=>p.map(x=>x.id===s.id?s:x)) }),
     // 【実装手順書 A】技能実習生 作業日誌
     trainee_diary:     () => React.createElement(TraineeDiaryPage, {
       staff,
       fields,
       diaries:  traineeDiaries,
-      onAdd:    d => setTraineeDiaries(p => [...p, d]),
+      onAdd:    d => { setTraineeDiaries(p => [...p, d]); celebrateSave('作業日誌を記録！') },
       onDelete: id => setTraineeDiaries(p => p.filter(d => d.id !== id)),
     }),
-    equipment:         () => React.createElement(Equipment,   { rentals, onAdd:r=>setRentals(p=>[...p,r]), onUpdate:r=>setRentals(p=>p.map(x=>x.id===r.id?r:x)), onDelete:id=>setRentals(p=>p.filter(r=>r.id!==id)) }),
+    equipment:         () => React.createElement(Equipment,   { rentals, onAdd:r=>{setRentals(p=>[...p,r]);celebrateSave('予約を追加！')}, onUpdate:r=>setRentals(p=>p.map(x=>x.id===r.id?r:x)), onDelete:id=>setRentals(p=>p.filter(r=>r.id!==id)) }),
     simulator:         () => React.createElement(RevenueSimulator, null),
     manual:            () => React.createElement(ManualLibrary,    null),
     settings:          () => React.createElement(Settings,    null),
@@ -472,7 +477,7 @@
       current:       page,
       onChange:      p => setPage(p),
       fields,
-      onAddField:    f  => setFields(p => [...p, f]),
+      onAddField:    f  => { setFields(p => [...p, f]); celebrateSave('圃場を追加！') },
       onDeleteField: id => setFields(p => p.filter(f => f.id !== id)),
       currentOrg,
       currentFarm,

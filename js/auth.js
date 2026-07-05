@@ -92,11 +92,27 @@ function OnboardingScreen({ user, onComplete }) {
       const org = orgs[0]
       const { data:farms, error:farmErr } = await sb.from('farm_farms').insert({ org_id:org.id, name:(orgType==='solo' ? (farmName||orgName) : farmName), jgap_cert_no:jgapNo }).select()
       if (farmErr) throw farmErr
+      if (typeof celebrateSave === 'function') celebrateSave('セットアップ完了！🌱')
       onComplete(org, farms[0])
     } catch(err) { setError(err.message) } finally { setLoading(false) }
   }
+  // オンボーディングの進捗表示（今どこまで進んだかが一目で分かる。バー＋ステップドット）
+  const TOTAL = 2
+  const progressBar = (cur) => React.createElement('div', { style:{ marginBottom:26 } },
+    React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:7 } },
+      React.createElement('span', { style:{ fontSize:11, fontWeight:800, color:'#0A6B52', letterSpacing:'.08em' } }, 'SETUP'),
+      React.createElement('span', { style:{ fontSize:12, fontWeight:700, color:'#0A6B52' } }, 'ステップ ' + cur + ' / ' + TOTAL)
+    ),
+    React.createElement('div', { style:{ height:8, background:'#E7EFE9', borderRadius:999, overflow:'hidden' } },
+      React.createElement('div', { style:{ height:'100%', width:(cur/TOTAL*100)+'%', background:'linear-gradient(90deg,#0D9972,#0A6B52)', borderRadius:999, transition:'width .55s cubic-bezier(.4,0,.2,1)', boxShadow:'0 0 8px rgba(13,153,114,.5)' } })
+    ),
+    React.createElement('div', { style:{ display:'flex', gap:6, marginTop:10, justifyContent:'center' } },
+      [1,2].map(n => React.createElement('div', { key:n, style:{ width: n===cur?24:8, height:8, borderRadius:999, background: n<=cur?'#0A6B52':'#D8E0DA', transition:'all .45s cubic-bezier(.4,0,.2,1)' } }))
+    )
+  )
   if (step === 1) return React.createElement('div', { style:wrapStyle },
     React.createElement('div', { style:{...boxStyle, width:500} },
+      progressBar(1),
       React.createElement('div', { style:{ textAlign:'center', marginBottom:28 } }, React.createElement('div', { style:{fontSize:36,marginBottom:8} }, '🌱'), React.createElement('h2', { style:{fontSize:20,fontWeight:700,color:'#111827',margin:'0 0 4px'} }, 'ようこそ！'), React.createElement('p', { style:{color:'#64748B',fontSize:13,margin:0} }, '農場の管理形態を選択してください')),
       React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:24 } },
         React.createElement('button', { onClick:()=>setOrgType('solo'), style:card(orgType==='solo') }, React.createElement('div', { style:{fontSize:28,marginBottom:10} }, '🏡'), React.createElement('div', { style:{fontSize:14,fontWeight:700,color:'#111827',marginBottom:4} }, '個人・単一農場'), React.createElement('div', { style:{fontSize:12,color:'#64748B',lineHeight:1.5} }, '農家・個人事業主として1農場を管理')),
@@ -108,6 +124,7 @@ function OnboardingScreen({ user, onComplete }) {
   return React.createElement('div', { style:wrapStyle },
     React.createElement('div', { style:{...boxStyle, width:440} },
       React.createElement('button', { onClick:()=>setStep(1), style:{ background:'none', border:'none', color:'#0A6B52', cursor:'pointer', fontSize:13, marginBottom:16, padding:0 } }, '← 戻る'),
+      progressBar(2),
       React.createElement('h2', { style:{ fontSize:18, fontWeight:700, color:'#111827', marginBottom:20 } }, orgType==='solo' ? '🏡 農場情報を入力' : '🏢 法人・農場情報を入力'),
       React.createElement('form', { onSubmit:handleCreate },
         React.createElement('label', { style:lbl }, React.createElement('span', { style:spn }, orgType==='solo' ? '農場名 *' : '法人名（組合名）*'), React.createElement('input', { type:'text', value:orgName, onChange:e=>setOrgName(e.target.value), required:true, placeholder:orgType==='solo'?'例: 田中農園':'例: 農事組合法人○○', style:inp })),

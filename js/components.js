@@ -14872,6 +14872,7 @@ function CropCategoryPage({ categories, onSave }) {
   const [editing, setEditing]     = React.useState(null)
   const [gradesText, setGradesText] = React.useState('')
   const [suggestion, setSuggestion] = React.useState(null)  // テンプレ候補
+  const [deleteTarget, setDeleteTarget] = React.useState(null)  // 削除確認モーダル対象（共通ConfirmDeleteModal）
 
   const openNew  = () => { const c = blank(); setEditing(c); setGradesText(c.harvest_grades.join(', ')); setSuggestion(null) }
   const openEdit = (cat) => { setEditing({...cat}); setGradesText(cat.harvest_grades.join(', ')); setSuggestion(null) }
@@ -14900,6 +14901,7 @@ function CropCategoryPage({ categories, onSave }) {
       onSave(categories.map(c => c.key === updated.key ? updated : c))
     } else {
       onSave([...categories, updated])
+      celebrateSave('カテゴリを追加！')
     }
     closeEdit()
   }
@@ -14956,7 +14958,7 @@ function CropCategoryPage({ categories, onSave }) {
           React.createElement('div', { style:{ display:'flex', gap:6 } },
             React.createElement('button', { onClick:()=>openEdit(cat), style:{ flex:1, padding:'6px 0', background:'#F0F8F4', border:'1px solid #C6DDD0', borderRadius:6, fontSize:12, fontWeight:600, color:'#0A6B52', cursor:'pointer' } }, '✏ 編集'),
             !isBuiltin(cat.key) && React.createElement('button', {
-              onClick:()=>{ if(window.confirm(cat.name + 'を削除しますか？')) deleteCat(cat.key) },
+              onClick:()=> setDeleteTarget(cat),
               style:{ padding:'6px 12px', background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:6, fontSize:12, fontWeight:600, color:'#DC2626', cursor:'pointer' }
             }, '✕')
           )
@@ -15033,7 +15035,15 @@ function CropCategoryPage({ categories, onSave }) {
           React.createElement('button', { onClick:closeEdit, style:{ padding:'10px 16px', background:'#F1F5F9', border:'1px solid #E2E8F0', borderRadius:6, fontSize:14, color:'#64748B', cursor:'pointer' } }, 'キャンセル')
         )
       )
-    )
+    ),
+
+    // 削除確認（共通ConfirmDeleteModalに統一。旧window.confirmを置換）
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: '作物カテゴリを削除しますか？',
+      targetName: deleteTarget.name,
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { deleteCat(deleteTarget.key); setDeleteTarget(null) }
+    })
   )
 }
 

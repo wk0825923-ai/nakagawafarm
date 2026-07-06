@@ -719,11 +719,11 @@ const LANG_CONFIG = [
 function PesticideStockWidget({ pesticides, pesticideStock, onNavigate, _inGrid }) {
   const stockOf  = (p) => {
     const s = (pesticideStock || []).find(s => s.pesticide_id === p.id)
-    return s ? s.stock_L : (p.stock_L ?? 0)
+    return ((s && s.stock_L != null) ? s.stock_L : p.stock_L) ?? 0
   }
   const threshOf = (p) => {
     const s = (pesticideStock || []).find(s => s.pesticide_id === p.id)
-    return s ? s.alert_threshold_L : (p.alert_threshold_L ?? 0)
+    return ((s && s.alert_threshold_L != null) ? s.alert_threshold_L : p.alert_threshold_L) ?? 0
   }
 
   const alertItems = (pesticides || []).filter(p => stockOf(p) <= threshOf(p))
@@ -1173,11 +1173,11 @@ function PesticideHistoryPanel({ pesticides, records }) {
 function PesticideStockWidget({ pesticides, pesticideStock, onNavigate }) {
   const stockOf  = (p) => {
     const s = pesticideStock.find(s => s.pesticide_id === p.id)
-    return s ? s.stock_L : (p.stock_L ?? 0)
+    return ((s && s.stock_L != null) ? s.stock_L : p.stock_L) ?? 0
   }
   const threshOf = (p) => {
     const s = pesticideStock.find(s => s.pesticide_id === p.id)
-    return s ? s.alert_threshold_L : (p.alert_threshold_L ?? 0)
+    return ((s && s.alert_threshold_L != null) ? s.alert_threshold_L : p.alert_threshold_L) ?? 0
   }
 
   const alertItems = pesticides.filter(p => stockOf(p) <= threshOf(p))
@@ -1310,11 +1310,11 @@ function PesticideStockWidget({ pesticides, pesticideStock, onNavigate }) {
 function FertilizerStockWidget({ fertilizers, fertilizerStock, onNavigate, _inGrid }) {
   const stockOf  = (f) => {
     const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
-    return s ? s.stock_kg : (f.stock_kg ?? 0)
+    return ((s && s.stock_kg != null) ? s.stock_kg : f.stock_kg) ?? 0
   }
   const threshOf = (f) => {
     const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
-    return s ? s.alert_threshold_kg : (f.alert_threshold_kg ?? 0)
+    return ((s && s.alert_threshold_kg != null) ? s.alert_threshold_kg : f.alert_threshold_kg) ?? 0
   }
 
   const alertItems = fertilizers.filter(f => stockOf(f) <= threshOf(f))
@@ -5408,9 +5408,11 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }
     letterSpacing:'.05em', textTransform:'uppercase', marginBottom:'4px', display:'block'
   }
 
-  // 農薬マスタは希釈倍率を持たないため、作物別の推奨希釈(RECOMMENDED_DILUTIONS)から引く。
-  // 該当が無ければ空文字（undefinedを入れると controlled→uncontrolled 警告になるため必ず ''）。
+  // 希釈倍率の初期値: ①農薬マスタの標準希釈 → ②作物別の推奨希釈 → ③空。
+  // undefinedは入れない（controlled→uncontrolled 警告防止のため必ず ''）。
   const recDilution = (pid) => {
+    const p = pesticides.find(x => x.id === Number(pid))
+    if (p && p.dilution != null && p.dilution !== '') return p.dilution
     const list = (typeof RECOMMENDED_DILUTIONS !== 'undefined' && field) ? RECOMMENDED_DILUTIONS[field.crop] : null
     const hit  = list && list.find(r => r.pesticide_id === Number(pid))
     return (hit && hit.dilution != null) ? hit.dilution : ''
@@ -6517,7 +6519,7 @@ function HarvestRecordForm({ field, lots, destinations, harvestRecords, onSave, 
   // 残りは「+ 出荷先を追加」で必要な分だけ広げられるようにする。
   const frequentDests = destList.filter(d => d.frequent)
   const initialDests = frequentDests.length > 0 ? frequentDests : destList.slice(0, 1)
-  const makeRow = (dest) => ({ dest: dest.label, grade: cropGrades[0], unit_type: SHIPMENT_UNIT_TYPES[0].key, cases: '' })
+  const makeRow = (dest) => ({ dest: dest.label, grade: cropGrades[0] || '', unit_type: SHIPMENT_UNIT_TYPES[0].key, cases: '' })
   const [shipments, setShipments] = React.useState(initialDests.map(makeRow))
   const [saved, setSaved] = React.useState(false)
 
@@ -13392,12 +13394,14 @@ function PesticideMasterPage({ pesticides, pesticideStock, pesticidePurchases, o
 
   const stockOf = (p) => {
     const s = pesticideStock.find(s => s.pesticide_id === p.id)
-    return s ? s.stock_L : p.stock_L ?? 0
+    const v = (s && s.stock_L != null) ? s.stock_L : p.stock_L
+    return v ?? 0
   }
 
   const threshOf = (p) => {
     const s = pesticideStock.find(s => s.pesticide_id === p.id)
-    return s ? s.alert_threshold_L : p.alert_threshold_L ?? 0
+    const v = (s && s.alert_threshold_L != null) ? s.alert_threshold_L : p.alert_threshold_L
+    return v ?? 0
   }
 
   const isAlert = (p) => stockOf(p) <= threshOf(p)
@@ -13651,7 +13655,7 @@ function PesticideMasterPage({ pesticides, pesticideStock, pesticidePurchases, o
                   }
                 },
                   React.createElement('div', { style:{ fontSize:'12px', fontWeight:700, color:'#1D4ED8', lineHeight:1.2 } },
-                    p.dilution === 1 ? '原液' : p.dilution+'倍'
+                    p.dilution == null || p.dilution === '' ? '—' : (Number(p.dilution) === 1 ? '原液' : p.dilution+'倍')
                   ),
                   React.createElement('div', { style:{ fontSize:'9px', color:'#3B82F6', fontWeight:600, marginTop:'2px' } }, '希釈')
                 ),
@@ -13841,7 +13845,7 @@ function PesticideDetailModal({ pesticide: p, stock, thresh, ratio, isAlert: ale
           React.createElement('div', { style:{ background:'#F8FAF8', borderRadius:'10px', padding:'4px 14px', marginBottom:'16px' } },
             React.createElement('div', { style:rowStyle },
               React.createElement('span', { style:{ color:C.sub } }, '希釈倍率'),
-              React.createElement('span', { style:{ fontWeight:700, color:'#1D4ED8' } }, p.dilution === 1 ? '原液（希釈不要）' : p.dilution+'倍')
+              React.createElement('span', { style:{ fontWeight:700, color:'#1D4ED8' } }, p.dilution == null || p.dilution === '' ? '—' : (Number(p.dilution) === 1 ? '原液（希釈不要）' : p.dilution+'倍'))
             ),
             React.createElement('div', { style:rowStyle },
               React.createElement('span', { style:{ color:C.sub } }, '収穫前日数'),
@@ -14049,8 +14053,8 @@ function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchase
   const [detailModalId, setDetailModalId] = React.useState(null)
   const [activeTab, setActiveTab] = React.useState('list')
 
-  const stockOf  = (f) => { const s = fertilizerStock.find(s => s.fertilizer_id === f.id); return s ? s.stock_kg : f.stock_kg ?? 0 }
-  const threshOf = (f) => { const s = fertilizerStock.find(s => s.fertilizer_id === f.id); return s ? s.alert_threshold_kg : f.alert_threshold_kg ?? 0 }
+  const stockOf  = (f) => { const s = fertilizerStock.find(s => s.fertilizer_id === f.id); return ((s && s.stock_kg != null) ? s.stock_kg : f.stock_kg) ?? 0 }
+  const threshOf = (f) => { const s = fertilizerStock.find(s => s.fertilizer_id === f.id); return ((s && s.alert_threshold_kg != null) ? s.alert_threshold_kg : f.alert_threshold_kg) ?? 0 }
   const isAlert  = (f) => stockOf(f) <= threshOf(f)
 
   // ── カラーパレット（農薬マスタと共通トーン） ──
@@ -14743,7 +14747,7 @@ function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateS
 
   const stockOf = (f) => {
     const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
-    return s ? s.stock_kg : (f.stock_kg ?? 0)
+    return ((s && s.stock_kg != null) ? s.stock_kg : f.stock_kg) ?? 0
   }
 
   const handleApply = (f) => {

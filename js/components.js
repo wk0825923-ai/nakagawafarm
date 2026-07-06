@@ -9688,7 +9688,12 @@ function GapChecklistPanel({ gap, cats, open, setOpen, onToggle, ctx }) {
                   }
                 }, checked ? '✓' : ''),
                 React.createElement('span', { style:{ flex:1 } }, c.item),
-                isAuto ? React.createElement('span', { style:{ fontSize:10, fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:5, padding:'1px 6px', flexShrink:0 } }, '自動✓ 記録あり') : null
+                // 適用スキーム（JGAP/GGAP）
+                ...((c.schemes || ['JGAP','GGAP']).map(sc => React.createElement('span', { key:sc, style:{ fontSize:9.5, fontWeight:700, color:'#64748B', background:'#F1F5F9', border:'1px solid #E2E8F0', borderRadius:4, padding:'1px 5px', flexShrink:0 } }, sc === 'GGAP' ? 'G.GAP' : sc))),
+                // 自動達成の根拠 / 手動チェック
+                isAuto
+                  ? React.createElement('span', { style:{ fontSize:10, fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:5, padding:'1px 6px', flexShrink:0 } }, '自動✓ ' + (c.evidence || '記録あり'))
+                  : (c.auto ? React.createElement('span', { style:{ fontSize:10, color:'#B45309', flexShrink:0 } }, '記録待ち') : React.createElement('span', { style:{ fontSize:10, color:'#94A3B8', flexShrink:0 } }, '現場確認'))
               )
             })
           ) // end smooth-collapse-inner
@@ -9733,20 +9738,34 @@ function GapExportButtons({ exporting, sprayCount, handleExportPDF, handleExport
 
 // ── GapChecklist: チェックリスト専用ページ（UX-06: 未完了タブ追加）─
 function GapChecklist({ gap, onToggle, ctx }) {
-  const { open, setOpen, done, total, pct, cats, isDone } = useGapBase({ gap, records:[], fields:[], pesticides:[], ctx })
+  const { open, setOpen, isDone } = useGapBase({ gap, records:[], fields:[], pesticides:[], ctx })
   // UX-06: タブ状態管理（'all' | 'incomplete'）
   const [activeTab, setActiveTab] = React.useState('all')
+  // 【GAP認証対応】スキーム切替（both / JGAP / GGAP）
+  const [scheme, setScheme] = React.useState('both')
+  const inScheme = (c) => scheme === 'both' || (c.schemes || ['JGAP','GGAP']).includes(scheme)
+
+  // スキームで絞った母集合と対応度（システム自動達成／手動／要対応）
+  const schemeGap = gap.filter(inScheme)
+  const total     = schemeGap.length
+  const autoN     = schemeGap.filter(c => !c.is_cleared && isGapAutoCleared(c, ctx)).length  // システムが記録で満たす
+  const manualN   = schemeGap.filter(c => c.is_cleared).length                                // 人が確認済み
+  const done      = schemeGap.filter(isDone).length
+  const todoN     = total - done
+  const pct       = total ? Math.round(done / total * 100) : 0
+  const cats      = [...new Set(schemeGap.map(c => c.category))]
 
   // 未完了件数（自動達成を除く）
-  const incompleteCount = gap.filter(c => !isDone(c)).length
+  const incompleteCount = schemeGap.filter(c => !isDone(c)).length
 
   // タブに応じてフィルターしたgapリストを生成
   const filteredGap = activeTab === 'incomplete'
-    ? gap.filter(c => !isDone(c))
-    : gap
+    ? schemeGap.filter(c => !isDone(c))
+    : schemeGap
 
   // 未完了タブ時は空カテゴリを除外
   const filteredCats = cats.filter(cat => filteredGap.some(c => c.category === cat))
+  const schemeLabel = scheme === 'JGAP' ? 'JGAP' : scheme === 'GGAP' ? 'GLOBALG.A.P.' : 'JGAP / GLOBALG.A.P.'
 
   // タブスタイル定義
   const tabBase = {
@@ -9771,15 +9790,40 @@ function GapChecklist({ gap, onToggle, ctx }) {
 
   return React.createElement('div',{className:'page'},
     // ページタイトル
-    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'}},
+    React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px',flexWrap:'wrap',gap:'10px'}},
       React.createElement('div',null,
         React.createElement('div',{className:'eyebrow'},'GAP CHECKLIST'),
-        React.createElement('div',{className:'page-title'},'GAPチェックリスト'),
-        React.createElement('div',{className:'page-sub'},'JGAP / GlobalGAP 対応チェックリスト')
-      )
+        React.createElement('div',{className:'page-title'},'GAP対応チェックリスト'),
+        React.createElement('div',{className:'page-sub'},'JGAP / GLOBALG.A.P.（GGAP）両対応。記録・帳票・トレーサビリティの管理点はシステムが自動で満たします（審査に提出可能）。物理・書面の管理点は現場でご対応ください。')
+      ),
+      React.createElement('button',{ onClick:()=>window.print(), style:{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', border:'1px solid #0A6B52', background:'#fff', color:'#0A6B52', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0 } },
+        React.createElement('i',{ className:'ti ti-printer', style:{ fontSize:15 } }), '審査用に印刷 / PDF')
     ),
-    // 進捗バー
-    React.createElement(GapProgressBar,{ done, total, pct }),
+
+    // 対象スキーム切替
+    React.createElement('div',{ style:{ display:'flex', gap:8, alignItems:'center', margin:'8px 0 16px', flexWrap:'wrap' } },
+      React.createElement('span',{ style:{ fontSize:12, color:'#6B7280', fontWeight:600 } }, '対象スキーム'),
+      ...[['both','JGAP / GLOBALG.A.P.'],['JGAP','JGAP'],['GGAP','GLOBALG.A.P.']].map(([k,lab]) =>
+        React.createElement('button',{ key:k, onClick:()=>setScheme(k),
+          style:{ padding:'6px 14px', borderRadius:16, fontSize:12, fontWeight:700, cursor:'pointer', border:'1px solid',
+            borderColor: scheme===k ? '#0A6B52' : '#DDE2EC', background: scheme===k ? '#ECFDF5' : '#fff', color: scheme===k ? '#0A6B52' : '#64748B' } }, lab))
+    ),
+
+    // 対応度サマリー（システムが満たす／人が確認／要対応）
+    React.createElement('div',{ style:{ display:'flex', gap:12, marginBottom:16, flexWrap:'wrap' } },
+      React.createElement('div',{ style:{ flex:1, minWidth:150, background:'#fff', border:'1px solid #E5E7EB', borderRadius:12, padding:'14px 16px' } },
+        React.createElement('div',{ style:{ fontSize:26, fontWeight:800, color:'#0A6B52', lineHeight:1 } }, pct + '%'),
+        React.createElement('div',{ style:{ fontSize:12, color:'#6B7280', marginTop:4 } }, schemeLabel + ' 対応度（' + done + '/' + total + '）')),
+      React.createElement('div',{ style:{ flex:1, minWidth:150, background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:12, padding:'14px 16px' } },
+        React.createElement('div',{ style:{ fontSize:26, fontWeight:800, color:'#0A6B52', lineHeight:1 } }, autoN + ' 件'),
+        React.createElement('div',{ style:{ fontSize:12, color:'#166534', marginTop:4 } }, '✅ システムが記録で自動達成')),
+      React.createElement('div',{ style:{ flex:1, minWidth:150, background:'#F0F9FF', border:'1px solid #BAE6FD', borderRadius:12, padding:'14px 16px' } },
+        React.createElement('div',{ style:{ fontSize:26, fontWeight:800, color:'#0369A1', lineHeight:1 } }, manualN + ' 件'),
+        React.createElement('div',{ style:{ fontSize:12, color:'#0369A1', marginTop:4 } }, '☑ 人が確認済み')),
+      React.createElement('div',{ style:{ flex:1, minWidth:150, background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:12, padding:'14px 16px' } },
+        React.createElement('div',{ style:{ fontSize:26, fontWeight:800, color:'#B45309', lineHeight:1 } }, todoN + ' 件'),
+        React.createElement('div',{ style:{ fontSize:12, color:'#B45309', marginTop:4 } }, '🖐 要対応（多くは物理・書面）')),
+    ),
     // UX-06: タブ切り替えUI
     React.createElement('div',{
       style:{

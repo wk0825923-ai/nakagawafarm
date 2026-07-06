@@ -643,6 +643,15 @@ function isGapAutoCleared(item, ctx) {
     default:                 return false
   }
 }
+
+// 各GAP項目に「適用スキーム(JGAP/GGAP)」と「自動達成の根拠ラベル」を付与。
+// 記録・帳票・トレーサビリティ系はJGAP/GGAP共通。IPM・エネルギー/資源はGGAP色が濃い(JGAPは推奨寄り)。
+const _GAP_GGAP_LEANING = new Set([13, 29])
+const _GAP_EVIDENCE = { records_exist:'作業記録', spray_record:'農薬散布記録', pesticide_master:'農薬マスタ', pest_purchase:'農薬仕入記録', fert_record:'施肥記録', fert_purchase:'肥料仕入記録', harvest_record:'収穫記録', shipment_record:'出荷記録', machine_maint:'機械整備記録', worker_managed:'作業者名簿', trainee_visa:'ビザ管理', traceability:'ロット追跡', seed_lot:'種苗ロット' }
+INITIAL_GAP_CHECKS.forEach(c => {
+  c.schemes  = _GAP_GGAP_LEANING.has(c.id) ? ['GGAP'] : ['JGAP', 'GGAP']
+  c.evidence = c.auto ? (_GAP_EVIDENCE[c.auto] || '記録') : null
+})
 const INITIAL_RENTALS = []
 // ===== 今日のタスクモックデータ =====
 // 「今日 どの畑で 誰が 何をする」を一目で把握するためのデータ

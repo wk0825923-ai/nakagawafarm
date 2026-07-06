@@ -29,6 +29,11 @@ CHROME_PATH="/path/to/chrome" node qa.js
 | `npm run test:basic`    | 初回(空データ)＋継続(データ投入)の2パターンで全ページ巡回。複数圃場＋写真保存・保存演出・設定を検査（`qa.js`） |
 | `npm run test:farm`     | 中川農園シナリオ（20圃場・レタス/とうもろこし/米・米→8月末レタス転換・過去データ・実習生3名）で全ページ巡回（`qa_farm.js`） |
 | `npm run test:category` | 作物カテゴリの新規追加演出・削除確認モーダルを検査（`qa_cat.js`） |
+| `node qa_sim.js`     | **3年運用シミュレーション**。25圃場×4年×エッジ(空名/巨大値/null価格/畝未指定/ビザ切れ/status欠落等)900記録で全ページ＋圃場詳細サブタブを巡回。`whiteScreens`/`badPages`(NaN/undefined/Infinity表示)/`errorCount` を検査 |
+| `node qa_actions.js` | **使い倒し**。GAP帳票PDF/Excel出力・農薬/施肥/収穫のリッチ保存・出荷/マスタ/整備の追加・削除・収益シミュレーターを実操作し `errorCount` を検査 |
+| `node qa_empty.js`   | **新規ユーザー(データ空)** で全ページが白画面/壊れ表示/クラッシュしないか検査 |
+
+> 引き継ぎ前の回帰確認は最低限この3本（`qa_sim` / `qa_actions` / `qa_empty`）を回し、`errorCount:0` / `whiteScreens:[]` / `badPages:[]` を確認すること。
 
 ## 結果の見方
 標準出力の `QARESULT_START ... QARESULT_END` 間が JSON。主に見る値：

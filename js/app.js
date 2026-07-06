@@ -3,6 +3,16 @@
   CONFIG.FARM_NAME    = currentOrg.type === 'corp' ? currentOrg.name + ' / ' + currentFarm.name : (currentFarm.name || currentOrg.name)
   CONFIG.JGAP_CERT_NO = currentFarm.jgap_cert_no || currentOrg.jgap_cert_no || 'JGAP-XXXX-XXXXX'
   const useFPS = (k, i) => usePersistState(k + '_' + farmKey, i)
+  // 【デモ】?demo=20 付きで開いたら20圃場デモデータを自動投入（tools/demo-seed.js）。
+  // リンクを踏むだけで見られるようにするための仕組み。投入後は自身でクリーンURLへ遷移する。
+  React.useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('demo') && !window.__demoSeeding) {
+      window.__demoSeeding = true
+      const s = document.createElement('script')
+      s.src = '/tools/demo-seed.js?' + Date.now()
+      document.body.appendChild(s)
+    }
+  }, [])
   const [page,      setPage]     = React.useState('dashboard')
   const [fields,    setFields]   = useFPS('farm_fields_v2',     INITIAL_FIELDS)
   const [cropCycles, setCropCycles] = useFPS('farm_crop_cycles', INITIAL_CROP_CYCLES)

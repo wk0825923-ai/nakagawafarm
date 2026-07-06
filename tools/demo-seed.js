@@ -44,6 +44,6 @@
   set('farm_maintenance_records',[{id:8001,date:'2026-06-03',machine_name:'トラクター',machine_no:'T-01',mtype:'点検',result:'異常なし',worker:'中川 太郎',note:'エンジンオイル確認'},{id:8002,date:'2026-06-10',machine_name:'スプレーヤー',machine_no:'S-02',mtype:'清掃',result:'対応済',worker:'田中 一郎',note:'ノズル詰まり除去'},{id:8003,date:'2026-06-20',machine_name:'コンバイン',machine_no:'C-01',mtype:'整備',result:'要対応',worker:'今福 健',note:'刃の摩耗・交換手配'},{id:8004,date:'2026-07-01',machine_name:'管理機',machine_no:'K-03',mtype:'点検',result:'異常なし',worker:'佐藤 花子',note:''}]);
   set('farm_shipment_records',[{id:9101,date:'2025-06-10',variety:'シスコ',dest:'朝採りJA',cases:60,harvest_date:'2025-06-05',note:'朝出し'},{id:9102,date:'2025-06-12',variety:'シスコ',dest:'取引先A',cases:40,harvest_date:'2025-06-05',note:''},{id:9103,date:'2025-07-25',variety:'ゴールドラッシュ',dest:'房の駅',cases:30,harvest_date:'2025-07-20',note:'直売'}]);
   set('farm_monthly_temps',[1,2,6,12,17,21,25,26,21,15,9,3]);
-  alert('✅ 20圃場デモデータを投入しました。OKでリロードします。');
-  location.reload();
+  try { alert('✅ 20圃場デモデータを投入しました。OKで表示します。'); } catch (e) {}
+  location.href = location.origin + location.pathname;
 })();

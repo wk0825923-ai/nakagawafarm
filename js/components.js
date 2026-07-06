@@ -2890,6 +2890,7 @@ function StepBar({ step, steps }) {
 // ── ステップ1: 日付・圃場・天気・作業者 ────────────
 function RecordStep1({ form, fields, up, onNext, isFieldPreset }) {
   const WEATHERS = [{ v:'晴', icon:'☀️' }, { v:'曇', icon:'🌤' }, { v:'雨', icon:'🌧' }, { v:'強風', icon:'💨' }]
+  const [fieldQuery, setFieldQuery] = React.useState('')  // 圃場が多い時の検索
 
   // 所要時間（分）を開始・終了・休憩から自動計算
   const calcRequired = () => {
@@ -2938,39 +2939,51 @@ function RecordStep1({ form, fields, up, onNext, isFieldPreset }) {
             React.createElement('span', { style:{ marginLeft:'auto', fontSize:'11px', color:'#0A6B52', fontWeight:600, background:'#ECFDF5', padding:'2px 8px', borderRadius:'4px' } }, '選択済み')
           )
         )
-      : React.createElement('div', { className:'form-group' },
-          React.createElement('label', { className:'form-label' }, '圃場を選択'),
-          React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', margin:'-4px 0 8px' } },
-            '複数選択できます（同じ作業を選んだ圃場すべてに一括記録）。※農薬散布のみ主圃場1つに記録します'),
-          React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' } },
-            ...fields.map(f => {
-              const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids : (form.field_id ? [Number(form.field_id)] : [])
+      : (() => {
+          const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids : (form.field_id ? [Number(form.field_id)] : [])
+          const q = fieldQuery.trim().toLowerCase()
+          const shown = q
+            ? fields.filter(f => (f.name||'').toLowerCase().includes(q) || String(f.field_no||'').toLowerCase().includes(q) || (f.crop||'').toLowerCase().includes(q))
+            : fields
+          const setSel = (next) => { up('field_ids', next); up('field_id', next.length ? String(next[0]) : '') }
+          return React.createElement('div', { className:'form-group' },
+            React.createElement('div', { style:{ display:'flex', alignItems:'baseline', gap:8, marginBottom:6 } },
+              React.createElement('label', { className:'form-label', style:{ margin:0 } }, '圃場を選択'),
+              selectedIds.length > 0 ? React.createElement('span', { style:{ fontSize:'12px', fontWeight:700, color:'#0A6B52' } }, '選択中 ' + selectedIds.length + ' 圃場') : null,
+              selectedIds.length > 0 ? React.createElement('button', { onClick:()=>setSel([]), style:{ marginLeft:'auto', fontSize:'11px', color:'#6B7280', background:'none', border:'none', cursor:'pointer' } }, 'クリア') : null,
+            ),
+            React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280', margin:'0 0 8px' } },
+              '複数選択できます（同じ作業を選んだ圃場すべてに一括記録）。※農薬散布のみ主圃場1つに記録します'),
+            // 検索（圃場が多い時に絞り込み）
+            React.createElement('input', {
+              type:'text', className:'form-input', value:fieldQuery, onChange:e=>setFieldQuery(e.target.value),
+              placeholder:'🔍 圃場名・番号・作物で絞り込み（例: 16 / レタス）', style:{ marginBottom:'8px' }
+            }),
+            // チップのグリッド（多くても内側だけスクロール＝ページ全体は動かない）
+            React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:'8px', maxHeight:'240px', overflowY:'auto', padding:'2px', border:'1px solid #EEF2F0', borderRadius:'8px' } },
+            ...(shown.length === 0 ? [React.createElement('div', { key:'none', style:{ gridColumn:'1/-1', textAlign:'center', color:'#9CA3AF', fontSize:'13px', padding:'16px' } }, '該当する圃場がありません')] : shown.map(f => {
               const isSel = selectedIds.includes(f.id)
-              const toggle = () => {
-                const next = isSel ? selectedIds.filter(x => x !== f.id) : [...selectedIds, f.id]
-                up('field_ids', next)
-                up('field_id', next.length ? String(next[0]) : '')
-              }
+              const toggle = () => setSel(isSel ? selectedIds.filter(x => x !== f.id) : [...selectedIds, f.id])
               return React.createElement('button', {
                 key: f.id,
                 onClick: toggle,
                 style:{
-                  display:'flex', alignItems:'center', gap:'10px', padding:'12px 14px',
+                  display:'flex', alignItems:'center', gap:'8px', padding:'9px 10px',
                   borderRadius:'8px', cursor:'pointer', border:'1px solid',
-                  borderColor: isSel ? f.color : '#DDE2EC',
-                  background:  isSel ? f.color+'15' : '#F8FAFC',
+                  borderColor: isSel ? '#0A6B52' : '#DDE2EC',
+                  background:  isSel ? '#ECFDF5' : '#fff',
                   textAlign:'left'
                 }
               },
-                React.createElement('div', { style:{ width:16, height:16, borderRadius:'4px', border:'1px solid '+(isSel?f.color:'#CBD5E1'), background: isSel ? f.color : '#fff', color:'#fff', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:700 } }, isSel ? '✓' : ''),
-                React.createElement('div', null,
-                  React.createElement('div', { style:{ fontSize:'14px', color:'#374151', fontWeight:600 } }, f.name),
-                  React.createElement('div', { style:{ fontSize:'12px', color:'#6B7280' } }, f.crop + ' / ' + f.area_are + 'a')
+                React.createElement('div', { style:{ width:16, height:16, borderRadius:'4px', border:'1px solid '+(isSel?'#0A6B52':'#CBD5E1'), background: isSel ? '#0A6B52' : '#fff', color:'#fff', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'11px', fontWeight:700 } }, isSel ? '✓' : ''),
+                React.createElement('div', { style:{ minWidth:0 } },
+                  React.createElement('div', { style:{ fontSize:'13px', color:'#374151', fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' } }, f.name),
+                  React.createElement('div', { style:{ fontSize:'11px', color:'#9CA3AF' } }, f.crop)
                 )
               )
-            })
+            }))
           )
-        ),
+        )})(),
 
     // ── 開始・終了・所要・休憩（常時表示） ──
     React.createElement('div', { className:'form-group' },
@@ -4210,8 +4223,8 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   ], [step, form, fields, pesticides, records, isOver, dilution, selField, selP, handlePesticideUpdate, showContinueButton, photoError])
 
   return React.createElement('div', { className: inModal ? '' : 'page' },
-    !inModal && React.createElement('div', { className:'eyebrow' }, 'DAILY WORK LOG'),
-    !inModal && React.createElement('div', { className:'page-title' }, '日次作業入力'),
+    !inModal && React.createElement('div', { className:'eyebrow' }, 'DAILY REPORT'),
+    !inModal && React.createElement('div', { className:'page-title' }, '日報入力'),
     !inModal && React.createElement('div', { className:'page-sub' }, '作業内容を記録してGAP書類を自動生成します'),
     React.createElement('div', { className: inModal ? '' : 'card' },
       React.createElement(StepBar, { step, steps:STEPS }),

@@ -17,7 +17,6 @@ const NAV_SECTIONS_DATA = [
   { id:'field_summary',    label:'圃場まとめ',          icon:'table'          },  // 週次: ロット別生産履歴
   { id:'harvest_forecast', label:'収穫予測',            icon:'temperature'    },  // 週次: 積算温度
   { id:'shipment_log',     label:'出荷記録',            icon:'truck-delivery' },  // 収穫→ストック→出荷・ストック残
-  { id:'field_performance',label:'圃場実績・評価',      icon:'chart-bar'      },  // 月次
   { id:'crop_plan',        label:'作付計画 / 経営予測', icon:'calendar-event' },  // 季節ごと
   { id:'export',           label:'GAP帳票出力',         icon:'file-export'    },  // 監査時
   { id:'gap',              label:'GAPチェックリスト',   icon:'checklist'      },  // 監査時
@@ -3155,6 +3154,11 @@ function RecordStep3({ form, up, pesticides, records, lotSprayRecords, isOver, s
         React.createElement('i', { className:'ti ti-shovel', style:{ fontSize:'14px' } }),
         '畝づくり作業の詳細'
       ),
+      // 畝範囲（任意）— 管理表の「ベッド作成日」列のように畝と紐づけたい人向け。空でもOK。
+      React.createElement('div', { className:'form-group', style:{ marginBottom:'12px' } },
+        React.createElement('label', { className:'form-label' }, '畝範囲（任意）'),
+        React.createElement('input', { type:'text', className:'form-input', value:form.row_range || '', onChange:e=>up('row_range', e.target.value), placeholder:'例: 1-6 / 空欄でもOK', style:{ maxWidth:'240px' } })
+      ),
       // 作業項目（紙日報の 1〜8 に対応するボタン選択）
       React.createElement('div', { className:'form-group', style:{ marginBottom:'12px' } },
         React.createElement('label', { className:'form-label' }, '作業項目'),
@@ -3362,6 +3366,7 @@ function RecordStep4({ form, dilution, selField, selP, isOver, onPrev, onSave, s
       ['droplet',  '希釈倍率', dilution + '倍',                                 '#2563EB'],
     ] : []),
     ...(form.work_type === '畝づくり' ? [
+      ...(form.row_range ? [['layout-rows', '畝範囲', form.row_range, '#B45309']] : []),
       ...(form.bed_work_item ? [['shovel', '作業項目', form.bed_work_item, '#B45309']] : []),
       ...(form.bed_fertilizer_name ? [['leaf', '肥料', form.bed_fertilizer_name + (form.bed_fertilizer_bags ? '（' + form.bed_fertilizer_bags + '袋）' : ''), '#0D9972']] : []),
       ...(form.mulch_type ? [['layout-rows', 'マルチ', form.mulch_type + (form.mulch_rolls ? '（' + form.mulch_rolls + '本）' : ''), '#64748B']] : []),

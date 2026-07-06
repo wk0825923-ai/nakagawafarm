@@ -434,9 +434,13 @@
       onUpdateStock: onUpdateFertilizerStock,
     }),
     // 【圃場まとめ】ロット別生産履歴（管理表シート相当の自動再構築）
-    field_summary: () => React.createElement(FieldSummaryPage, {
-      fields, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides, fertilizers, pesticidePurchases,
-    }),
+    // 【圃場まとめ】生産履歴（ロット別）＋ 実績・評価（KPI）をタブ統合（集計が被る2ページを1つに）
+    field_summary: () => React.createElement(TabHubPage, { tabs: [
+      { key:'history', label:'生産履歴（ロット別）', render: () => React.createElement(FieldSummaryPage, {
+        fields, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides, fertilizers, pesticidePurchases,
+      }) },
+      { key:'perf', label:'実績・評価（KPI）', render: pageMap.field_performance },
+    ] }),
     // 【収穫予測】積算温度モデルによる収穫予測
     harvest_forecast: () => React.createElement(HarvestForecastPage, {
       fields, farmLots, harvestRecords, cropCategories, monthlyTemps, onSaveMonthlyTemps: setMonthlyTemps,

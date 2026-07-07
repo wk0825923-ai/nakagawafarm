@@ -214,16 +214,32 @@ function FieldAccordionItem({ f, isOpen, onChange, onDeleteTarget }) {
 //   GAP自動達成/原価）も自動連動する。端末をまたぐ本連動はバックエンド移行後。
 // =====================================================
 function StaffQuickView(props) {
-  const { fields, records, lotSprayRecords, topDressingRecords, harvestRecords,
-          currentOrg, currentFarm, authUser, onExit, onSignOut } = props
+  const { fields, records, lotSprayRecords, topDressingRecords, harvestRecords, pesticides,
+          currentOrg, currentFarm, authUser, onExit, onSignOut,
+          onUpdate, onDelete, onDeleteSpray, onDeleteTopDressing, onDeleteHarvest } = props
   const today = new Date().toISOString().slice(0,10)
-  // 今日入力ぶんの件数（4種の記録を横断。スタッフに「ちゃんと届いた」実感を返す）
-  const todayCount = (
-    (records || []).filter(r => r.date === today).length +
-    (lotSprayRecords || []).filter(r => r.date === today).length +
-    (topDressingRecords || []).filter(r => r.date === today).length +
-    (harvestRecords || []).filter(r => r.date === today).length
-  )
+  // 編集・削除の対象（間違えた日報を直せるように）
+  const [detailRecord, setDetailRecord] = React.useState(null)  // 基本日報 → RecordDetailModal(編集/削除)
+  const [deleteTarget, setDeleteTarget] = React.useState(null)  // リッチ記録 → 削除確認 {kind,id,label}
+  const fieldName = (id) => { const f = (fields || []).find(x => x.id === id); return f ? f.name : '圃場不明' }
+
+  // 今日入力ぶんを4種横断で1リストに（スタッフが「ちゃんと届いた」実感＋間違いを直せる導線）
+  const todayItems = []
+  ;(records || []).filter(r => r.date === today).forEach(r =>
+    todayItems.push({ kind:'daily', id:r.id, label:r.work_type || '作業', field:fieldName(r.field_id),
+      icon:(WORK_ICON_MAP[r.work_type] || WORK_ICON_MAP['その他']), sub:r.worker || '', raw:r }))
+  ;(lotSprayRecords || []).filter(r => r.date === today).forEach(r =>
+    todayItems.push({ kind:'spray', id:r.id, label:'農薬散布', field:fieldName(r.field_id),
+      icon:WORK_ICON_MAP['農薬散布'], sub:r.row_range ? ('畝 '+r.row_range) : '' }))
+  ;(topDressingRecords || []).filter(r => r.date === today).forEach(r =>
+    todayItems.push({ kind:'fert', id:r.id, label:'施肥', field:fieldName(r.field_id),
+      icon:WORK_ICON_MAP['施肥'], sub:r.row_range ? ('畝 '+r.row_range) : '' }))
+  ;(harvestRecords || []).filter(r => r.date === today).forEach(r =>
+    todayItems.push({ kind:'harvest', id:r.id, label:'収穫', field:fieldName(r.field_id),
+      icon:WORK_ICON_MAP['収穫'], sub:(r.total_cases != null ? (r.total_cases+'ケース') : '') }))
+  const todayCount = todayItems.length
+
+  const DELETERS = { spray:onDeleteSpray, fert:onDeleteTopDressing, harvest:onDeleteHarvest }
   const farmLabel = (currentFarm && currentFarm.name) || (currentOrg && currentOrg.name) || CONFIG.FARM_NAME
 
   return React.createElement('div', { className:'staff-view', style:{ minHeight:'100vh', width:'100%', background:'#F4FAF6', overflowY:'auto', overflowX:'hidden' } },
@@ -248,11 +264,12 @@ function StaffQuickView(props) {
       )
     ),
     // ── 説明バナー ──
-    React.createElement('div', { style:{ maxWidth:760, margin:'14px auto 0', padding:'0 16px' } },
+    React.createElement('div', { className:'staff-content', style:{ maxWidth:760, margin:'14px auto 0', padding:'0 16px' } },
       React.createElement('div', { style:{ background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#065F46', lineHeight:1.6 } },
         '今日の作業を記録してください。保存すると経営者の管理画面にそのまま反映されます（同じ端末）。'),
-      // ── 日報フォーム本体（フル機能画面と完全に同じ RecordForm を再利用） ──
-      React.createElement('div', { style:{ marginTop:14, background:'#fff', border:'1px solid #DDE8DE', borderRadius:12, padding:'18px 16px 22px', boxShadow:'0 1px 3px rgba(0,0,0,.05)' } },
+      // ── 日報フォーム本体（フル機能画面と完全に同じ RecordForm を再利用。RecordForm自身が
+      //    .page/.card を描画するので、ここで二重にカードで囲まない＝狭幅でのはみ出し防止） ──
+      React.createElement('div', { style:{ marginTop:6 } },
         fields && fields.length > 0
           ? React.createElement(RecordForm, {
               fields, pesticides: props.pesticides, records, lotSprayRecords, onSave: props.onSave,
@@ -260,11 +277,60 @@ function StaffQuickView(props) {
               harvestRecords, staff: props.staff,
               onSaveLotSpray: props.onSaveLotSpray, onSaveTopDressing: props.onSaveTopDressing, onSaveHarvest: props.onSaveHarvest,
             })
-          : React.createElement('div', { style:{ padding:'28px 8px', textAlign:'center', color:'#64748B', fontSize:14 } },
+          : React.createElement('div', { style:{ marginTop:14, background:'#fff', border:'1px solid #DDE8DE', borderRadius:12, padding:'28px 16px', textAlign:'center', color:'#64748B', fontSize:14 } },
               '圃場がまだ登録されていません。経営者画面で圃場を登録すると、ここで日報が入力できます。')
       ),
-      React.createElement('div', { style:{ height:32 } })
-    )
+
+      // ── 今日入力した記録（間違えたら直せる：基本日報は編集/削除、農薬・施肥・収穫は削除して入力し直し） ──
+      fields && fields.length > 0 && React.createElement('div', { style:{ marginTop:22 } },
+        React.createElement('div', { style:{ display:'flex', alignItems:'baseline', gap:8, marginBottom:10 } },
+          React.createElement('div', { style:{ fontSize:15, fontWeight:800, color:'#0A6B52' } }, '今日入力した記録'),
+          React.createElement('div', { style:{ fontSize:12, color:'#6B7280' } }, todayCount + '件')
+        ),
+        todayCount === 0
+          ? React.createElement('div', { style:{ background:'#fff', border:'1px dashed #C6DDD0', borderRadius:12, padding:'20px 16px', textAlign:'center', color:'#94A3B8', fontSize:13 } },
+              'まだ今日の記録はありません。上のフォームから入力してください。')
+          : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8 } },
+              ...todayItems.map(it =>
+                React.createElement('div', { key: it.kind+'-'+it.id,
+                  style:{ display:'flex', alignItems:'center', gap:10, background:'#fff', border:'1px solid #DDE8DE', borderRadius:12, padding:'10px 12px' } },
+                  React.createElement('div', { style:{ width:34, height:34, borderRadius:'50%', background:(it.icon&&it.icon.color)||'#6B7280', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+                    React.createElement('i', { className:'ti ti-'+((it.icon&&it.icon.icon)||'dots'), style:{ fontSize:16, color:'#fff' } })),
+                  React.createElement('div', { style:{ flex:1, minWidth:0 } },
+                    React.createElement('div', { style:{ fontSize:14, fontWeight:700, color:'#1A1F2E' } }, it.label),
+                    React.createElement('div', { style:{ fontSize:12, color:'#6B7280', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } },
+                      it.field + (it.sub ? '　' + it.sub : ''))
+                  ),
+                  // 基本日報は「なおす」(編集)、リッチ記録は「けす」(削除して入力し直し)
+                  it.kind === 'daily'
+                    ? React.createElement('button', { onClick:()=>setDetailRecord(it.raw),
+                        style:{ flexShrink:0, background:'#F0F8F4', border:'1px solid #C6DDD0', color:'#0A6B52', borderRadius:8, padding:'8px 14px', fontSize:13, fontWeight:700, cursor:'pointer' } }, 'なおす')
+                    : React.createElement('button', { onClick:()=>setDeleteTarget({ kind:it.kind, id:it.id, label:it.label+'（'+it.field+'）' }),
+                        style:{ flexShrink:0, background:'#FEF2F2', border:'1px solid #FCA5A5', color:'#DC2626', borderRadius:8, padding:'8px 14px', fontSize:13, fontWeight:700, cursor:'pointer' } }, 'けす')
+                )
+              )
+            ),
+        React.createElement('div', { style:{ marginTop:8, fontSize:11, color:'#94A3B8', lineHeight:1.5 } },
+          '※「なおす」で内容を修正、「けす」で消して入力し直せます。農薬散布・施肥・収穫は、消してから正しく入れ直してください。')
+      ),
+      React.createElement('div', { style:{ height:40 } })
+    ),
+
+    // ── 基本日報の編集/削除モーダル（フル機能画面と同じ RecordDetailModal を再利用） ──
+    detailRecord && React.createElement(RecordDetailModal, {
+      record: detailRecord, fields, pesticides,
+      onClose: () => setDetailRecord(null),
+      onUpdate: onUpdate ? r => { onUpdate(r); setDetailRecord(null) } : null,
+      onDelete: onDelete ? id => { onDelete(id); setDetailRecord(null) } : null,
+    }),
+    // ── リッチ記録（農薬/施肥/収穫）の削除確認 ──
+    deleteTarget && React.createElement(ConfirmDeleteModal, {
+      title: 'この記録を消しますか？',
+      targetName: deleteTarget.label,
+      detail: '消したあと、正しい内容で入力し直してください。',
+      onCancel: () => setDeleteTarget(null),
+      onConfirm: () => { const del = DELETERS[deleteTarget.kind]; if (del) del(deleteTarget.id); setDeleteTarget(null) },
+    })
   )
 }
 

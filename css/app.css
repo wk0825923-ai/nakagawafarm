@@ -428,4 +428,11 @@
       .staff-view button{ min-height:44px; }
       /* 横スクロールの原因になりがちな固定px幅を封じる */
       .staff-view [style*="width: 90px"], .staff-view [style*="width:90px"]{ width:auto !important; }
+      /* 入れ子カードの水平パディング積み重ねで内側が潰れ、確認行(固定120px)や
+         ステップ丸が右にはみ出す問題への対処。狭幅ではパディングを圧縮する。 */
+      .staff-content{ padding:0 10px !important; }
+      .staff-view .page{ padding:16px 10px !important; }
+      .staff-view .card{ padding:14px 12px !important; }
+      /* 確認テーブルのラベル固定幅を狭幅では詰める（値の潰れ防止） */
+      .staff-view .card [style*="width: 120px"], .staff-view .card [style*="width:120px"]{ width:92px !important; }
     }

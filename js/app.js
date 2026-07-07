@@ -530,6 +530,9 @@
       fields, pesticides, records, lotSprayRecords, topDressingRecords, harvestRecords,
       onSave: onSaveRecordWithStock, farmLots, fertilizers, destinations: shipmentDestinations, staff,
       onSaveLotSpray: onSaveLotSprayRecord, onSaveTopDressing: onSaveTopDressingRecord, onSaveHarvest: onSaveHarvestRecord,
+      // 間違えた日報を直せるように（基本日報=編集/削除、農薬/施肥/収穫=削除して入力し直し）
+      onUpdate: onUpdateRecordWithStock, onDelete: onDeleteRecordWithStock,
+      onDeleteSpray: onDeleteLotSprayRecord, onDeleteTopDressing: onDeleteTopDressingRecord, onDeleteHarvest: onDeleteHarvestRecord,
       currentOrg, currentFarm, authUser,
       onExit: () => setViewMode('admin'),
       onSignOut,

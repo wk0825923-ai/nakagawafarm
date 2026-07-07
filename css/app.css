@@ -414,3 +414,18 @@
     @media (prefers-reduced-motion: reduce){
       .sb-celeb-card,.sb-celeb-svg .ring,.sb-celeb-svg .check,.sb-celeb-pulse,.sb-confetti{animation-duration:.01s!important}
     }
+
+    /* ===== スタッフ画面モバイル対応 =====
+       現場はスマホ利用が前提（PCが1人1台ない）。スタッフ画面(.staff-view)は
+       サイドバー無しの全幅なので、あとは狭幅で崩れる要素だけを整える。 */
+    .staff-view input, .staff-view select, .staff-view textarea{ max-width:100%; box-sizing:border-box; }
+    @media (max-width: 640px){
+      /* 多カラムの入力グリッドは縦1列に畳む（インラインstyleを!importantで上書き） */
+      .staff-view [style*="grid-template-columns"]{ grid-template-columns:1fr !important; }
+      /* iOSで入力欄フォーカス時の自動ズームを防ぐ（16px以上） */
+      .staff-view input, .staff-view select, .staff-view textarea{ font-size:16px !important; }
+      /* 指で押しやすいタップ領域を確保 */
+      .staff-view button{ min-height:44px; }
+      /* 横スクロールの原因になりがちな固定px幅を封じる */
+      .staff-view [style*="width: 90px"], .staff-view [style*="width:90px"]{ width:auto !important; }
+    }

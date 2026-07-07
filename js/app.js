@@ -23,6 +23,10 @@
     }
   }, [])
   const [page,      setPage]     = React.useState('dashboard')
+  // 【スタッフ画面】'admin'(経営者フル機能) / 'staff'(日報だけの簡易入力)。
+  // ?view=staff で初期表示をスタッフ画面に。データは同じstate/localStorageなので同一端末で連動。
+  const [viewMode, setViewMode] = React.useState(() =>
+    new URLSearchParams(window.location.search).get('view') === 'staff' ? 'staff' : 'admin')
   const [fields,    setFields]   = useFPS('farm_fields_v2',     INITIAL_FIELDS)
   const [cropCycles, setCropCycles] = useFPS('farm_crop_cycles', INITIAL_CROP_CYCLES)
   const [records,   setRecords]  = useFPS('farm_records',    INITIAL_RECORDS)
@@ -519,6 +523,19 @@
   // タブクリックでsetPageが呼べるようにwindowに登録
   window.__fieldTabChange = (newPage) => setPage(newPage)
 
+  // 【スタッフ画面】日報だけの簡易入力。RecordFormを同じ保存ハンドラで再利用するため、
+  // ここで入力した記録・計算は経営者画面にそのまま連動する（同一端末）。
+  if (viewMode === 'staff') {
+    return React.createElement(StaffQuickView, {
+      fields, pesticides, records, lotSprayRecords, topDressingRecords, harvestRecords,
+      onSave: onSaveRecordWithStock, farmLots, fertilizers, destinations: shipmentDestinations, staff,
+      onSaveLotSpray: onSaveLotSprayRecord, onSaveTopDressing: onSaveTopDressingRecord, onSaveHarvest: onSaveHarvestRecord,
+      currentOrg, currentFarm, authUser,
+      onExit: () => setViewMode('admin'),
+      onSignOut,
+    })
+  }
+
   return React.createElement('div', { style:{display:'flex',height:'100vh',width:'100vw',overflow:'hidden'} },
     React.createElement(Sidebar, {
       current:       page,
@@ -532,6 +549,7 @@
       onFarmChange,
       onSignOut,
       authUser,
+      onEnterStaff: () => setViewMode('staff'),
     }),
     React.createElement('main',  { className:'main' }, mainContent)
   )

@@ -205,7 +205,70 @@ function FieldAccordionItem({ f, isOpen, onChange, onDeleteTarget }) {
   )
 }
 
-function Sidebar({ current, onChange, fields, onAddField, onDeleteField, currentOrg, currentFarm, availableFarms, onFarmChange, onSignOut, authUser }) {
+// =====================================================
+// STAFF-01: スタッフ簡易入力画面（日報だけ）
+// 経営者向けフル機能画面とは別の、入力に絞ったシンプル画面。
+// RecordForm を「そのまま」再利用するため、ここで入力した記録は経営者画面と
+// 完全に同じ state / localStorage キーに書き込まれる。
+// → 同一端末（同じブラウザ）なら記録も計算（ダッシュボード/圃場まとめ/収穫予測/
+//   GAP自動達成/原価）も自動連動する。端末をまたぐ本連動はバックエンド移行後。
+// =====================================================
+function StaffQuickView(props) {
+  const { fields, records, lotSprayRecords, topDressingRecords, harvestRecords,
+          currentOrg, currentFarm, authUser, onExit, onSignOut } = props
+  const today = new Date().toISOString().slice(0,10)
+  // 今日入力ぶんの件数（4種の記録を横断。スタッフに「ちゃんと届いた」実感を返す）
+  const todayCount = (
+    (records || []).filter(r => r.date === today).length +
+    (lotSprayRecords || []).filter(r => r.date === today).length +
+    (topDressingRecords || []).filter(r => r.date === today).length +
+    (harvestRecords || []).filter(r => r.date === today).length
+  )
+  const farmLabel = (currentFarm && currentFarm.name) || (currentOrg && currentOrg.name) || CONFIG.FARM_NAME
+
+  return React.createElement('div', { className:'staff-view', style:{ minHeight:'100vh', width:'100%', background:'#F4FAF6', overflowY:'auto', overflowX:'hidden' } },
+    // ── ヘッダー（大きめ・シンプル。高齢/実習生の利用を想定して文字大） ──
+    React.createElement('div', { style:{ background:'#0A6B52', color:'#fff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap', rowGap:10, position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 8px rgba(0,0,0,.12)' } },
+      React.createElement('div', { style:{ minWidth:0, flex:'1 1 auto' } },
+        React.createElement('div', { style:{ fontSize:13, opacity:.85, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, '🌱 ' + farmLabel),
+        React.createElement('div', { style:{ fontSize:19, fontWeight:800, letterSpacing:'.01em', whiteSpace:'nowrap' } }, 'スタッフ入力')
+      ),
+      React.createElement('div', { style:{ display:'flex', gap:8, alignItems:'center', flexShrink:0 } },
+        // 今日の入力件数バッジ
+        React.createElement('div', { style:{ background:'rgba(255,255,255,.15)', borderRadius:999, padding:'6px 14px', fontSize:13, fontWeight:700, whiteSpace:'nowrap' } },
+          '今日 ' + todayCount + ' 件'),
+        onExit && React.createElement('button', {
+          onClick: onExit,
+          style:{ background:'#fff', color:'#0A6B52', border:'none', borderRadius:8, padding:'8px 14px', fontSize:13, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }
+        }, '経営者画面へ'),
+        onSignOut && React.createElement('button', {
+          onClick: onSignOut,
+          style:{ background:'none', color:'#fff', border:'1px solid rgba(255,255,255,.5)', borderRadius:8, padding:'8px 12px', fontSize:12, cursor:'pointer', whiteSpace:'nowrap' }
+        }, 'ログアウト')
+      )
+    ),
+    // ── 説明バナー ──
+    React.createElement('div', { style:{ maxWidth:760, margin:'14px auto 0', padding:'0 16px' } },
+      React.createElement('div', { style:{ background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#065F46', lineHeight:1.6 } },
+        '今日の作業を記録してください。保存すると経営者の管理画面にそのまま反映されます（同じ端末）。'),
+      // ── 日報フォーム本体（フル機能画面と完全に同じ RecordForm を再利用） ──
+      React.createElement('div', { style:{ marginTop:14, background:'#fff', border:'1px solid #DDE8DE', borderRadius:12, padding:'18px 16px 22px', boxShadow:'0 1px 3px rgba(0,0,0,.05)' } },
+        fields && fields.length > 0
+          ? React.createElement(RecordForm, {
+              fields, pesticides: props.pesticides, records, lotSprayRecords, onSave: props.onSave,
+              farmLots: props.farmLots, fertilizers: props.fertilizers, destinations: props.destinations,
+              harvestRecords, staff: props.staff,
+              onSaveLotSpray: props.onSaveLotSpray, onSaveTopDressing: props.onSaveTopDressing, onSaveHarvest: props.onSaveHarvest,
+            })
+          : React.createElement('div', { style:{ padding:'28px 8px', textAlign:'center', color:'#64748B', fontSize:14 } },
+              '圃場がまだ登録されていません。経営者画面で圃場を登録すると、ここで日報が入力できます。')
+      ),
+      React.createElement('div', { style:{ height:32 } })
+    )
+  )
+}
+
+function Sidebar({ current, onChange, fields, onAddField, onDeleteField, currentOrg, currentFarm, availableFarms, onFarmChange, onSignOut, authUser, onEnterStaff }) {
   const [farmMenuOpen, setFarmMenuOpen] = React.useState(false)
   // 【メニュー整理】セクションを折りたたみ可能に。普段使わない「管理・設定」は既定で閉じる。
   const [openSections, setOpenSections] = React.useState({ data: true, sys: false })
@@ -322,6 +385,10 @@ function Sidebar({ current, onChange, fields, onAddField, onDeleteField, current
     // ── フッター: ユーザー情報 + サインアウト ──
     React.createElement('div', { style:{ marginTop:'auto', padding:'12px 14px 14px', borderTop:'1px solid #DDE8DE', flexShrink:0 } },
       authUser && React.createElement('div', { style:{ fontSize:11, color:'#94A3B8', marginBottom:8, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } }, authUser.email),
+      onEnterStaff && React.createElement('button', {
+        onClick: onEnterStaff,
+        style:{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, background:'#F0F8F4', border:'1px solid #C6DDD0', borderRadius:6, padding:'7px 10px', fontSize:12, fontWeight:700, color:'#0A6B52', cursor:'pointer', width:'100%', marginBottom:8 }
+      }, React.createElement('i', { className:'ti ti-hard-hat', style:{ fontSize:14 } }), 'スタッフ画面を開く'),
       React.createElement('button', {
         onClick: onSignOut,
         style:{ display:'flex', alignItems:'center', gap:6, background:'none', border:'1px solid #DDE8DE', borderRadius:6, padding:'6px 10px', fontSize:12, color:'#64748B', cursor:'pointer', width:'100%' }

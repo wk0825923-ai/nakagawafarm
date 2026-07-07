@@ -218,7 +218,7 @@ function StaffQuickView(props) {
   const { fields, records, lotSprayRecords, topDressingRecords, harvestRecords, pesticides,
           currentOrg, currentFarm, authUser, onExit, onSignOut,
           onUpdate, onDelete, onDeleteSpray, onDeleteTopDressing, onDeleteHarvest } = props
-  const today = new Date().toISOString().slice(0,10)
+  const today = todayYmd()
   // 編集・削除の対象（間違えた日報を直せるように）
   const [detailRecord, setDetailRecord] = React.useState(null)  // 基本日報 → RecordDetailModal(編集/削除)
   const [deleteTarget, setDeleteTarget] = React.useState(null)  // リッチ記録 → 削除確認 {kind,id,label}
@@ -4380,7 +4380,7 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   const isFieldPreset = inModal && fields.length === 1
   const presetFieldId = isFieldPreset ? String(fields[0].id) : ''
   const [form, setForm]         = React.useState({
-    date: new Date().toISOString().slice(0,10),
+    date: todayYmd(),
     field_id: presetFieldId, field_ids: [], work_type: '', pesticide_id: '',
     amount: '', weather: '晴', worker: '', note: '', checks: {},
     start_time: '08:00', end_time: '17:00', break_minutes: 60,
@@ -5616,7 +5616,7 @@ function FieldDashboardSection({ field, fieldRecords, fieldRows, pesticides, lot
 //   両モード共存: 畝マップ下部に手動入力欄も常時表示（微調整用）
 // ─────────────────────────────────────────────────────
 function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }) {
-  const [date, setDate]               = React.useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate]               = React.useState(todayYmd())
   const [weather, setWeather]         = React.useState('')  // 天気（薬剤散布記録シートの「天気」列に対応）
   const [selectedRows, setSelectedRows] = React.useState(new Set())  // 畝マップ選択セット
   const [rowRange, setRowRange]       = React.useState('')            // テキスト入力（フォールバック・手動調整用）
@@ -6114,7 +6114,7 @@ function LotSprayRecordSection({ field, lotSprayRecords, pesticides, onSave, onD
 // （在庫減算側の優先ロジックは Step1-2 の onSaveTopDressingRecord 側で対応済み）。
 // ─────────────────────────────────────────────────────
 function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, staff }) {
-  const [date, setDate]                 = React.useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate]                 = React.useState(todayYmd())
   // 散布区分: 中川農園の記録手順では堆肥・元肥（ベッド前）・追肥がすべて「肥料散布記録」に集約されるため区分で管理
   const [fertilizingType, setFertilizingType] = React.useState('追肥')
   const [item, setItem]                 = React.useState(lots[0]?.variety || '')   // 品目（作物・品種）
@@ -6750,7 +6750,7 @@ function HarvestRecordForm({ field, lots, destinations, harvestRecords, onSave, 
   // 【実装手順書 Step2】出荷先マスタは固定リストではなくApp側で管理される
   // destinations（後から追加・編集できる）を使う。万一空の場合はSHIPMENT_DESTINATIONSにフォールバック。
   const destList = (destinations && destinations.length > 0) ? destinations : SHIPMENT_DESTINATIONS
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayYmd()
   const [form, setForm] = React.useState({
     date:      today,
     variety:   lots.length > 0 ? lots[0].variety : '',
@@ -10990,7 +10990,7 @@ function Equipment({ rentals, onAdd, onUpdate, onDelete }) {
         const d       = i + 1
         const dateStr = year + '-' + String(mo).padStart(2,'0') + '-' + String(d).padStart(2,'0')
         const dayR    = visibleRentals.filter(r => r.date === dateStr)
-        const isToday = dateStr === new Date().toISOString().slice(0, 10)
+        const isToday = dateStr === todayYmd()
         const dow     = (firstDow + i) % 7
         const hasDbl  = EQUIP_LIST.some(eq => rentals.filter(r => r.date===dateStr && r.equipment===eq).length > 1)
 
@@ -11106,7 +11106,7 @@ function Equipment({ rentals, onAdd, onUpdate, onDelete }) {
               ),
               React.createElement('tbody', null,
                 ...sortedRentals.map(r => {
-                  const isUpcoming = r.date >= new Date().toISOString().slice(0,10)
+                  const isUpcoming = r.date >= todayYmd()
                   return React.createElement('tr', {
                     key: r.id,
                     onClick: () => setSelectedRental(r),
@@ -11870,7 +11870,7 @@ function TraineeDiaryPage({ staff, fields, diaries, onAdd, onDelete }) {
   const [deleteTarget, setDeleteTarget]   = React.useState(null)  // 削除確認モーダル対象
   const [showAddModal, setShowAddModal]   = React.useState(false) // 新規追加モーダル
   const [editTarget, setEditTarget]       = React.useState(null)  // 編集モーダル対象
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayYmd()
   // 【日誌UX改善 Step1】月次フィルター — 'YYYY-MM' 形式。初期値は当月
   const [selectedMonth, setSelectedMonth] = React.useState(today.slice(0, 7))
   const [exportingPdf, setExportingPdf]   = React.useState(false)
@@ -14000,7 +14000,7 @@ function PesticideDetailModal({ pesticide: p, stock, thresh, ratio, isAlert: ale
   const [view, setView] = React.useState(alert ? 'detail' : 'detail')
   const [showPurchaseForm, setShowPurchaseForm] = React.useState(false)
   const [purchaseForm, setPurchaseForm] = React.useState({
-    date: new Date().toISOString().slice(0,10),
+    date: todayYmd(),
     amount_L: '',
     supplier: '',
     price_yen: '',
@@ -14029,7 +14029,7 @@ function PesticideDetailModal({ pesticide: p, stock, thresh, ratio, isAlert: ale
     setTimeout(() => {
       setPurchaseDone(false)
       setShowPurchaseForm(false)
-      setPurchaseForm({ date: new Date().toISOString().slice(0,10), amount_L:'', supplier:'', price_yen:'' })
+      setPurchaseForm({ date: todayYmd(), amount_L:'', supplier:'', price_yen:'' })
     }, 1800)
   }
 
@@ -14749,7 +14749,7 @@ function FertilizerAddModal({ C, onClose, onSave }) {
 }
 function FertilizerDetailModal({ f, stock, thresh, alert, ratio, C, onClose, onUpdate, onDelete, fertilizerPurchases, onAddPurchase, fertilizerStock }) {
   const [modalTab, setModalTab] = React.useState('detail') // 'detail' | 'edit' | 'purchase' | 'history'
-  const [purchaseForm, setPurchaseForm] = React.useState({ date: new Date().toISOString().slice(0,10), amount_kg: '', supplier: '', price_yen: '' })
+  const [purchaseForm, setPurchaseForm] = React.useState({ date: todayYmd(), amount_kg: '', supplier: '', price_yen: '' })
   const [purchaseSaved, setPurchaseSaved] = React.useState(false)
   const [editSaved, setEditSaved] = React.useState(false)
   const [deleteConfirm, setDeleteConfirm] = React.useState(false)
@@ -14803,7 +14803,7 @@ function FertilizerDetailModal({ f, stock, thresh, alert, ratio, C, onClose, onU
     if (onAddPurchase) onAddPurchase({ fertilizer_id: f.id, ...purchaseForm, amount_kg: Number(purchaseForm.amount_kg), price_yen: Number(purchaseForm.price_yen) || null })
     setPurchaseSaved(true)
     setTimeout(() => { setPurchaseSaved(false); setModalTab('history') }, 800)
-    setPurchaseForm({ date: new Date().toISOString().slice(0,10), amount_kg: '', supplier: '', price_yen: '' })
+    setPurchaseForm({ date: todayYmd(), amount_kg: '', supplier: '', price_yen: '' })
   }
 
   const rowStyle = { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:'1px solid #F1F5F9', fontSize:'13px' }
@@ -15596,7 +15596,7 @@ function TabHubPage({ tabs }) {
 function MaintenanceLogPage({ records, staff, onSave, onDelete }) {
   const MTYPES  = ['点検', '整備', '清掃']
   const RESULTS = ['異常なし', '要対応', '対応済']
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayYmd()
   const blank = { date: today, machine_name:'', machine_no:'', mtype:'点検', result:'異常なし', worker:'', note:'' }
   const [form, setForm] = React.useState(blank)
   const [deleteTarget, setDeleteTarget] = React.useState(null)
@@ -15686,7 +15686,7 @@ function MaintenanceLogPage({ records, staff, onSave, onDelete }) {
 // 追記し、ストック残 = Σ収穫(品目別) − Σ出荷(品目別) を計算で表示する。既存集計に非依存。
 // =====================================================
 function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations, onSave, onDelete }) {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayYmd()
   const varieties = [...new Set((harvestRecords || []).map(r => r.variety).filter(Boolean))]
   const destList = (destinations || []).map(d => d.label)
 

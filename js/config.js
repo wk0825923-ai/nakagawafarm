@@ -6,6 +6,14 @@ const SUPABASE_URL      = 'https://jfalipljqvuzigmxzeoy.supabase.co'
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmYWxpcGxqcXZ1emlnbXh6ZW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MDc2ODcsImV4cCI6MjA5ODM4MzY4N30.Wqw8W3LBJetv0edidP8QJNuuQh0-sRjPgB9kXKmcvjA'
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+// 「今日」のローカル日付(YYYY-MM-DD)。記録日は<input type="date">のローカル日付で
+// 保存されるため、比較・初期値もローカルで作る。toISOStringはUTC基準で、JSTの
+// 早朝(0:00-8:59)は前日になり、当日の記録が未来扱い/初期値が前日になる不具合があった。
+function todayYmd(d) {
+  const t = d || new Date()
+  return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
+}
+
 const CONFIG = {
   FARM_NAME:     '農場名',
   JGAP_CERT_NO:  'JGAP-XXXX-XXXXX',

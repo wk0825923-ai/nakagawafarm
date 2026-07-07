@@ -8136,7 +8136,9 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
   React.useEffect(()=>{
     const map=mapInstanceRef.current; if (!map) return
     map.eachLayer(l=>{if (l instanceof L.CircleMarker) map.removeLayer(l)})
-    fields.forEach(f=>L.circleMarker([f.lat,f.lng],{color:f.color,fillColor:f.color,fillOpacity:.7,radius:10,weight:2}).bindPopup(
+    // 緯度経度が未設定の圃場（地図でピン留めせずに登録した圃場）はマーカーを作らない。
+    // Leafletは(undefined,undefined)で例外を投げアプリ全体を巻き込んで落ちるため、必ずガードする。
+    fields.filter(f=>Number.isFinite(Number(f.lat))&&Number.isFinite(Number(f.lng))).forEach(f=>L.circleMarker([Number(f.lat),Number(f.lng)],{color:f.color,fillColor:f.color,fillOpacity:.7,radius:10,weight:2}).bindPopup(
       '<div style="min-width:150px">'
       + '<b>'+f.name+'</b><br>'+f.crop+' / '+f.area_are+'a — '+f.status
       + '<div class="popup-goto-field" data-field-id="'+f.id+'" style="margin-top:8px;padding:6px 10px;background:#0A6B52;color:#fff;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;">圃場詳細を見る →</div>'

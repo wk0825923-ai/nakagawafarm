@@ -4394,7 +4394,9 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   const [showContinueButton, setShowContinueButton] = React.useState(false)
   const [photoError, setPhotoError] = React.useState('')
   
-  const updateField = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  // 多重送信ガード用（保存ボタン連打で二重登録を防ぐ）。フォーム編集で解除。
+  const savingRef = React.useRef(false)
+  const updateField = (k, v) => { savingRef.current = false; setForm(f => ({ ...f, [k]: v })) }
 
   const selP    = pesticides.find(p => p.id === Number(form.pesticide_id))
   const isOver  = isPesticideOverLimit(records, form.field_id, selP, lotSprayRecords || [])
@@ -4424,6 +4426,11 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
 
   const handleSave = () => {
     if (!form.field_id || !form.work_type) return
+    // 【多重送信ガード】保存ボタン連打（高齢者/もたつく端末で起きがち）で同じ日報が
+    // 複数登録されるのを防ぐ。1.2秒は再保存をブロックし、フォーム編集/続けて入力で解除。
+    if (savingRef.current) return
+    savingRef.current = true
+    setTimeout(() => { savingRef.current = false }, 1200)
     // 【複数圃場同時記録】農薬散布は圃場ごとに使用回数・希釈が異なるため主圃場のみ。
     // それ以外の作業は選択圃場ぶんの単一field_id記録へ展開（読み取り側は既存のまま）。
     const isPesticide = form.work_type === '農薬散布'
@@ -4447,6 +4454,7 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   
   // UX-10: 「続けて入力」クリック時の処理
   const handleContinueInput = () => {
+    savingRef.current = false // 続けて入力するので保存ガードを解除
     // date, weather, work_type だけ引き継いで、field_id と others をリセット
     setForm(f => ({
       date: f.date,

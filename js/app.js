@@ -27,6 +27,9 @@
   // ?view=staff で初期表示をスタッフ画面に。データは同じstate/localStorageなので同一端末で連動。
   const [viewMode, setViewMode] = React.useState(() =>
     new URLSearchParams(window.location.search).get('view') === 'staff' ? 'staff' : 'admin')
+  // 整合性チェックの「該当箇所を開く」で、日報管理に飛んで該当記録の編集モーダルを直接開くための一発ジャンプ
+  const [focusRecordId, setFocusRecordId] = React.useState(null)
+  const navigateTo = (p, focus) => { if (focus != null) setFocusRecordId(focus); setPage(p) }
   const [fields,    setFields]   = useFPS('farm_fields_v2',     INITIAL_FIELDS)
   const [cropCycles, setCropCycles] = useFPS('farm_crop_cycles', INITIAL_CROP_CYCLES)
   const [records,   setRecords]  = useFPS('farm_records',    INITIAL_RECORDS)
@@ -395,14 +398,14 @@
 
   const pageMap = {
     dashboard:         () => React.createElement(Dashboard,   { fields, records, staff, gap, todayTasks, onToggleTodayTask:toggleTodayTask, onAddTodayTask:addTodayTask, cropPlans, pesticides, pesticideStock, fertilizers, fertilizerStock, lotSprayRecords, maintenanceRecords, gapCtx:{ records, lotSprayRecords, pesticides, pesticidePurchases, topDressingRecords, fertilizerPurchases, harvestRecords, shipmentRecords, maintenanceRecords, staff, farmLots }, onNavigate: p => setPage(p), onSaveRecord: onSaveRecordWithStock, onUpdateRecord: onUpdateRecordWithStock, onDeleteRecord: onDeleteRecordWithStock }),
-    record_list:       () => React.createElement(RecordTablePage, { records, fields, pesticides, onUpdate: onUpdateRecordWithStock, onDelete: onDeleteRecordWithStock, cropCycles, onUpdateRecordCycle }),
+    record_list:       () => React.createElement(RecordTablePage, { records, fields, pesticides, onUpdate: onUpdateRecordWithStock, onDelete: onDeleteRecordWithStock, cropCycles, onUpdateRecordCycle, focusRecordId, onClearFocus: () => setFocusRecordId(null) }),
     export:            () => React.createElement(GapExport,  { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides, ctx:{ records, lotSprayRecords, pesticides, pesticidePurchases, topDressingRecords, fertilizerPurchases, harvestRecords, shipmentRecords, maintenanceRecords, staff, farmLots } }),
     field_map:         () => React.createElement(FieldMapPage,   { fields, onAdd:f=>{setFields(p=>[...p,f]);celebrateSave('圃場を追加！')}, onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage, cropCategories }),
     fields:            () => React.createElement(FieldTablePage, { fields, onAdd:f=>{setFields(p=>[...p,f]);celebrateSave('圃場を追加！')}, onDelete:id=>setFields(p=>p.filter(f=>f.id!==id)), cropCycles, onNavigate:setPage, cropCategories }),
     crop_plan:         () => React.createElement(CropPlan,    { fields, plans:cropPlans, records, pesticides, onAdd:p=>{setCropPlans(prev=>[...prev,p]);celebrateSave('作付計画を追加！')}, onDelete:id=>setCropPlans(prev=>prev.filter(p=>p.id!==id)) }),
     gap:               () => React.createElement(GapChecklist, { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), ctx:{ records, lotSprayRecords, pesticides, pesticidePurchases, topDressingRecords, fertilizerPurchases, harvestRecords, shipmentRecords, maintenanceRecords, staff, farmLots } }),
     // 【突合せ】記録の食い違い・入力ミスを横断点検（原因と対処つき）
-    integrity_check:   () => React.createElement(FarmIntegrityPage, { records, lotSprayRecords, topDressingRecords, harvestRecords, shipmentRecords, farmLots, fields, pesticides, fertilizers, pesticideStock, pesticidePurchases, fertilizerStock, fertilizerPurchases, onNavigate:setPage }),
+    integrity_check:   () => React.createElement(FarmIntegrityPage, { records, lotSprayRecords, topDressingRecords, harvestRecords, shipmentRecords, farmLots, fields, pesticides, fertilizers, pesticideStock, pesticidePurchases, fertilizerStock, fertilizerPurchases, onNavigate:navigateTo }),
     gap_package:       () => React.createElement(GapExport,   { gap, onToggle:id=>setGap(p=>p.map(c=>c.id===id?{...c,is_cleared:!c.is_cleared}:c)), records, fields, pesticides, ctx:{ records, lotSprayRecords, pesticides, pesticidePurchases, topDressingRecords, fertilizerPurchases, harvestRecords, shipmentRecords, maintenanceRecords, staff, farmLots } }),
     staff:             () => React.createElement(StaffList,   { staff, onAdd:s=>{setStaff(p=>[...p,s]);celebrateSave('スタッフを追加！')}, onDelete:id=>setStaff(p=>p.filter(s=>s.id!==id)), onUpdate:s=>setStaff(p=>p.map(x=>x.id===s.id?s:x)) }),
     // 【実装手順書 A】技能実習生 作業日誌

@@ -676,6 +676,10 @@ function runFarmIntegrityChecks(ctx) {
   const days   = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000)
   const yearOf = (d) => (d || '').slice(0, 4)
   const rowset = (s) => (typeof parseRowRange === 'function' ? parseRowRange(s) : new Set())
+  // 「直す」で該当画面へ一発ジャンプするための遷移先ヒント
+  const navRecord = (id) => ({ page: 'record_list', focus: id })
+  const navField  = (fid, sub) => ({ page: 'field:' + fid + ':' + (sub || 'dashboard') })
+  const subFor    = (kind) => (kind === 'spray' ? 'pesticide' : kind === 'harvest' ? 'harvest' : 'dashboard')
   let seq = 0
   const push = (o) => findings.push(Object.assign({ id: 'chk' + (++seq), refs: [] }, o))
   const run  = (fn) => { try { fn() } catch (e) { /* 1チェックの失敗で全体を止めない */ } }
@@ -700,6 +704,7 @@ function runFarmIntegrityChecks(ctx) {
         cause: '同じ圃場で同じ農薬を上限より多く使用（記録ミス、または実際の使用超過）。',
         fix: '誤登録なら記録を訂正、実使用なら次作で剤をローテーション。',
         refs: evs.map(e => ({ kind: e.src.kind, id: e.src.id, label: e.date })),
+        nav: navField(Number(fid), 'pesticide'),
       })
     })
   })
@@ -719,23 +724,27 @@ function runFarmIntegrityChecks(ctx) {
             cause: '収穫前日数を空けずに農薬を使用（散布日/収穫日の入力ミス、または実際の違反）。',
             fix: '日付の誤りが無いか確認。実際に違反ならロットの出荷可否を要判断。',
             refs: [{ kind: e.src.kind, id: e.src.id, label: '散布 ' + e.date }, { kind: 'harvest', id: h.id, label: '収穫 ' + h.date }],
+            nav: navField(h.field_id, 'harvest'),
           })
         }
       })
     })
   })
 
-  // H1 出荷が収穫を超過（ストック残マイナス）。出荷記録は品種(variety)単位で集計されるため品種キーで突合。
+  // H1 収穫と出荷の突合。品種(variety)単位で集計（出荷記録の集計軸に一致）。
+  //   歩留まり・繰越で収穫≠出荷の増減は自然に起こりうるため、出荷>収穫（＝在庫がマイナス＝
+  //   実際にはあり得ない）だけを「要確認」として挙げる。出荷<収穫（ロス/自家消費/在庫残）は正常。
   run(() => {
     const harv = {}, ship = {}
     harvests.forEach(h => { const k = h.variety || ('圃場#' + h.field_id); harv[k] = (harv[k] || 0) + (Number(h.total_cases) || 0) })
     shipments.forEach(s => { const k = s.variety || ('圃場#' + s.field_id); const c = Number(s.cases != null ? s.cases : s.total_cases) || 0; ship[k] = (ship[k] || 0) + c })
     Object.keys(ship).forEach(k => {
       if ((ship[k] || 0) > (harv[k] || 0) + 0.001) push({
-        severity: 'high', category: '出荷', title: '出荷が収穫を超過（ストック残マイナス）',
-        detail: k + '：収穫 ' + (harv[k] || 0) + 'ケース < 出荷 ' + ship[k] + 'ケース',
-        cause: '収穫より多く出荷が登録されている（出荷ケース数の入力ミス、または収穫記録漏れ）。',
-        fix: '収穫記録の漏れ、または出荷数の誤りを確認して訂正。',
+        severity: 'mid', category: '出荷', title: '出荷が収穫を超えている（在庫がマイナス）',
+        detail: k + '：収穫 ' + (harv[k] || 0) + 'ケース ＜ 出荷 ' + ship[k] + 'ケース（差 ' + (ship[k] - (harv[k] || 0)) + '）',
+        cause: '歩留まりや繰越で収穫と出荷に増減は出ますが、出荷が収穫を上回るのは通常あり得ません。収穫記録の漏れ、前年繰越の未計上、または出荷数の入力ミスの可能性。',
+        fix: '収穫記録の抜けが無いか、前年からの繰越が別で計上されていないか、出荷数の誤りが無いかを確認。',
+        nav: { page: 'shipment_log' },
       })
     })
   })
@@ -753,6 +762,7 @@ function runFarmIntegrityChecks(ctx) {
         cause: '圃場や畝範囲の選び間違いの可能性（別圃場の記録が紛れている等）。',
         fix: '記録の圃場・畝範囲、またはロット登録を確認して合わせる。',
         refs: [{ kind, id: r.id, label: r.date }],
+        nav: navField(r.field_id, subFor(kind)),
       })
     }
     sprays.forEach(r => checkRow(r, 'spray', '農薬散布'))
@@ -773,6 +783,7 @@ function runFarmIntegrityChecks(ctx) {
       detail: fname(r.field_id) + ' ' + wt + ' が ' + r.date + '（今日 ' + today + ' より先）',
       cause: '作業日の打ち間違いの可能性。', fix: '正しい作業日に訂正。',
       refs: [{ kind, id: r.id, label: r.date }],
+      nav: kind === 'record' ? navRecord(r.id) : navField(r.field_id, subFor(kind)),
     }) })
   })
 
@@ -788,6 +799,7 @@ function runFarmIntegrityChecks(ctx) {
         detail: '使用推定 ' + used[pid].toFixed(2) + 'L > 仕入 ' + avail + 'L',
         cause: '仕入記録の漏れ、または散布液量/希釈の入力ミス。',
         fix: '仕入記録の追加、または散布記録の数値を確認。',
+        nav: { page: 'master_hub' },
       }) }
     })
   })
@@ -801,6 +813,7 @@ function runFarmIntegrityChecks(ctx) {
       detail: fname(arr[0].field_id) + ' ' + arr[0].date + ' ' + arr[0].work_type + ' が ' + arr.length + '件',
       cause: '二重登録の可能性（保存ボタンの押し過ぎ等）。', fix: '重複ぶんを削除。',
       refs: arr.map(r => ({ kind: 'record', id: r.id, label: r.date })),
+      nav: navRecord(arr[0].id),
     }) })
   })
 
@@ -812,6 +825,7 @@ function runFarmIntegrityChecks(ctx) {
       detail: missing.length + '件で作業者が空欄',
       cause: '入力時に作業者名を入れ忘れ。', fix: '各記録に作業者名を追記。',
       refs: missing.slice(0, 20).map(r => ({ kind: 'record', id: r.id, label: r.date })),
+      nav: navRecord(missing[0].id),
     })
   })
 
@@ -834,6 +848,7 @@ function runFarmIntegrityChecks(ctx) {
         cause: '希釈倍率の桁間違い等の入力ミスの可能性（薬害・残留リスク）。',
         fix: '散布記録の希釈倍率を確認して訂正。',
         refs: [{ kind: 'spray', id: r.id, label: r.date }],
+        nav: navField(r.field_id, 'pesticide'),
       }) }
     }))
   })
@@ -845,11 +860,13 @@ function runFarmIntegrityChecks(ctx) {
       detail: fname(h.field_id) + ' ' + h.date + '：' + h.total_cases + 'ケース',
       cause: 'ケース数の入力漏れ/誤り。', fix: '正しいケース数に訂正。',
       refs: [{ kind: 'harvest', id: h.id, label: h.date }],
+      nav: navField(h.field_id, 'harvest'),
     }) })
     shipments.forEach(s => { if (Number(s.cases) <= 0) push({
       severity: 'mid', category: '数値', title: '出荷ケース数が0以下',
       detail: (s.variety || fname(s.field_id)) + ' ' + s.date + '：' + s.cases + 'ケース',
       cause: '出荷数の入力漏れ/誤り。', fix: '正しい出荷数に訂正。',
+      nav: { page: 'shipment_log' },
     }) })
   })
 
@@ -861,6 +878,7 @@ function runFarmIntegrityChecks(ctx) {
       detail: bad.length + '件（在庫の減算計算に影響）',
       cause: '散布液量の入力漏れ。', fix: '各散布記録に散布液量(L)を入力。',
       refs: bad.slice(0, 20).map(r => ({ kind: 'spray', id: r.id, label: r.date })),
+      nav: navField(bad[0].field_id, 'pesticide'),
     })
   })
 
@@ -874,6 +892,7 @@ function runFarmIntegrityChecks(ctx) {
         cause: '収穫日または定植日の入力ミス（時系列の矛盾）。',
         fix: '日付を確認して訂正。',
         refs: [{ kind: 'harvest', id: h.id, label: h.date }],
+        nav: navField(h.field_id, 'harvest'),
       })
     })
   })
@@ -887,6 +906,7 @@ function runFarmIntegrityChecks(ctx) {
         detail: fname(r.field_id) + '：' + label + ' ' + r.date + ' < 定植 ' + plant,
         cause: '作業日または定植日の入力ミス。', fix: '日付を確認して訂正。',
         refs: [{ kind, id: r.id, label: r.date }],
+        nav: navField(r.field_id, subFor(kind)),
       })
     }
     sprays.forEach(r => chk(r, 'spray', '散布'))
@@ -901,6 +921,7 @@ function runFarmIntegrityChecks(ctx) {
       detail: nw.length + '件',
       cause: '天気の入力漏れ。', fix: '各散布記録に天気を追記。',
       refs: nw.slice(0, 20).map(r => ({ kind: 'spray', id: r.id, label: r.date })),
+      nav: navField(nw[0].field_id, 'pesticide'),
     })
   })
 
@@ -912,6 +933,7 @@ function runFarmIntegrityChecks(ctx) {
       detail: nv.length + '件',
       cause: '品種の入力漏れ。', fix: '各収穫記録に品種を追記。',
       refs: nv.slice(0, 20).map(h => ({ kind: 'harvest', id: h.id, label: h.date })),
+      nav: navField(nv[0].field_id, 'harvest'),
     })
   })
 
@@ -925,6 +947,7 @@ function runFarmIntegrityChecks(ctx) {
         detail: fname(a[0].field_id) + ' ' + a[0].date + (a[0].row_range ? (' 畝' + a[0].row_range) : '') + ' が ' + a.length + '件',
         cause: '二重登録の可能性。', fix: '重複ぶんを削除。',
         refs: a.map(r => ({ kind, id: r.id, label: r.date })),
+        nav: navField(a[0].field_id, subFor(kind)),
       }) })
     }
     dupBy(sprays, r => [r.field_id, r.date, r.row_range || '', (r.pesticides || []).map(p => p.pesticide_id).sort().join(',')].join('|'), 'spray', '農薬散布')
@@ -943,6 +966,7 @@ function runFarmIntegrityChecks(ctx) {
           detail: fname(Number(fid)) + ' 畝 ' + act[i].row_range + ' と ' + act[j].row_range + ' が重複',
           cause: '旧作の終了処理漏れ、または畝範囲の入力ミス（収穫が二重に集計される温床）。',
           fix: '古いロットを収穫済/終了にするか、畝範囲を修正。',
+          nav: navField(Number(fid), 'dashboard'),
         })
       }
     })

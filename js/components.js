@@ -524,12 +524,12 @@ function FarmIntegrityPage(props) {
                 React.createElement('span', { style:{ fontSize:11, fontWeight:700, color:'#065F46', flexShrink:0 } }, '対処'),
                 React.createElement('span', { style:{ fontSize:12, color:'#374151' } }, f.fix)
               ),
-              (f.refs && f.refs.length > 0) && React.createElement('div', { style:{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' } },
-                React.createElement('span', { style:{ fontSize:11, color:'#9CA3AF' } }, '該当:'),
-                ...f.refs.slice(0, 8).map((rf, i) => React.createElement('span', { key:i, style:{ fontSize:11, color:'#4B5563', background:'#F3F4F6', borderRadius:6, padding:'2px 7px' } }, rf.label || (rf.kind + '#' + rf.id))),
-                f.refs.length > 8 && React.createElement('span', { style:{ fontSize:11, color:'#9CA3AF' } }, '他' + (f.refs.length - 8) + '件'),
-                onNavigate && React.createElement('button', { onClick:()=>onNavigate('record_list'),
-                  style:{ marginLeft:'auto', fontSize:11, fontWeight:700, color:'#0A6B52', background:'#F0F8F4', border:'1px solid #C6DDD0', borderRadius:8, padding:'4px 10px', cursor:'pointer' } }, '日報管理で直す →')
+              React.createElement('div', { style:{ marginTop:8, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' } },
+                (f.refs && f.refs.length > 0) && React.createElement('span', { style:{ fontSize:11, color:'#9CA3AF' } }, '該当:'),
+                ...(f.refs || []).slice(0, 8).map((rf, i) => React.createElement('span', { key:i, style:{ fontSize:11, color:'#4B5563', background:'#F3F4F6', borderRadius:6, padding:'2px 7px' } }, rf.label || (rf.kind + '#' + rf.id))),
+                (f.refs && f.refs.length > 8) && React.createElement('span', { style:{ fontSize:11, color:'#9CA3AF' } }, '他' + (f.refs.length - 8) + '件'),
+                onNavigate && React.createElement('button', { onClick:()=> onNavigate((f.nav && f.nav.page) || 'record_list', f.nav && f.nav.focus),
+                  style:{ marginLeft:'auto', fontSize:11, fontWeight:700, color:'#fff', background:'#0A6B52', border:'none', borderRadius:8, padding:'5px 12px', cursor:'pointer' } }, '該当箇所を開く →')
               )
             )
           })
@@ -3999,7 +3999,7 @@ function RecordDetailModal({ record, fields, pesticides, onClose, onUpdate, onDe
 }
 
 // ── UX-04: 記録一覧テーブル（検索・絞り込み対応）────────────────
-function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycles=[], onUpdateRecordCycle }) {
+function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycles=[], onUpdateRecordCycle, focusRecordId, onClearFocus }) {
   // UX-04: 検索・フィルター state
   const [query,      setQuery]      = React.useState('')
   const [filterWork, setFilterWork] = React.useState('all')
@@ -4008,6 +4008,14 @@ function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycl
   const [dateTo,     setDateTo]     = React.useState('')
   const [expanded,   setExpanded]   = React.useState(false)
   const [selectedRecord, setSelectedRecord] = React.useState(null)
+
+  // 整合性チェックからの「該当箇所を開く」: 指定IDの記録の編集モーダルを自動で開く（一発ジャンプ）
+  React.useEffect(() => {
+    if (focusRecordId == null) return
+    const rec = records.find(r => r.id === focusRecordId)
+    if (rec) { setSelectedRecord(rec); setQuery('') }
+    if (onClearFocus) onClearFocus()
+  }, [focusRecordId])
 
   // UX-04: フィルタリングロジック
   const filtered = React.useMemo(() => {
@@ -4493,7 +4501,7 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
 
 // ── RecordTablePage: 一覧専用ページ（旧 DailyRecord hideForm:true）──
 // UX-04: RecordTablePage — 検索・絞り込みバー付き記録一覧ページ
-function RecordTablePage({ records, fields, pesticides, onUpdate, onDelete, cropCycles=[], onUpdateRecordCycle }) {
+function RecordTablePage({ records, fields, pesticides, onUpdate, onDelete, cropCycles=[], onUpdateRecordCycle, focusRecordId, onClearFocus }) {
   return React.createElement('div', { className:'page' },
     React.createElement('div', { style:{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:'6px' } },
       React.createElement('div', null,
@@ -4502,7 +4510,7 @@ function RecordTablePage({ records, fields, pesticides, onUpdate, onDelete, crop
         React.createElement('div', { className:'page-sub' }, '全日報記録 ' + records.length + '件 — キーワード・作業種・圃場・期間で絞り込み可能')
       )
     ),
-    React.createElement(RecordTable, { records, fields, pesticides, onUpdate, onDelete, cropCycles, onUpdateRecordCycle })
+    React.createElement(RecordTable, { records, fields, pesticides, onUpdate, onDelete, cropCycles, onUpdateRecordCycle, focusRecordId, onClearFocus })
   )
 }
 

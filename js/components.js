@@ -4907,6 +4907,34 @@ function LotRiskClearBadge() {
 // 【畝マップ（衛星）】圃場の中心(lat/lng)・面積(are)・畝の総本数(row_count)・植え方角から、
 // 各畝の矩形ポリゴン([[lat,lng]×4])を自動生成する。圃場を正方形近似し、畝は南北(縦)に走る前提。
 // 方角に「東西/横/EW」があれば畝を東西向きにする。boundaryが無くても衛星上に畝レイアウトを表示できる。
+// 畝の矩形を圃場の輪郭ポリゴンに収める（Sutherland-Hodgman）。輪郭は凸を前提（4隅程度の圃場で正確）。
+// 座標は[lat,lng]。clip外に完全に出る畝は空になり描画されない。
+function _clipToPolygon(subject, clip) {
+  if (!Array.isArray(clip) || clip.length < 3) return subject
+  const signedArea = (poly) => { let s = 0; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; s += a[1] * b[0] - b[1] * a[0] } return s / 2 }
+  let cp = clip.slice(); if (signedArea(cp) < 0) cp = cp.slice().reverse()   // CCWに正規化
+  // 点pが辺a→bの内側(左)か。x=lng(idx1), y=lat(idx0)
+  const inside = (p, a, b) => ((b[1] - a[1]) * (p[0] - a[0]) - (b[0] - a[0]) * (p[1] - a[1])) >= 0
+  const intersect = (s, e, a, b) => {
+    const x1=s[1],y1=s[0], x2=e[1],y2=e[0], x3=a[1],y3=a[0], x4=b[1],y4=b[0]
+    const den=(x1-x2)*(y3-y4)-(y1-y2)*(x3-x4); if (Math.abs(den) < 1e-15) return e.slice()
+    const t=((x1-x3)*(y3-y4)-(y1-y3)*(x3-x4))/den
+    return [ y1 + t*(y2-y1), x1 + t*(x2-x1) ]   // [lat,lng]
+  }
+  let out = subject.slice()
+  for (let i = 0; i < cp.length; i++) {
+    const a = cp[i], b = cp[(i + 1) % cp.length], input = out; out = []
+    for (let j = 0; j < input.length; j++) {
+      const cur = input[j], prev = input[(j + input.length - 1) % input.length]
+      const curIn = inside(cur, a, b), prevIn = inside(prev, a, b)
+      if (curIn) { if (!prevIn) out.push(intersect(prev, cur, a, b)); out.push(cur) }
+      else if (prevIn) out.push(intersect(prev, cur, a, b))
+    }
+    if (out.length === 0) break
+  }
+  return out
+}
+
 function generateBedPolygons(field) {
   const n = Math.round(Number(field && field.row_count))
   if (!n || n < 1) return []
@@ -4946,7 +4974,14 @@ function generateBedPolygons(field) {
       const dLat = off / mPerLat, w2 = (bedW / 2) * 0.9 / mPerLat, dLng = half / mPerLng
       corners = [[lat0 + dLat - w2, lng0 - dLng], [lat0 + dLat - w2, lng0 + dLng], [lat0 + dLat + w2, lng0 + dLng], [lat0 + dLat + w2, lng0 - dLng]]
     }
-    polys.push({ bed: i + 1, corners })
+    // 輪郭がある場合は畝を輪郭内にクリップ（はみ出しを防ぐ）。輪郭外に完全に出る畝は描画しない。
+    if (bd && bd.length >= 3) {
+      let clipped
+      try { clipped = _clipToPolygon(corners, bd) } catch (e) { clipped = corners }
+      if (clipped && clipped.length >= 3) polys.push({ bed: i + 1, corners: clipped })
+    } else {
+      polys.push({ bed: i + 1, corners })
+    }
   }
   return polys
 }

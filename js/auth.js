@@ -64,7 +64,7 @@ function LoginScreen({ onAuth }) {
       mode === 'login' && React.createElement('div', { style:{ marginBottom:16 } },
         React.createElement('span', { style:{ ...spn, marginBottom:6 } }, 'どちらで使いますか？'),
         React.createElement('div', { style:{ display:'flex', gap:8 } },
-          ...[['admin','🏢 管理者','農場全体の管理'],['staff','👤 スタッフ','日報の入力']].map(([k,lab,desc]) =>
+          ...[['admin','管理者','農場全体の管理'],['staff','スタッフ','日報の入力']].map(([k,lab,desc]) =>
             React.createElement('button', { key:k, type:'button', onClick:()=>setRole(k),
               style:{ flex:1, padding:'10px 8px', borderRadius:10, cursor:'pointer', textAlign:'center',
                 border:'2px solid '+(role===k?'#0A6B52':'#E5E7EB'), background: role===k?'#F0FDF4':'#fff' } },

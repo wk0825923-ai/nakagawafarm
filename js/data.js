@@ -694,7 +694,7 @@ const INITIAL_GAP_CHECKS = [
   { id:75, code:"24.02", category:"温室効果ガスと気候変動", item:"農場では、土壌とバイオマス中の有機炭素の形成を促進している。", level:"rec", schemes:["GGAP"], is_cleared:false },
   { id:76, code:"24.03", category:"温室効果ガスと気候変動", item:"大気中の温室効果ガス（GHG）の削減と吸収に対する農場の貢献は測定指標で裏付けられている。", level:"rec", schemes:["GGAP"], is_cleared:false },
   // -- 廃棄物管理 --
-  { id:77, code:"25.01", category:"廃棄物管理", item:"廃棄物管理の仕組みを実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:77, code:"25.01", category:"廃棄物管理", item:"廃棄物管理の仕組みを実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン", auto:"waste_record" },
   { id:78, code:"25.02", category:"廃棄物管理", item:"農場全域において、廃棄物や汚染源を特定している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
   { id:79, code:"25.03", category:"廃棄物管理", item:"すべてのフォークリフト及びその他の自走式運搬車両は、清潔で手入れが行き届き、排気ガスによる汚染を回避するのに適切な種類のものである。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
   { id:80, code:"25.04", category:"廃棄物管理", item:"軽油やその他の燃料油タンクの貯蔵区域は環境に配慮され安全である。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
@@ -874,6 +874,7 @@ function isGapAutoCleared(item, ctx) {
     case 'harvest_record':   return has(ctx.harvestRecords)
     case 'shipment_record':  return has(ctx.shipmentRecords)
     case 'machine_maint':    return has(ctx.maintenanceRecords)
+    case 'waste_record':     return (ctx.records || []).some(r => r.waste && String(r.waste).trim())
     case 'worker_managed':   return has(ctx.staff)
     case 'trainee_visa':     return (ctx.staff || []).some(s => s.role === 'trainee' && s.visa_expires_at)
     case 'traceability':     return has(ctx.harvestRecords) && lots().some(a => (a || []).length > 0)
@@ -883,7 +884,7 @@ function isGapAutoCleared(item, ctx) {
 }
 
 // 各GAP項目に「自動達成の根拠ラベル」を付与。スキームは生成時に GGAP を設定済み。
-const _GAP_EVIDENCE = { records_exist:'作業記録', spray_record:'農薬散布記録', pesticide_master:'農薬マスタ', pest_purchase:'農薬仕入記録', fert_record:'施肥記録', fert_purchase:'肥料仕入記録', harvest_record:'収穫記録', shipment_record:'出荷記録', machine_maint:'機械整備記録', worker_managed:'作業者名簿', trainee_visa:'ビザ管理', traceability:'ロット追跡', seed_lot:'種苗ロット' }
+const _GAP_EVIDENCE = { records_exist:'作業記録', spray_record:'農薬散布記録', pesticide_master:'農薬マスタ', pest_purchase:'農薬仕入記録', fert_record:'施肥記録', fert_purchase:'肥料仕入記録', harvest_record:'収穫記録', shipment_record:'出荷記録', machine_maint:'機械整備記録', worker_managed:'作業者名簿', trainee_visa:'ビザ管理', traceability:'ロット追跡', seed_lot:'種苗ロット', waste_record:'廃棄物記録' }
 INITIAL_GAP_CHECKS.forEach(c => {
   if (!c.schemes) c.schemes = ['GGAP']
   c.evidence = c.auto ? (_GAP_EVIDENCE[c.auto] || '記録') : null

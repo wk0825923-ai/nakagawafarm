@@ -3612,6 +3612,12 @@ function RecordStep3({ form, up, pesticides, records, lotSprayRecords, isOver, s
       onChecksChange: v => up('checks', v),
       checkKeys: ['mgmt_table', 'pesticide_fert', 'lettuce_table', 'sa'],
     }),
+    // 【廃棄物記入】紙の作業日報にある欄。任意。GAP廃棄物管理(FV-Smart 25)の記録として活用する。
+    React.createElement('div', { style:{ padding:'0 2px 12px' } },
+      React.createElement('label', { style:{ display:'block', fontSize:'12px', fontWeight:600, color:'#64748B', margin:'2px 0 4px' } }, '廃棄物（任意）'),
+      React.createElement('input', { type:'text', className:'form-input', value: form.waste || '', onChange: e => up('waste', e.target.value),
+        placeholder:'例: 農薬空容器3本 / 廃マルチ / 廃プラ（GAP廃棄物管理に活用）', style:{ width:'100%', boxSizing:'border-box' } })
+    ),
     React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
       React.createElement('button', { className:'btn btn-ghost', onClick:onPrev }, '← 戻る'),
       React.createElement('button', { className:'btn btn-primary', disabled:form.work_type==='農薬散布'&&isOver, onClick:onNext }, '確認 →')
@@ -3647,6 +3653,7 @@ function RecordStep4({ form, dilution, selField, selP, isOver, onPrev, onSave, s
     ] : []),
     ['chart-bar', '使用量',  form.amount ? form.amount + ' ' + (form.amount_unit || 'L/kg') : '—', '#64748B'],
     ...(form.note ? [['notes', '備考', form.note, '#7C3AED']] : []),
+    ...(form.waste ? [['trash', '廃棄物', form.waste, '#B45309']] : []),
     ...(form.photos && form.photos.length ? [['camera', '写真', form.photos.length + '枚', '#7C3AED']] : []),
   ]
   const multiFieldCount = (form.field_ids && form.field_ids.length > 1 && form.work_type !== '農薬散布') ? form.field_ids.length : 0
@@ -3859,9 +3866,13 @@ function RecordDetailModal({ record, fields, pesticides, onClose, onUpdate, onDe
               (record.break_minutes ? '　休憩 ' + record.break_minutes + '分' : '')
             )
           ),
-          React.createElement('div', { style:{ ...rowStyle, borderBottom:'none' } },
+          React.createElement('div', { style:rowStyle },
             React.createElement('span', { style:{ color:'#6B7280' } }, '備考'),
             React.createElement('span', { style:{ color: record.note ? '#374151' : '#9CA3AF' } }, record.note || 'なし')
+          ),
+          React.createElement('div', { style:{ ...rowStyle, borderBottom:'none' } },
+            React.createElement('span', { style:{ color:'#6B7280' } }, '廃棄物'),
+            React.createElement('span', { style:{ color: record.waste ? '#374151' : '#9CA3AF' } }, record.waste || 'なし')
           )
         ),
         // 【写真】添付写真のサムネイル（クリックで別タブ表示）

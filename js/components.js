@@ -1876,7 +1876,7 @@ function FieldCardCompact({ field, records }) {
     // 最終作業
     React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', borderTop:'1px solid #F1F5F9', paddingTop:'5px' } },
       lastRecord
-        ? lastRecord.work_type + ' · ' + lastRecord.date.slice(5)  // MM-DD のみ
+        ? (lastRecord.work_type || '作業') + (lastRecord.date ? ' · ' + String(lastRecord.date).slice(5) : '')  // MM-DD のみ
         : '記録なし'
     )
   )
@@ -4937,7 +4937,8 @@ function _clipToPolygon(subject, clip) {
 
 function generateBedPolygons(field) {
   const n = Math.round(Number(field && field.row_count))
-  if (!n || n < 1) return []
+  // 異常な畝数(未入力/巨大値/Infinity/NaN)は描画しない。放置すると畝ループがハングするため上限500でガード。
+  if (!n || n < 1 || !Number.isFinite(n) || n > 500) return []
   // 輪郭(boundary=[[lat,lng]...])があれば、その範囲・向きに畝を合わせる（手動微調整の反映）。
   const bd = Array.isArray(field && field.boundary) ? field.boundary.filter(p => Array.isArray(p) && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1]))) : null
   let lat0, lng0, widthM, heightM
@@ -4952,7 +4953,9 @@ function generateBedPolygons(field) {
   } else {
     lat0 = Number(field && field.lat); lng0 = Number(field && field.lng)
     if (!Number.isFinite(lat0) || !Number.isFinite(lng0)) return []
-    const side = Math.max(2, Math.sqrt((Number(field.area_are) || 1) * 100)) // 正方形近似
+    const areaVal = Number(field.area_are)
+    const area = (Number.isFinite(areaVal) && areaVal > 0) ? areaVal : 1
+    const side = Math.max(2, Math.min(2000, Math.sqrt(area * 100))) // 正方形近似(異常な面積で座標が発散しないよう上限2000m)
     widthM = side; heightM = side
   }
   const mPerLat = mPerLatBase
@@ -5068,7 +5071,10 @@ function RowMap({ lots, totalRows, selectable, selectedRows, onSelectRows, highl
     }
   }
 
-  if (!totalRows || totalRows < 1) return null
+  // 異常な畝数(巨大値/Infinity/NaN)はセルを大量生成してハングするため上限500でガード。
+  const _tr = Math.round(Number(totalRows))
+  if (!_tr || _tr < 1 || !Number.isFinite(_tr) || _tr > 500) return null
+  totalRows = _tr
 
   const rows = []
   for (let i = 1; i <= totalRows; i++) {
@@ -7648,7 +7654,7 @@ function HarvestRecordSection({ field, harvestRecords, lots, onSave, onDelete, d
   const fieldHarvestRecords = harvestRecords.filter(r => r.field_id === field.id)
 
   // 合計集計
-  const totalCases  = fieldHarvestRecords.reduce((acc, r) => acc + (r.total_cases || 0), 0)
+  const totalCases  = fieldHarvestRecords.reduce((acc, r) => acc + (Number(r.total_cases) || 0), 0)
   const totalByDest = {}
   fieldHarvestRecords.forEach(r => (r.shipments || []).forEach(s => {
     totalByDest[s.dest] = (totalByDest[s.dest] || 0) + s.cases
@@ -8452,6 +8458,8 @@ function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCy
           + '<div class="popup-draw-boundary" data-field-id="' + f.id + '" style="margin-top:6px;padding:6px 10px;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer">✏️ 輪郭を描く（畝を形に合わせる）</div>'
           + '<div class="popup-goto-field" data-field-id="' + f.id + '" style="margin-top:6px;padding:6px 10px;background:#0A6B52;color:#fff;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer">圃場詳細を見る →</div>'
           + '</div>'
+        // 非有限座標(異常データ由来)はLeafletが例外を投げるため描画しない
+        if (!bp.corners.every(c => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[1]))) return
         L.polygon(bp.corners,{ color:col, weight:1, fillColor:col, fillOpacity: filled ? .45 : .12 })
           .bindTooltip(tip,{direction:'top',opacity:.9})
           .bindPopup(popup)
@@ -8822,7 +8830,7 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
     const sprays = bucket[lot.id].sprays
     const ferts  = bucket[lot.id].ferts
     const harvs  = bucket[lot.id].harvs
-    const totalCases   = harvs.reduce((a, r) => a + (r.total_cases || 0), 0)
+    const totalCases   = harvs.reduce((a, r) => a + (Number(r.total_cases) || 0), 0)
     const harvestDates = harvs.map(r => r.date).filter(Boolean).sort()
     const s = seasonOf(lot.transplant_date) || seasonOf(lot.seed_date) || seasonOf(harvestDates[0]) || '未設定'
 
@@ -16056,7 +16064,7 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
   const destList = (destinations || []).map(d => d.label)
 
   // 品目別ストック残
-  const harvBy = {}; (harvestRecords || []).forEach(r => { if (r.variety) harvBy[r.variety] = (harvBy[r.variety] || 0) + (r.total_cases || 0) })
+  const harvBy = {}; (harvestRecords || []).forEach(r => { if (r.variety) harvBy[r.variety] = (harvBy[r.variety] || 0) + (Number(r.total_cases) || 0) })
   const shipBy = {}; (shipmentRecords || []).forEach(r => { if (r.variety) shipBy[r.variety] = (shipBy[r.variety] || 0) + (Number(r.cases) || 0) })
   const stockRows = [...new Set([...Object.keys(harvBy), ...Object.keys(shipBy)])]
     .map(v => ({ variety:v, harvested:harvBy[v] || 0, shipped:shipBy[v] || 0, stock:(harvBy[v] || 0) - (shipBy[v] || 0) }))

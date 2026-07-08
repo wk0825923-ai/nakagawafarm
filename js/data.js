@@ -908,7 +908,7 @@ function runFarmIntegrityChecks(ctx) {
   const lotsMap    = ctx.farmLots || {}
   const pesticides = ctx.pesticides || []
   const today  = todayYmd()  // ローカル日付(config.js)。UTC基準だとJST早朝に未来日付を誤検知するため。
-  const fname  = (id) => { const f = fields.find(x => x.id === id); return f ? f.name : ('圃場#' + id) }
+  const fname  = (id) => { const f = fields.find(x => x.id === id); return f ? f.name : (id != null && id !== '' ? ('圃場#' + id) : '圃場不明') }
   const pById  = (id) => pesticides.find(p => p.id === id)
   const days   = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000)
   const yearOf = (d) => (d || '').slice(0, 4)

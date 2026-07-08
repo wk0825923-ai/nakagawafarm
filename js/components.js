@@ -10269,9 +10269,15 @@ function GapChecklist({ gap, onToggle, ctx }) {
   const { open, setOpen, isDone } = useGapBase({ gap, records:[], fields:[], pesticides:[], ctx })
   // UX-06: タブ状態管理（'all' | 'incomplete'）
   const [activeTab, setActiveTab] = React.useState('all')
-  // 【GAP認証対応】GLOBALG.A.P. Ver6 の管理点レベルで絞り込み（all / major / minor / rec）
-  const [scheme, setScheme] = React.useState('all')
-  const inScheme = (c) => scheme === 'all' || c.level === scheme
+  // 【GAP認証対応】スキーム(GLOBALG.A.P. / McD Addendum / 両方)＋GGAPの管理点レベルで絞り込み。
+  const [schemeSel, setSchemeSel] = React.useState('GGAP')   // 'GGAP' | 'McD' | 'both'
+  const [scheme, setScheme] = React.useState('all')          // 'all' | 'major' | 'minor' | 'rec'（GGAPのみ）
+  const inScheme = (c) => {
+    const sc = c.schemes || ['GGAP']
+    if (!(schemeSel === 'both' || sc.includes(schemeSel))) return false
+    if (scheme !== 'all' && c.level && c.level !== scheme) return false  // レベル絞込はGGAP項目のみ
+    return true
+  }
 
   // スキームで絞った母集合と対応度（システム自動達成／手動／要対応）
   const schemeGap = gap.filter(inScheme)
@@ -10293,7 +10299,7 @@ function GapChecklist({ gap, onToggle, ctx }) {
 
   // 未完了タブ時は空カテゴリを除外
   const filteredCats = cats.filter(cat => filteredGap.some(c => c.category === cat))
-  const schemeLabel = 'GLOBALG.A.P. Ver6'
+  const schemeLabel = schemeSel === 'McD' ? 'McD Addendum' : schemeSel === 'both' ? 'GGAP＋McD' : 'GLOBALG.A.P. Ver6'
 
   // タブスタイル定義
   const tabBase = {
@@ -10322,14 +10328,22 @@ function GapChecklist({ gap, onToggle, ctx }) {
       React.createElement('div',null,
         React.createElement('div',{className:'eyebrow'},'GAP CHECKLIST'),
         React.createElement('div',{className:'page-title'},'GAP対応チェックリスト'),
-        React.createElement('div',{className:'page-sub'},'GLOBALG.A.P. Ver6(2024) FV-Smart 標準の管理点（190項目）に対応。記録・帳票・トレーサビリティの管理点はシステムが自動で満たします（審査に提出可能）。物理・書面の管理点は現場でご対応ください。')
+        React.createElement('div',{className:'page-sub'},'GLOBALG.A.P. Ver6(2024) FV-Smart（190管理点）＋ McDonald\'s Addendum1.1（28監査ポイント）に対応。記録・帳票・トレーサビリティの管理点はシステムが自動で満たします（審査に提出可能）。物理・書面の管理点は現場でご対応ください。')
       ),
       React.createElement('button',{ onClick:()=>window.print(), style:{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', border:'1px solid #0A6B52', background:'#fff', color:'#0A6B52', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0 } },
         React.createElement('i',{ className:'ti ti-printer', style:{ fontSize:15 } }), '審査用に印刷 / PDF')
     ),
 
-    // 管理点レベルで絞り込み（GLOBALG.A.P. Ver6: 上位=Major必須 / 下位=Minor必須 / 推奨）
-    React.createElement('div',{ style:{ display:'flex', gap:8, alignItems:'center', margin:'8px 0 16px', flexWrap:'wrap' } },
+    // 対象スキーム（GLOBALG.A.P. / McD Addendum / 両方）
+    React.createElement('div',{ style:{ display:'flex', gap:8, alignItems:'center', margin:'8px 0 8px', flexWrap:'wrap' } },
+      React.createElement('span',{ style:{ fontSize:12, color:'#6B7280', fontWeight:600 } }, '対象スキーム'),
+      ...[['GGAP','GLOBALG.A.P.'],['McD','McD Addendum'],['both','両方']].map(([k,lab]) =>
+        React.createElement('button',{ key:k, onClick:()=>setSchemeSel(k),
+          style:{ padding:'6px 14px', borderRadius:16, fontSize:12, fontWeight:700, cursor:'pointer', border:'1px solid',
+            borderColor: schemeSel===k ? '#0A6B52' : '#DDE2EC', background: schemeSel===k ? '#ECFDF5' : '#fff', color: schemeSel===k ? '#0A6B52' : '#64748B' } }, lab))
+    ),
+    // 管理点レベルで絞り込み（GGAPのみ・McD単独選択時は非表示）
+    schemeSel !== 'McD' && React.createElement('div',{ style:{ display:'flex', gap:8, alignItems:'center', margin:'0 0 16px', flexWrap:'wrap' } },
       React.createElement('span',{ style:{ fontSize:12, color:'#6B7280', fontWeight:600 } }, '管理点レベル'),
       ...[['all','すべて'],['major','上位（必須）'],['minor','下位（必須）'],['rec','推奨']].map(([k,lab]) =>
         React.createElement('button',{ key:k, onClick:()=>setScheme(k),

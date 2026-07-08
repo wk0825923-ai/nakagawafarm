@@ -4898,23 +4898,40 @@ function LotRiskClearBadge() {
 // 方角に「東西/横/EW」があれば畝を東西向きにする。boundaryが無くても衛星上に畝レイアウトを表示できる。
 function generateBedPolygons(field) {
   const n = Math.round(Number(field && field.row_count))
-  const lat0 = Number(field && field.lat), lng0 = Number(field && field.lng)
-  if (!n || n < 1 || !Number.isFinite(lat0) || !Number.isFinite(lng0)) return []
-  const areaM2 = (Number(field.area_are) || 1) * 100
-  const side = Math.max(2, Math.sqrt(areaM2))       // 一辺(m)。正方形近似
-  const half = side / 2
-  const bedW = side / n                              // 1畝の幅(m)
-  const mPerLat = 111320
-  const mPerLng = 111320 * Math.cos(lat0 * Math.PI / 180) || 111320
-  const ew = /東西|横|E-?W/i.test(String(field.bed_direction || field.direction || field.plant_direction || ''))
+  if (!n || n < 1) return []
+  // 輪郭(boundary=[[lat,lng]...])があれば、その範囲・向きに畝を合わせる（手動微調整の反映）。
+  const bd = Array.isArray(field && field.boundary) ? field.boundary.filter(p => Array.isArray(p) && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1]))) : null
+  let lat0, lng0, widthM, heightM
+  const mPerLatBase = 111320
+  if (bd && bd.length >= 3) {
+    const lats = bd.map(p => Number(p[0])), lngs = bd.map(p => Number(p[1]))
+    const minLa = Math.min(...lats), maxLa = Math.max(...lats), minLo = Math.min(...lngs), maxLo = Math.max(...lngs)
+    lat0 = (minLa + maxLa) / 2; lng0 = (minLo + maxLo) / 2
+    const mPerLng = mPerLatBase * Math.cos(lat0 * Math.PI / 180) || mPerLatBase
+    widthM = Math.max(2, (maxLo - minLo) * mPerLng)   // 東西幅(m)
+    heightM = Math.max(2, (maxLa - minLa) * mPerLatBase) // 南北高(m)
+  } else {
+    lat0 = Number(field && field.lat); lng0 = Number(field && field.lng)
+    if (!Number.isFinite(lat0) || !Number.isFinite(lng0)) return []
+    const side = Math.max(2, Math.sqrt((Number(field.area_are) || 1) * 100)) // 正方形近似
+    widthM = side; heightM = side
+  }
+  const mPerLat = mPerLatBase
+  const mPerLng = mPerLatBase * Math.cos(lat0 * Math.PI / 180) || mPerLatBase
+  // 畝の向き: 明示指定があれば従う。無ければ長辺方向に畝を走らせる（縦長→縦畝 / 横長→横畝）。
+  const dir = String(field.bed_direction || field.direction || field.plant_direction || '')
+  const ew = /東西|横|E-?W/i.test(dir) ? true : (/南北|縦|N-?S/i.test(dir) ? false : (widthM > heightM))
+  const half = (ew ? widthM : heightM) / 2        // 畝の長さ方向の半分
+  const span = (ew ? heightM : widthM)            // 畝を並べる幅方向の総長
+  const bedW = span / n
   const polys = []
   for (let i = 0; i < n; i++) {
-    const off = (i - (n - 1) / 2) * bedW             // 幅方向オフセット(m)
+    const off = (i - (n - 1) / 2) * bedW
     let corners
-    if (!ew) { // 縦畝(南北): 幅=東西(lng)、長さ=南北(lat)
+    if (!ew) { // 縦畝(南北): 長さ=南北(lat)、幅=東西(lng)
       const dLng = off / mPerLng, w2 = (bedW / 2) * 0.9 / mPerLng, dLat = half / mPerLat
       corners = [[lat0 - dLat, lng0 + dLng - w2], [lat0 + dLat, lng0 + dLng - w2], [lat0 + dLat, lng0 + dLng + w2], [lat0 - dLat, lng0 + dLng + w2]]
-    } else {   // 横畝(東西): 幅=南北(lat)、長さ=東西(lng)
+    } else {   // 横畝(東西): 長さ=東西(lng)、幅=南北(lat)
       const dLat = off / mPerLat, w2 = (bedW / 2) * 0.9 / mPerLat, dLng = half / mPerLng
       corners = [[lat0 + dLat - w2, lng0 - dLng], [lat0 + dLat - w2, lng0 + dLng], [lat0 + dLat + w2, lng0 + dLng], [lat0 + dLat + w2, lng0 - dLng]]
     }
@@ -8279,7 +8296,7 @@ function ConfirmDeleteModal({ title='削除しますか？', targetName, detail,
   )
 }
 
-function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavigate, cropCategories, farmLots={}, lotSprayRecords=[], topDressingRecords=[], harvestRecords=[], pesticides=[] }) {
+function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCycles=[], onNavigate, cropCategories, farmLots={}, lotSprayRecords=[], topDressingRecords=[], harvestRecords=[], pesticides=[] }) {
   const [showAdd,setShowAdd] = React.useState(false)
   // 地図クリックで新規圃場を登録する際の選択地点（モーダル表示トリガー）
   const [pendingLatLng, setPendingLatLng] = React.useState(null)
@@ -8307,6 +8324,13 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
     .filter(f => statusFilter.length === 0 || statusFilter.includes(f.status))
   const mapRef         = React.useRef(null)
   const mapInstanceRef = React.useRef(null)
+  // 【輪郭の手動微調整】衛星を見ながら圃場の角をタップして輪郭を描き、畝を実形状に合わせる。
+  const [drawFieldId, setDrawFieldId] = React.useState(null)   // 描画中の圃場ID（nullなら非描画）
+  const drawModeRef   = React.useRef(null)
+  const drawPointsRef = React.useRef([])
+  const drawLayerRef  = React.useRef(null)
+  const [drawTick, setDrawTick] = React.useState(0)            // 再描画トリガー
+  React.useEffect(()=>{ drawModeRef.current = drawFieldId },[drawFieldId])
   const crops=['レタス','米','とうもろこし','ターサイ','トマト','大豆','玉ねぎ']
   const colors=['#0D9972','#D97706','#2563EB','#7C3AED','#DC2626']
   // 作物カラーマップ（B-4仕様）
@@ -8326,7 +8350,12 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
 
     // B-4: マップクリックで新規圃場登録 → モーダルで入力（旧: window.prompt連打）
     map.on('click', e => {
-      setPendingLatLng(e.latlng)
+      if (drawModeRef.current != null) {           // 輪郭描画中: 角を追加
+        drawPointsRef.current.push([e.latlng.lat, e.latlng.lng])
+        setDrawTick(t => t + 1)
+      } else {
+        setPendingLatLng(e.latlng)
+      }
     })
 
     return ()=>{ map.remove(); mapInstanceRef.current=null }
@@ -8374,6 +8403,7 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
           +   '<span>💊 防除 <b>' + sprays + '</b></span><span>🌱 施肥 <b>' + ferts + '</b></span><span>🧺 収穫 <b>' + cases + '</b></span>'
           + '</div>'
           + ((flags||okFlag) ? '<div style="font-size:11px;margin:2px 0 6px">' + (flags||okFlag) + '</div>' : '')
+          + '<div class="popup-draw-boundary" data-field-id="' + f.id + '" style="margin-top:6px;padding:6px 10px;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer">✏️ 輪郭を描く（畝を形に合わせる）</div>'
           + '<div class="popup-goto-field" data-field-id="' + f.id + '" style="margin-top:6px;padding:6px 10px;background:#0A6B52;color:#fff;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer">圃場詳細を見る →</div>'
           + '</div>'
         L.polygon(bp.corners,{ color:col, weight:1, fillColor:col, fillOpacity: filled ? .45 : .12 })
@@ -8396,8 +8426,43 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
       const node = e.popup.getElement ? e.popup.getElement() : e.popup._contentNode
       const btn  = node && node.querySelector('.popup-goto-field')
       if (btn) btn.onclick = () => onNavigate && onNavigate('field:' + btn.getAttribute('data-field-id') + ':dashboard')
+      const dbtn = node && node.querySelector('.popup-draw-boundary')
+      if (dbtn) dbtn.onclick = () => startBoundary(Number(dbtn.getAttribute('data-field-id')))
     })
   },[fields, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides])
+  // 描画中の輪郭（点線ポリゴン＋角マーカー）を再描画
+  React.useEffect(()=>{
+    const map=mapInstanceRef.current; if(!map) return
+    if(drawLayerRef.current){ map.removeLayer(drawLayerRef.current); drawLayerRef.current=null }
+    const pts=drawPointsRef.current
+    if(drawFieldId!=null && pts.length>0){
+      const g=L.layerGroup()
+      if(pts.length>=2) L.polygon(pts,{color:'#1D4ED8',weight:2,dashArray:'5,5',fillColor:'#1D4ED8',fillOpacity:.12}).addTo(g)
+      pts.forEach(p=>L.circleMarker(p,{radius:4,color:'#1D4ED8',fillColor:'#fff',fillOpacity:1,weight:2}).addTo(g))
+      g.addTo(map); drawLayerRef.current=g
+    }
+  },[drawTick, drawFieldId])
+  // 輪郭描画の確定/取消
+  const finishBoundary = () => {
+    if(drawFieldId!=null && drawPointsRef.current.length>=3 && onUpdateField){
+      onUpdateField(drawFieldId,{ boundary: drawPointsRef.current.slice() })
+      try{ if(typeof showToast==='function') showToast('輪郭を保存しました。畝を形状に合わせました。','success') }catch(e){}
+    } else if (drawPointsRef.current.length<3) {
+      try{ if(typeof showToast==='function') showToast('角を3点以上タップしてください。','warn') }catch(e){}
+      return
+    }
+    setDrawFieldId(null); drawPointsRef.current=[]; setDrawTick(t=>t+1)
+  }
+  const cancelBoundary = () => { setDrawFieldId(null); drawPointsRef.current=[]; setDrawTick(t=>t+1) }
+  const startBoundary = (fid) => { const f=fields.find(x=>x.id===fid); drawPointsRef.current=(f&&Array.isArray(f.boundary)?f.boundary.slice():[]); setDrawFieldId(fid); setDrawTick(t=>t+1); if(mapInstanceRef.current) mapInstanceRef.current.closePopup() }
+  // 描画中の操作バー（画面下部）
+  const drawBarEl = drawFieldId!=null && React.createElement('div',{ style:{ position:'fixed', left:'50%', bottom:'24px', transform:'translateX(-50%)', zIndex:1200, background:'#fff', border:'1px solid #DDE8DE', borderRadius:12, boxShadow:'0 8px 28px rgba(0,0,0,.18)', padding:'10px 14px', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', maxWidth:'92vw' } },
+    React.createElement('span',{ style:{ fontSize:13, fontWeight:700, color:'#1D4ED8' } }, '✏️ 輪郭を描く'),
+    React.createElement('span',{ style:{ fontSize:12, color:'#64748B' } }, '地図の角をタップ（'+drawPointsRef.current.length+'点）'),
+    React.createElement('button',{ onClick:()=>{ drawPointsRef.current.pop(); setDrawTick(t=>t+1) }, style:{ padding:'6px 12px', borderRadius:8, border:'1px solid #DDE2EC', background:'#fff', color:'#374151', fontSize:12, fontWeight:600, cursor:'pointer' } }, '1つ戻す'),
+    React.createElement('button',{ onClick:cancelBoundary, style:{ padding:'6px 12px', borderRadius:8, border:'1px solid #FCA5A5', background:'#fff', color:'#DC2626', fontSize:12, fontWeight:600, cursor:'pointer' } }, '取消'),
+    React.createElement('button',{ onClick:finishBoundary, style:{ padding:'6px 14px', borderRadius:8, border:'none', background:'#0A6B52', color:'#fff', fontSize:12, fontWeight:700, cursor:'pointer' } }, '確定')
+  )
   const listEl = fields.length === 0
     ? React.createElement('div', { style:{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'56px 24px', gap:14, textAlign:'center', background:'#fff', borderRadius:12, border:'1.5px dashed #C6DDD0' } },
         React.createElement('div', { style:{ width:64, height:64, borderRadius:'50%', background:'#F0F8F4', display:'flex', alignItems:'center', justifyContent:'center', marginBottom:4 } },
@@ -8527,8 +8592,9 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
   if (mode === 'map') return React.createElement('div', { className:'page' },
     React.createElement('div', { className:'eyebrow' }, 'FIELD MAP'),
     React.createElement('div', { className:'page-title' }, '圃場マップ'),
-    React.createElement('div', { className:'page-sub' }, fields.length + '圃場 — 地図上をクリックして新規登録'),
+    React.createElement('div', { className:'page-sub' }, fields.length + '圃場 — 地図上をクリックして新規登録／畝をタップで輪郭を描いて形を合わせる'),
     mapEl,
+    drawBarEl,
     pendingAddModalEl,
     deleteModalEl
   )
@@ -8596,8 +8662,8 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
 // =====================================================
 // CAT-05-3: FieldMapPage / FieldTablePage — FieldList から分割した専用コンポーネント
 // =====================================================
-function FieldMapPage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides }) {
-  return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'map', cropCycles, onNavigate, cropCategories, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides })
+function FieldMapPage({ fields, onAdd, onDelete, onUpdateField, cropCycles, onNavigate, cropCategories, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides }) {
+  return React.createElement(FieldList, { fields, onAdd, onDelete, onUpdateField, mode:'map', cropCycles, onNavigate, cropCategories, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides })
 }
 function FieldTablePage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories }) {
   return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'list', cropCycles, onNavigate, cropCategories })

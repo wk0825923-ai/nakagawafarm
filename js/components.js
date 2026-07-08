@@ -3310,7 +3310,7 @@ function RecordStep1({ form, fields, up, onNext, isFieldPreset }) {
       )
     ),
     React.createElement('div', { style:{ display:'flex', justifyContent:'flex-end' } },
-      React.createElement('button', { className:'btn btn-primary', disabled:!form.field_id, onClick:onNext }, '次へ →')
+      React.createElement('button', { className:'btn btn-primary', onClick:()=>{ if(!form.field_id){ showToast('圃場を選んでください', 'warn'); return } onNext() } }, '次へ →')
     )
   )
 }
@@ -3373,7 +3373,7 @@ function RecordStep2({ form, up, onPrev, onNext, onAddPhoto, onRemovePhoto, phot
 
     React.createElement('div', { style:{ display:'flex', justifyContent:'space-between' } },
       React.createElement('button', { className:'btn btn-ghost', onClick:onPrev }, '← 戻る'),
-      React.createElement('button', { className:'btn btn-primary', disabled:!form.work_type, onClick:onNext }, '次へ →')
+      React.createElement('button', { className:'btn btn-primary', onClick:()=>{ if(!form.work_type){ showToast('作業内容を選んでください', 'warn'); return } onNext() } }, '次へ →')
     )
   )
 }
@@ -4509,18 +4509,18 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   const handleAddPhoto = (file) => {
     setPhotoError('')
     const cur = form.photos || []
-    if (cur.length >= PHOTO_MAX_PER_RECORD) { setPhotoError('写真は最大' + PHOTO_MAX_PER_RECORD + '枚までです'); return }
+    if (cur.length >= PHOTO_MAX_PER_RECORD) { const m = '写真は最大' + PHOTO_MAX_PER_RECORD + '枚までです'; setPhotoError(m); showToast(m, 'warn'); return }
     compressImageFile(file).then(dataUrl => {
       const curBytes  = cur.reduce((a, p) => a + p.length * 2, 0)
       const projected = estimateLocalStorageBytes() + curBytes + dataUrl.length * 2
-      if (projected > PHOTO_STORAGE_BUDGET) { setPhotoError('空き容量が不足しているため写真を追加できません（記録は保存できます）'); return }
+      if (projected > PHOTO_STORAGE_BUDGET) { const m = '空き容量が不足しているため写真を追加できません（記録は保存できます）'; setPhotoError(m); showToast(m, 'warn'); return }
       setForm(f => ({ ...f, photos: [...(f.photos || []), dataUrl] }))
     }).catch(() => setPhotoError('画像を処理できませんでした'))
   }
   const handleRemovePhoto = (idx) => setForm(f => ({ ...f, photos: (f.photos || []).filter((_, i) => i !== idx) }))
 
   const handleSave = () => {
-    if (!form.field_id || !form.work_type) return
+    if (!form.field_id || !form.work_type) { showToast('圃場と作業内容を選んでください', 'warn'); return }
     // 【多重送信ガード】保存ボタン連打（高齢者/もたつく端末で起きがち）で同じ日報が
     // 複数登録されるのを防ぐ。1.2秒は再保存をブロックし、フォーム編集/続けて入力で解除。
     if (savingRef.current) return
@@ -5297,7 +5297,7 @@ function LotFormModal({ field, lot, existingLots, onSave, onClose }) {
   const valid = rowSet.size > 0 && form.variety.trim() !== ''
 
   const handleSave = () => {
-    if (!valid) return
+    if (!valid) { showToast('畝範囲と品種を入力してください', 'warn'); return }
     const seedlingDays = (form.seed_date && form.transplant_date)
       ? Math.round((new Date(form.transplant_date) - new Date(form.seed_date)) / 86400000)
       : (lot?.seedling_period_days ?? null)
@@ -5400,7 +5400,7 @@ function LotFormModal({ field, lot, existingLots, onSave, onClose }) {
           style:{ padding:'9px 18px', borderRadius:'8px', border:'1.5px solid #D8E4D8', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
         }, 'キャンセル'),
         React.createElement('button', {
-          onClick: handleSave, disabled: !valid,
+          onClick: handleSave,
           style:{
             padding:'9px 20px', borderRadius:'8px', border:'none',
             cursor: valid ? 'pointer' : 'not-allowed',
@@ -5772,7 +5772,7 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }
 
   const submittingRef = React.useRef(false)
   const handleSubmit = () => {
-    if (!valid) return
+    if (!valid) { showToast('日付・畝範囲・散布量・農薬と希釈倍率を入力してください', 'warn'); return }
     if (submittingRef.current) return   // 連打による二重登録を防止
     submittingRef.current = true
     setTimeout(() => { submittingRef.current = false }, 1200)
@@ -5953,7 +5953,6 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff }
       }, 'キャンセル'),
       React.createElement('button', {
         onClick: handleSubmit,
-        disabled: !valid,
         style:{
           padding:'9px 20px', borderRadius:'8px', border:'none',
           cursor: valid ? 'pointer' : 'not-allowed',
@@ -6277,7 +6276,7 @@ function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, sta
 
   const submittingRef = React.useRef(false)
   const handleSubmit = () => {
-    if (!valid) return
+    if (!valid) { showToast('日付・畝範囲・肥料と量（希釈倍率かkg）を入力してください', 'warn'); return }
     if (submittingRef.current) return   // 連打による二重登録を防止
     submittingRef.current = true
     setTimeout(() => { submittingRef.current = false }, 1200)
@@ -6495,7 +6494,6 @@ function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, sta
       }, 'キャンセル'),
       React.createElement('button', {
         onClick: handleSubmit,
-        disabled: !valid,
         style:{
           padding:'9px 20px', borderRadius:'8px', border:'none',
           cursor: valid ? 'pointer' : 'not-allowed',
@@ -6942,7 +6940,7 @@ function HarvestRecordForm({ field, lots, destinations, harvestRecords, onSave, 
 
   const submittingRef = React.useRef(false)
   const handleSave = () => {
-    if (!canSave) return
+    if (!canSave) { showToast('日付・品種・畝範囲・出荷ケース数を入力してください', 'warn'); return }
     if (submittingRef.current) return   // 連打による二重登録を防止
     submittingRef.current = true
     setTimeout(() => { submittingRef.current = false }, 1200)
@@ -7255,7 +7253,6 @@ function HarvestRecordForm({ field, lots, destinations, harvestRecords, onSave, 
       }, 'キャンセル'),
       React.createElement('button', {
         onClick: handleSave,
-        disabled: !canSave,
         style:{
           flex:2, padding:'11px', borderRadius:'8px', border:'none',
           background: canSave ? '#0A6B52' : '#D1D5DB',
@@ -11491,8 +11488,7 @@ function StaffList({ staff, onAdd, onDelete, onUpdate }) {
             style:{ flex:1, padding:'10px 18px', borderRadius:'6px', border:'1px solid #D1D5DB', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
           }, 'キャンセル'),
           React.createElement('button', {
-            onClick: () => { if (canSave) onSave(form) },
-            disabled: !canSave,
+            onClick: () => { if (!canSave) { showToast('名前を入力してください', 'warn'); return } onSave(form) },
             style:{ flex:2, padding:'10px 18px', borderRadius:'6px', border:'none', fontSize:'13px', fontWeight:700, cursor: canSave ? 'pointer' : 'not-allowed',
               background: canSave ? '#0A6B52' : '#D1D5DB', color:'#fff' }
           }, '登録する')
@@ -12141,8 +12137,7 @@ function TraineeDiaryPage({ staff, fields, diaries, onAdd, onDelete }) {
             style:{ flex:1, padding:'10px 18px', borderRadius:'6px', border:'1px solid #D1D5DB', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
           }, 'キャンセル'),
           React.createElement('button', {
-            onClick: () => { if (canSave) onSave(form) },
-            disabled: !canSave,
+            onClick: () => { if (!canSave) { showToast('日付・実習生・作業内容を入力してください', 'warn'); return } onSave(form) },
             style:{ flex:2, padding:'10px 18px', borderRadius:'6px', border:'none', fontSize:'13px', fontWeight:700, cursor: canSave ? 'pointer' : 'not-allowed',
               background: canSave ? (isEdit ? '#1D4ED8' : '#0A6B52') : '#D1D5DB', color:'#fff' }
           }, isEdit ? '変更を保存' : '日誌を登録')
@@ -15698,7 +15693,7 @@ function MaintenanceLogPage({ records, staff, onSave, onDelete }) {
   const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const valid = form.machine_name.trim() !== ''
   const submit = () => {
-    if (!valid) return
+    if (!valid) { showToast('機械名を入力してください', 'warn'); return }
     onSave({ ...form, id: Date.now(), machine_name: form.machine_name.trim(), machine_no: form.machine_no.trim(), worker: form.worker.trim(), note: form.note.trim() })
     setForm(blank)
   }
@@ -15740,7 +15735,7 @@ function MaintenanceLogPage({ records, staff, onSave, onDelete }) {
         React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '内容・備考'),
           React.createElement('input', { type:'text', className:'form-input', value:form.note, onChange:e=>up('note', e.target.value), placeholder:'例: エンジンオイル交換 / 刃の清掃 / 異常なし' })),
       ),
-      React.createElement('button', { className:'btn btn-primary', disabled:!valid, onClick:submit, style:{ opacity: valid?1:.6 } }, '記録する')
+      React.createElement('button', { className:'btn btn-primary', onClick:submit, style:{ opacity: valid?1:.6 } }, '記録する')
     ),
 
     // 一覧
@@ -15798,7 +15793,7 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
   const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const valid = form.variety && form.dest && Number(form.cases) > 0
   const submit = () => {
-    if (!valid) return
+    if (!valid) { showToast('品目・出荷先・数量を入力してください', 'warn'); return }
     onSave({ ...form, id: Date.now(), cases: Number(form.cases), note: form.note.trim() })
     setForm({ ...blank, variety: form.variety, dest: form.dest })
   }
@@ -15852,7 +15847,7 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
         React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '備考'),
           React.createElement('input', { type:'text', className:'form-input', value:form.note, onChange:e=>up('note', e.target.value), placeholder:'例: 朝出し / 直売分' })),
       ),
-      React.createElement('button', { className:'btn btn-primary', disabled:!valid, onClick:submit, style:{ opacity: valid?1:.6 } }, '出荷を記録する')
+      React.createElement('button', { className:'btn btn-primary', onClick:submit, style:{ opacity: valid?1:.6 } }, '出荷を記録する')
     ),
 
     // 出荷一覧

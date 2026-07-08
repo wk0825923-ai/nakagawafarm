@@ -588,49 +588,234 @@ const CROP_PESTICIDE_MAP = {
 }
 const INITIAL_STAFF = []
 const INITIAL_RECORDS = []
-// GLOBALG.A.P. IFA（統合農場保証）／JGAP の主要管理点をベースにしたチェックリスト。
-// auto: システムに記録があれば自動で達成扱いにする判定キー（isGapAutoCleared 参照）。
-// 物理確認（施錠・手洗い設備・水質検査 等）は auto を付けず人手で確認する。
-// ※ 正式な認証取得時は、取得する認証の最新版（GLOBALG.A.P. IFA v6 等）の公式チェックリストと最終照合すること。
+// GLOBALG.A.P. Ver6(2024) FV-Smart 標準の実チェックリスト（中川農園のGGAP資料 簡易版より）。
+// 190管理点/33原則群。level: major(上位=Major Must) / minor(下位=Minor Must) / rec(推奨)。
+// auto: システムに記録があれば自動達成(isGapAutoCleared)。doc: 対応する必要書類のヒント。
+// ※ McD(マクドナルド)Addendumは別スキームで後日追加。合否は最終的に審査機関の判断。
 const INITIAL_GAP_CHECKS = [
-  // ── 記録・トレーサビリティ ──
-  { id:1,  category:'記録・トレーサビリティ', item:'圃場ごとの作業記録の作成・保管（5年間）',        auto:'records_exist',  is_cleared:false },
-  { id:2,  category:'記録・トレーサビリティ', item:'種苗→畝→農薬・肥料→収穫の追跡（トレーサビリティ）', auto:'traceability', is_cleared:false },
-  { id:3,  category:'記録・トレーサビリティ', item:'収穫ロット番号の採番・記録',                      auto:'harvest_record', is_cleared:false },
-  { id:4,  category:'記録・トレーサビリティ', item:'出荷先・出荷量の記録（引渡記録）',                auto:'shipment_record',is_cleared:false },
-  // ── 種苗 ──
-  { id:5,  category:'種苗',                  item:'種苗の入手先・品種・ロットの記録',                auto:'seed_lot',       is_cleared:false },
-  { id:6,  category:'種苗',                  item:'自家育苗・購入苗の管理記録',                                             is_cleared:false },
-  // ── 農薬（植物保護資材）──
-  { id:7,  category:'農薬（植物保護資材）',   item:'農薬使用記録（作物・日付・希釈・散布量）の作成',  auto:'spray_record',   is_cleared:false },
-  { id:8,  category:'農薬（植物保護資材）',   item:'登録農薬・適用作物・使用回数上限の整備',          auto:'pesticide_master',is_cleared:false },
-  { id:9,  category:'農薬（植物保護資材）',   item:'農薬の購入・入庫・在庫記録の保管',                auto:'pest_purchase',  is_cleared:false },
-  { id:10, category:'農薬（植物保護資材）',   item:'収穫前日数（PHI）の遵守確認',                                            is_cleared:false },
-  { id:11, category:'農薬（植物保護資材）',   item:'農薬保管庫の施錠・分別保管',                                            is_cleared:false },
-  { id:12, category:'農薬（植物保護資材）',   item:'PPE（防護具）の使用・保管',                                             is_cleared:false },
-  { id:13, category:'農薬（植物保護資材）',   item:'IPM（総合的病害虫管理）の実施記録',                                     is_cleared:false },
-  // ── 施肥・土壌管理 ──
-  { id:14, category:'施肥・土壌管理',         item:'施肥記録（圃場・日付・肥料・量）の作成',          auto:'fert_record',    is_cleared:false },
-  { id:15, category:'施肥・土壌管理',         item:'肥料・堆肥の購入・在庫記録の保管',                auto:'fert_purchase',  is_cleared:false },
-  { id:16, category:'施肥・土壌管理',         item:'土壌診断・土壌管理の記録',                                              is_cleared:false },
-  // ── 水管理 ──
-  { id:17, category:'水管理',                item:'灌漑用水の水源・水質リスク評価（年1回以上）',                            is_cleared:false },
-  { id:18, category:'水管理',                item:'水使用の記録',                                                          is_cleared:false },
-  // ── 収穫・調製・衛生 ──
-  { id:19, category:'収穫・調製・衛生',       item:'収穫・出荷記録の作成',                            auto:'harvest_record', is_cleared:false },
-  { id:20, category:'収穫・調製・衛生',       item:'収穫・調製時の衛生管理（手洗い・容器の洗浄）',                          is_cleared:false },
-  { id:21, category:'収穫・調製・衛生',       item:'作業者の衛生・健康管理',                                                is_cleared:false },
-  // ── 労働安全・福祉 ──
-  { id:22, category:'労働安全・福祉',         item:'作業者名簿・雇用記録の整備',                      auto:'worker_managed', is_cleared:false },
-  { id:23, category:'労働安全・福祉',         item:'外国人技能実習生の在留資格（ビザ）管理',          auto:'trainee_visa',   is_cleared:false },
-  { id:24, category:'労働安全・福祉',         item:'安全教育・多言語教育の実施記録',                                        is_cleared:false },
-  { id:25, category:'労働安全・福祉',         item:'緊急時連絡先の掲示・救急用具の常備',                                    is_cleared:false },
-  // ── 機械・器具の保守 ──
-  { id:26, category:'機械・器具の保守',       item:'機械・器具の点検・整備記録',                      auto:'machine_maint',  is_cleared:false },
-  { id:27, category:'機械・器具の保守',       item:'散布機・収穫機の洗浄記録（農薬残留防止）',        auto:'machine_maint',  is_cleared:false },
-  // ── 環境・廃棄物 ──
-  { id:28, category:'環境・廃棄物',           item:'廃棄物（農薬空容器・廃プラ）の分別・処理記録',                          is_cleared:false },
-  { id:29, category:'環境・廃棄物',           item:'エネルギー・資源使用の把握',                                            is_cleared:false },
+  // -- 内部文書化 --
+  { id:1, code:"01.01", category:"内部文書化", item:"文書と記録を管理およびコントロールするための手順がある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"01_文書管理の規定" },
+  { id:2, code:"01.02", category:"内部文書化", item:"審査対象の記録は現状を反映して更新している。記録は、さらに長い期間が要求される場合を除き、最低2年間保管している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"01_文書管理の規定" },
+  { id:3, code:"01.03", category:"内部文書化", item:"生産者は、本規格に対して、毎年最低1回の自己評価/内部監査を実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"01_文書管理の規定" },
+  { id:4, code:"01.04", category:"内部文書化", item:"自己評価/内部監査で検出された不順守に対処するために、有効な是正処置をとっている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"01_文書管理の規定" },
+  // -- 継続的改善計画 --
+  { id:5, code:"02.01", category:"継続的改善計画", item:"継続的改善計画を文書化している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"02_継続的改善計画" },
+  { id:6, code:"02.02", category:"継続的改善計画", item:"継続的改善計画を実施している証拠がある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"02_継続的改善計画" },
+  // -- リソース管理及びトレーニング --
+  { id:7, code:"03.01", category:"リソース管理及びトレーニング", item:"規格の実施に影響を与える職務担当者の役割と責任を定めている。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"03_作業別一覧/リスク評価" },
+  { id:8, code:"03.02", category:"リソース管理及びトレーニング", item:"使用する資材に関する技術的な意思決定の責任者は、その力量を実証することができる。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"03_作業別一覧/リスク評価" },
+  { id:9, code:"03.03", category:"リソース管理及びトレーニング", item:"働く人の教育訓練は、必要なスキルと力量を含んでおり、記録によって裏付けている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"03_作業別一覧/リスク評価" },
+  { id:10, code:"03.04", category:"リソース管理及びトレーニング", item:"すべての教育訓練活動が記録されている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"03_作業別一覧/リスク評価" },
+  // -- アウトソーシング活動（外部委託業者） --
+  { id:11, code:"04.01", category:"アウトソーシング活動（外部委託業者）", item:"生産者は、外部委託した活動が、提供されるサービスに関連する本規格の原則及び基準に適合していることを確実にしている。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- 仕様書、供給業者、在庫管理 --
+  { id:12, code:"05.01", category:"仕様書、供給業者、在庫管理", item:"食品安全に関連する資材とサービスの仕様書が閲覧可能である。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"05_在庫表/供給業者仕様書" },
+  { id:13, code:"05.02", category:"仕様書、供給業者、在庫管理", item:"サイトの在庫を管理するために、在庫表を作成している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"05_在庫表/供給業者仕様書" },
+  // -- トレーサビリティー --
+  { id:14, code:"06.01", category:"トレーサビリティー", item:"すべてのGLOBALG.A.P.登録生産物は、生産された（および該当する場合、取り扱われた）登録農場まで追跡可能である。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"traceability" },
+  // -- 並行所有、トレーサビリティー、分離 --
+  { id:15, code:"07.01", category:"並行所有、トレーサビリティー、分離", item:"GLOBALG.A.P.認証プロセスを通じたすべての生産物を識別し、非認証プロセスを通じた生産物と分別するための有効なシステムがある。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:16, code:"07.02", category:"並行所有、トレーサビリティー、分離", item:"並行所有を登録している場合、GLOBALG.A.P.ナンバー（GGN）を、認証生産プロセスを通じたすべての最終生産物に表示する。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:17, code:"07.03", category:"並行所有、トレーサビリティー、分離", item:"認証生産プロセスと非認証生産プロセスを通じた生産物の正しい出荷を確実にするための最終確認を行っている。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:18, code:"07.04", category:"並行所有、トレーサビリティー、分離", item:"異なる仕入先から購入した生産物を識別している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- マスバランス --
+  { id:19, code:"08.01", category:"マスバランス", item:"すべての登録生産物の販売数量についての記録が閲覧可能である。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"shipment_record" },
+  { id:20, code:"08.02", category:"マスバランス", item:"すべての生産物について、数量（生産、在庫、及び/又は 購入）を記録し、まとめている。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"shipment_record" },
+  // -- リコールと撤回 --
+  { id:21, code:"09.01", category:"リコールと撤回", item:"市場からの生産物のリコール及び撤収を管理するために文書化した手順があり、その手順を毎年テストしている。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- 苦情 --
+  { id:22, code:"10.01", category:"苦情", item:"規格の対象となる内部及び外部の問題に関連する苦情処理手順を閲覧でき、運用している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"10_申し立ての仕組み" },
+  { id:23, code:"10.02", category:"苦情", item:"働く人は規格に関する自らの権利について知らされており、また、働く人が報復を恐れることなく内密に懸念を申し立てることができる苦情処理のしくみを利用でき、実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"10_申し立ての仕組み" },
+  // -- 不適合生産物 --
+  { id:24, code:"11.01", category:"不適合生産物", item:"不適合品を管理し、取り扱うための手順がある。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- 試験所検査 --
+  { id:25, code:"12.01", category:"試験所検査", item:"検査機関による検査は、業界の要求事項と整合した方法で実施している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  // -- 機械および装置 --
+  { id:26, code:"13.01", category:"機械および装置", item:"機器、用具、および装置は目的に適ったもので、メンテナンスされている。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"machine_maint" },
+  { id:27, code:"13.02", category:"機械および装置", item:"生産物を汚染しない方法で機器を保管している。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"machine_maint" },
+  { id:28, code:"13.03", category:"機械および装置", item:"収穫物の積み込み、輸送、保管に使用する車両と機器は、用途に適しており、清掃し、メンテナンスされている。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"machine_maint" },
+  // -- 食品安全方針 --
+  { id:29, code:"14.01", category:"食品安全方針", item:"生産者は、食品安全方針宣言を記入し、署名している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- フードディフェンス --
+  { id:30, code:"15.01", category:"フードディフェンス", item:"悪意のある攻撃や汚染に関連するリスクに対処するため、フードディフェンスのしくみがある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"15_フードディフェンス評価" },
+  // -- 食品偽装 --
+  { id:31, code:"16.01", category:"食品偽装", item:"食品偽装に関連するリスクに対処するしくみがある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"16_食品偽装評価" },
+  // -- ロゴの使用 --
+  { id:32, code:"17.01", category:"ロゴの使用", item:"GLOBALG.A.P.の文言、商標、QRコードとロゴ、GLOBALG.A.P.ナンバー（GGN）は、「GLOBALG.A.P.商標の使用：方針と指針」に従って使用している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- GLOBALG.A.P.状況 --
+  { id:33, code:"18.01", category:"GLOBALG.A.P.状況", item:"取引文書に、GLOBALG.A.P.認証ステータス及びGLOBALG.A.P.ナンバー（GGN）を記載している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- 衛生 --
+  { id:34, code:"19.01", category:"衛生", item:"農場には、文書化された衛生リスク評価がある。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:35, code:"19.02", category:"衛生", item:"食品安全リスクを最小限に抑えるために、文書化された衛生手順を実施している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:36, code:"19.03", category:"衛生", item:"農場で働くすべての人が衛生教育を受けている。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:37, code:"19.04", category:"衛生", item:"喫煙、飲食（ガムを噛むことを含む）は指定された場所に限定されている。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:38, code:"19.05", category:"衛生", item:"働く人、来訪者、下請け業者のために、作業現場付近で清潔なトイレを提供している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:39, code:"19.06", category:"衛生", item:"生産物に直接触れるすべての働く人、来訪者、下請け業者のために手洗い設備が利用可能である。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:40, code:"19.07", category:"衛生", item:"生産物汚染につながる可能性のある動物の活動を管理している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:41, code:"19.08", category:"衛生", item:"生産と収穫に使用する容器は洗浄され、メンテナンスされ、使用に適した状態である。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- 労働者の健康、安全、および福祉 --
+  { id:42, code:"20.01.01", category:"労働者の健康、安全、および福祉", item:"働く人の健康と安全に関する文書化されたリスク評価がある。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:43, code:"20.01.02", category:"労働者の健康、安全、および福祉", item:"農場には健康と安全の手順がある。（文書とは明記されていない）", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:44, code:"20.01.03", category:"労働者の健康、安全、および福祉", item:"P: リスク評価に基づき、すべての担当者が健康と安全に関する教育訓練を受けている。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:45, code:"20.02.01", category:"労働者の健康、安全、および福祉", item:"事故・緊急時の手順を掲示し、周知している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:46, code:"20.02.02", category:"労働者の健康、安全、および福祉", item:"働く人の健康と安全に有害な物質に関する安全アドバイスがすぐに閲覧でき、利用可能である。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:47, code:"20.02.03", category:"労働者の健康、安全、および福祉", item:"作業現場近くのすべての常設の施設と 圃場において、救急箱が利用できる。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:48, code:"20.02.04", category:"労働者の健康、安全、および福祉", item:"農場での活動が行われているときは、応急処置の訓練を受けた者が少なくとも1名、農場に常駐している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:49, code:"20.03.01", category:"労働者の健康、安全、および福祉", item:"働く人、来訪者、下請け業者は適切な個人用保護具（PPE）を装備している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:50, code:"20.03.02", category:"労働者の健康、安全、および福祉", item:"個人用保護具（PPE）は、身の回り品に汚染リスクを与えないように、清潔な状態を維持し、適切に保管している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:51, code:"20.03.03", category:"労働者の健康、安全、および福祉", item:"提供された個人用保護具（PPE）を働く人が使用していることを示す証拠がある。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:52, code:"20.03.04", category:"労働者の健康、安全、および福祉", item:"必要に応じて適切な更衣室が利用可能である。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:53, code:"20.04.01", category:"労働者の健康、安全、および福祉", item:"働く人の健康、安全、福祉に関する問題について、管理者と働く人の間でコミュニケーションが取れている。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:54, code:"20.04.02", category:"労働者の健康、安全、および福祉", item:"働く人は清潔な飲料水、食品置場、食事と休憩をする場所を利用できる。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:55, code:"20.04.03", category:"労働者の健康、安全、および福祉", item:"農場内住居は、該当する法的規制に適合しており、居住に適し、基本的なサービスと設備を備えている。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:56, code:"20.04.04", category:"労働者の健康、安全、および福祉", item:"働く人に提供している移動手段は作業者の健康と安全に関する一般的な規制に従い安全である。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  // -- 現場管理 --
+  { id:57, code:"21.01", category:"現場管理", item:"登録されたすべてのサイトについて、文書化されたリスク評価が完了している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
+  { id:58, code:"21.02", category:"現場管理", item:"管理計画に、運用の適切性に関するリスク評価で特定したリスクを最小限に抑える戦略を定めており、その計画を策定・実行し、定期的に見直している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
+  { id:59, code:"21.03", category:"現場管理", item:"生産に使用するサイトと設備を識別する仕組みがある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
+  { id:60, code:"21.04", category:"現場管理", item:"サイトは整理整頓されている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
+  { id:61, code:"21.05", category:"現場管理", item:"生産者は、農場を周囲の景観と影響しあう農業生態系の一部として認識している（ただし、生産者の法的責任は農場内にとどまる）。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
+  { id:62, code:"21.06", category:"現場管理", item:"アレルゲンを取扱う、又は保管する場合、その作業についての文書化されたアレルゲン管理プログラムがある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
+  // -- 生物多様性と生息地 --
+  { id:63, code:"22.01.01", category:"生物多様性と生息地", item:"生物多様性の保護と強化を可能にするよう管理している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"22_生物多様性の保護と増進" },
+  { id:64, code:"22.01.02", category:"生物多様性と生息地", item:"生物多様性を保護している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"22_生物多様性の保護と増進" },
+  { id:65, code:"22.01.03", category:"生物多様性と生息地", item:"生物多様性を強化している。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"22_生物多様性の保護と増進" },
+  { id:66, code:"22.02.01", category:"生物多様性と生息地", item:"耕作不適地は、生物多様性を保護・強化するための生態学的重点地域として利用している", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"22_生物多様性の保護と増進" },
+  { id:67, code:"22.03.01", category:"生物多様性と生息地", item:"農場内（農場敷地内）において、2014年1月1日以降、法的に保護価値が認められた（又は他の手段で有効に保護された）地域を、農地又は他の用途に転換していない。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"22_生物多様性の保護と増進" },
+  { id:68, code:"22.03.02", category:"生物多様性と生息地", item:"農場内（農場敷地内）において、2008年1月1日から2014年1月1日の間に、農地又は他の用途に転換された法的に保護価値が認められた（又は他の手段による実質的に保護された）地域を、すでに復元済み、復元途上、又は拘束力のある復元を予定している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"22_生物多様性の保護と増進" },
+  { id:69, code:"22.03.03", category:"生物多様性と生息地", item:"生物多様性の管理は測定指標で裏付けられている。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"22_生物多様性の保護と増進" },
+  // -- エネルギー効率 --
+  { id:70, code:"23.01", category:"エネルギー効率", item:"農場でのエネルギー使用量をモニタリングしている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"23_エネルギーモニタリング" },
+  { id:71, code:"23.02", category:"エネルギー効率", item:"モニタリングの結果に基づき、農場のエネルギー効率改善計画がある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"23_エネルギーモニタリング" },
+  { id:72, code:"23.03", category:"エネルギー効率", item:"エネルギー効率改善計画は、非再生可能エネルギーの使用量を最小限にすることを考慮している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"23_エネルギーモニタリング" },
+  { id:73, code:"23.04", category:"エネルギー効率", item:"エネルギーの管理は測定指標で裏付けられている。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"23_エネルギーモニタリング" },
+  // -- 温室効果ガスと気候変動 --
+  { id:74, code:"24.01", category:"温室効果ガスと気候変動", item:"農場はGHG*排出量の削減と大気からの吸収に貢献している。 *温室効果ガス（GHG）排出量とは、二酸化炭素（CO₂）、メタン（CH₄）、亜酸化窒素（N₂O）、フッ素系ガスなどを指す。地球温暖化への影響がそれぞれ異なるため、CO₂ 相当量（CO₂e）として算出されることもある。", level:"rec", schemes:["GGAP"], is_cleared:false },
+  { id:75, code:"24.02", category:"温室効果ガスと気候変動", item:"農場では、土壌とバイオマス中の有機炭素の形成を促進している。", level:"rec", schemes:["GGAP"], is_cleared:false },
+  { id:76, code:"24.03", category:"温室効果ガスと気候変動", item:"大気中の温室効果ガス（GHG）の削減と吸収に対する農場の貢献は測定指標で裏付けられている。", level:"rec", schemes:["GGAP"], is_cleared:false },
+  // -- 廃棄物管理 --
+  { id:77, code:"25.01", category:"廃棄物管理", item:"廃棄物管理の仕組みを実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:78, code:"25.02", category:"廃棄物管理", item:"農場全域において、廃棄物や汚染源を特定している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:79, code:"25.03", category:"廃棄物管理", item:"すべてのフォークリフト及びその他の自走式運搬車両は、清潔で手入れが行き届き、排気ガスによる汚染を回避するのに適切な種類のものである。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:80, code:"25.04", category:"廃棄物管理", item:"軽油やその他の燃料油タンクの貯蔵区域は環境に配慮され安全である。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:81, code:"25.05", category:"廃棄物管理", item:"有機廃棄物は、環境汚染のリスクを低減するために適切な方法で管理している。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:82, code:"25.06", category:"廃棄物管理", item:"洗浄と清掃に使用した水は、環境、健康、および安全への影響を最小限に抑える方法で処分している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:83, code:"25.07", category:"廃棄物管理", item:"包装資材の破片や小片、その他の生産物以外の廃棄物は、圃場から除去している", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:84, code:"25.08", category:"廃棄物管理", item:"プラスチックは責任ある方法で管理している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  { id:85, code:"25.09", category:"廃棄物管理", item:"食品廃棄物*の発生を防止・管理している。 *食品廃棄物：人による消費、動物の飼料、又はバイオベース資材として利用しない食品。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"25_廃棄物管理プラン" },
+  // -- 種苗 --
+  { id:86, code:"26.01", category:"種苗", item:"該当する場合、種苗は、品種登録に関する法令に適合したものを入手している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:87, code:"26.02", category:"種苗", item:"種苗は知的財産に関する法令に適合したものを入手している。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:88, code:"26.03", category:"種苗", item:"農場内で育苗・増殖した種苗について、植物の健康をコントロールする仕組みを運用し、記録している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:89, code:"26.04", category:"種苗", item:"農場内で育苗・増殖した種苗に施用した全ての化学処理に関する最新の記録が利用可能である。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:90, code:"26.05", category:"種苗", item:"購入した種苗の化学処理に関する情報が利用可能である。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- 遺伝子組み換え生物 --
+  { id:91, code:"27.01", category:"遺伝子組み換え生物", item:"遺伝子組換え（GM）資材の使用と取扱いに関する手順が利用可能である。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:92, code:"27.02", category:"遺伝子組み換え生物", item:"遺伝子組換え作物及び/又は試料の栽培は、生産国の現行の規制を遵守している", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:93, code:"27.03", category:"遺伝子組み換え生物", item:"生産者の直接の顧客に、生産物の遺伝子組換え作物(GMO）ステータスを知らせている。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:94, code:"27.04", category:"遺伝子組み換え生物", item:"遺伝子組換え（GM）作物と従来の作物が予期せず混ざることを防いでいる。", level:"major", schemes:["GGAP"], is_cleared:false },
+  // -- 土壌と培地の管理 --
+  { id:95, code:"28.01.01", category:"土壌と培地の管理", item:"生産者には、土壌の健全性を改善・最適化するための土壌管理計画がある。", level:"major", schemes:["GGAP"], is_cleared:false },
+  { id:96, code:"28.01.02", category:"土壌と培地の管理", item:"農場の土壌地図がある。", level:"rec", schemes:["GGAP"], is_cleared:false },
+  { id:97, code:"28.01.03", category:"土壌と培地の管理", item:"可能な場合、一年生作物の輪作を実施している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:98, code:"28.01.04", category:"土壌と培地の管理", item:"土壌構造を改善又は維持し、ソイルコンパクションの可能性を減らすための技術を使用している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:99, code:"28.01.05", category:"土壌と培地の管理", item:"生産者は土壌侵食の可能性を減らすための技術を使用している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:100, code:"28.02.01", category:"土壌と培地の管理", item:"土壌消毒剤の使用の正当性を示す文書がある。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:101, code:"28.02.02", category:"土壌と培地の管理", item:"土壌消毒後、作付けまでの期間を厳守している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:102, code:"28.03.01", category:"土壌と培地の管理", item:"生産者は培地のリサイクルに参加している。", level:"rec", schemes:["GGAP"], is_cleared:false },
+  { id:103, code:"28.03.02", category:"土壌と培地の管理", item:"再利用を目的として培地の殺菌に使用したあらゆる薬剤を記録している。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  { id:104, code:"28.03.03", category:"土壌と培地の管理", item:"天然由来の培地は、指定保護区域から採取したものではない。", level:"minor", schemes:["GGAP"], is_cleared:false },
+  // -- 肥料とバイオスティミュラント --
+  { id:105, code:"29.01.01", category:"肥料とバイオスティミュラント", item:"すべての肥料とバイオスティミュラントの施用に関する最新の記録がある。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"fert_record", doc:"29_有機質肥料リスク検討表" },
+  { id:106, code:"29.01.02", category:"肥料とバイオスティミュラント", item:"すべての肥料散布の記録は以下を含まなければならない。 地理的な地域、および圃場、果樹園、温室の名称又は参照情報", level:"minor", schemes:["GGAP"], is_cleared:false, auto:"fert_record", doc:"29_有機質肥料リスク検討表" },
+  { id:107, code:"29.01.03", category:"肥料とバイオスティミュラント", item:"すべての肥料散布の記録は以下を含まなければならない。日付", level:"minor", schemes:["GGAP"], is_cleared:false, auto:"fert_record", doc:"29_有機質肥料リスク検討表" },
+  { id:108, code:"29.01.04", category:"肥料とバイオスティミュラント", item:"すべての肥料散布の記録は以下を含まなければならない。名前と種類", level:"minor", schemes:["GGAP"], is_cleared:false, auto:"fert_record", doc:"29_有機質肥料リスク検討表" },
+  { id:109, code:"29.01.05", category:"肥料とバイオスティミュラント", item:"すべての肥料散布の記録は以下を含まなければならない。量（該当する場合、施用率又は濃度）", level:"minor", schemes:["GGAP"], is_cleared:false, auto:"fert_record", doc:"29_有機質肥料リスク検討表" },
+  { id:110, code:"29.01.06", category:"肥料とバイオスティミュラント", item:"すべての肥料散布の記録は以下を含まなければならない。施肥を行った者を明確に特定するための個人または複数の施肥者名", level:"minor", schemes:["GGAP"], is_cleared:false, auto:"fert_record", doc:"29_有機質肥料リスク検討表" },
+  { id:111, code:"29.01.07", category:"肥料とバイオスティミュラント", item:"肥料の管理は測定指標で裏付けられている。", level:"rec", schemes:["GGAP"], is_cleared:false, auto:"fert_record", doc:"29_有機質肥料リスク検討表" },
+  { id:112, code:"29.02.01", category:"肥料とバイオスティミュラント", item:"肥料とバイオスティミュラントを、食品安全上のリスクを低減する適切な方法で保管している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"29_有機質肥料リスク検討表" },
+  { id:113, code:"29.02.02", category:"肥料とバイオスティミュラント", item:"肥料とバイオスティミュラントを、環境汚染のリスクを低減する適切な方法で保管している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"29_有機質肥料リスク検討表" },
+  { id:114, code:"29.03.01", category:"肥料とバイオスティミュラント", item:"有機肥料のリスク評価を、使用目的に沿って実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"29_有機質肥料リスク検討表" },
+  { id:115, code:"29.03.02", category:"肥料とバイオスティミュラント", item:"有機肥料の施用から収穫までの間隔は、食品の安全性を損なっていない。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"29_有機質肥料リスク検討表" },
+  { id:116, code:"29.03.03", category:"肥料とバイオスティミュラント", item:"農場では人糞尿を含む下水汚泥を使用することを禁止している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"29_有機質肥料リスク検討表" },
+  { id:117, code:"29.04.01", category:"肥料とバイオスティミュラント", item:"施用した肥料に含まれる主要養分（窒素、リン、カリウム）の含有量を把握している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"29_有機質肥料リスク検討表" },
+  { id:118, code:"29.04.02", category:"肥料とバイオスティミュラント", item:"購入した無機肥料に、重金属を含む化学物質の含有量の証拠文書が添付されている。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"29_有機質肥料リスク検討表" },
+  // -- 水管理 --
+  { id:119, code:"30.01.01", category:"水管理", item:"収穫まで、及び収穫後に使用する水について、食品安全のリスク評価がある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:120, code:"30.01.02", category:"水管理", item:"農場（収穫まで、および収穫後）の水管理の環境への影響を評価するために、リスク評価を実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:121, code:"30.01.03", category:"水管理", item:"水管理計画が利用可能である。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:122, code:"30.01.04", category:"水管理", item:"農場内での水管理を農場外での活動で補完するための措置をとっている（ただし、生産者の法的範囲は農場内である）。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:123, code:"30.02.01", category:"水管理", item:"法的に要求されている場合、農場レベルでの水使用について 有効な許認可を取得している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:124, code:"30.02.02", category:"水管理", item:"水に関する許認可に記載されている制限事項に適合している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:125, code:"30.03.01", category:"水管理", item:"実行可能な場合、水を集水し、必要に応じて再利用するための措置を実施している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:126, code:"30.04.01", category:"水管理", item:"貯水施設があり、水量が最も豊富な期間に有効活用できるよう、手入れが行き届いている。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:127, code:"30.04.02", category:"水管理", item:"貯水は、食品安全上のリスクをもたらしていない。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:128, code:"30.05.01", category:"水管理", item:"リスク評価に基づき、食品安全の観点から水の分析を行っている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:129, code:"30.05.02", category:"水管理", item:"リスク評価の結果及び水質分析の結果に基づいて是正処置を講じている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:130, code:"30.05.03", category:"水管理", item:"下水処理水の使用は、食品安全上のリスクをもたらすものではない。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:131, code:"30.05.04", category:"水管理", item:"収穫時及び収穫後に生産物と接触する水は、飲料水の微生物基準を満たしていなければならない。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:132, code:"30.05.05", category:"水管理", item:"生産、収穫、収穫後に使用する循環利用水を、適切な頻度で交換又は補充している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:133, code:"30.05.06", category:"水管理", item:"収穫時又は収穫後に使用する処理水を適切にモニタリングしている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:134, code:"30.06.01", category:"水管理", item:"作物の灌漑量を計算し、最適化するためのツールを常に使用している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:135, code:"30.06.02", category:"水管理", item:"水の使用量を把握し、水の使用効率を高めるために特定した対策を講じている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  { id:136, code:"30.06.03", category:"水管理", item:"水の管理は測定指標で裏付けられている。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"30_使用水リスク評価" },
+  // -- 総合的有害生物管理（IPM） --
+  { id:137, code:"31.01", category:"総合的有害生物管理（IPM）", item:"総合的病害虫管理（IPM）を、教育訓練やアドバイスを通じた支援を受けて実施している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"31_IPM計画/実践計画" },
+  { id:138, code:"31.02", category:"総合的有害生物管理（IPM）", item:"生産者は、登録作物に影響を及ぼす関連する病害虫・雑草についての情報を得ている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"31_IPM計画/実践計画" },
+  { id:139, code:"31.03", category:"総合的有害生物管理（IPM）", item:"登録農作物に影響を及ぼす関連病害虫・雑草を管理するために農場レベルで使用する手段を記述した総合的病害虫管理（IPM）計画がある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"31_IPM計画/実践計画" },
+  { id:140, code:"31.04", category:"総合的有害生物管理（IPM）", item:"生産者は予防策を講じている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"31_IPM計画/実践計画" },
+  { id:141, code:"31.05", category:"総合的有害生物管理（IPM）", item:"生産者は、病害虫の管理を計画するために、登録作物のモニタリングを実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"31_IPM計画/実践計画" },
+  { id:142, code:"31.06", category:"総合的有害生物管理（IPM）", item:"生産者は病害虫を管理するための介入を行っている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"31_IPM計画/実践計画" },
+  { id:143, code:"31.07", category:"総合的有害生物管理（IPM）", item:"利用可能な農薬及び特定防除資材(PPP)の効力を維持するため、耐性/抵抗性を生じさせないための推奨事項に従っている。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"31_IPM計画/実践計画" },
+  { id:144, code:"31.08", category:"総合的有害生物管理（IPM）", item:"生産者は、総合的病害虫管理（IPM）の結果を、IPM計画の学習と改善に活用している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"31_IPM計画/実践計画" },
+  // -- 農薬及び特定防除資材 --
+  { id:145, code:"32.01.01", category:"農薬及び特定防除資材", item:"生産国で認可された農薬及び特定防除資材（PPP）のみを使用している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:146, code:"32.01.02", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）及びその他の処理を、製品ラベルの推奨事項に従って適切に施用している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:147, code:"32.01.03", category:"農薬及び特定防除資材", item:"生産者は、近隣の圃場への農薬のドリフトを防ぐための積極的な手段を講じている", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:148, code:"32.01.04", category:"農薬及び特定防除資材", item:"生産者は、近隣の圃場からの農薬のドリフトを防ぐための積極的な手段を講じている。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:149, code:"32.02.01", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）の施用について記録している。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"spray_record", doc:"32_農薬散布/残留手順" },
+  { id:150, code:"32.02.02", category:"農薬及び特定防除資材", item:"施用時の天候を記録している。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"spray_record", doc:"32_農薬散布/残留手順" },
+  { id:151, code:"32.02.03", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）の管理は、測定指標で裏付けられている。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:152, code:"32.03.01", category:"農薬及び特定防除資材", item:"登録された収穫前期間を遵守していることを示す証拠がある。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"spray_record", doc:"32_農薬散布/残留手順" },
+  { id:153, code:"32.04.01", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）の空容器は、保管・廃棄前に水で3回洗浄し、すすぎ液は環境にリスクを与えない方法で廃棄している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:154, code:"32.04.02", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）の空容器を、同一製品の補充・運搬以外の目的で再利用していない。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:155, code:"32.04.03", category:"農薬及び特定防除資材", item:"空容器は、廃棄が可能になるまで安全に保管している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:156, code:"32.04.04", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）の空容器は、人及び環境へのリスクを低減するような方法で廃棄している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:157, code:"32.04.05", category:"農薬及び特定防除資材", item:"利用可能であれば、公的な回収および廃棄システムを利用し、回収システムの規則に従い、空容器を適切に保管、識別、取扱いをしている。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:158, code:"32.04.06", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）容器の廃棄又は破壊に関するすべての現地の規制を遵守している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:159, code:"32.05.01", category:"農薬及び特定防除資材", item:"使用期限切れ農薬及び特定防除資材（PPP）は、安全に保管し、識別し、認可又は承認されたルートを経て廃棄している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:160, code:"32.06.01", category:"農薬及び特定防除資材", item:"余った混合済み薬液やタンクゆすぎ液は、責任を持って廃棄している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:161, code:"32.07.01", category:"農薬及び特定防除資材", item:"生産物が取引される販売先の市場についての最大残留基準値（MRL）に関する情報が利用可能である。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:162, code:"32.07.02", category:"農薬及び特定防除資材", item:"すべての登録生産物のリスク評価が完了し、該当する市場の最大残留基準値（MRL）の要件を満たしている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:163, code:"32.07.03", category:"農薬及び特定防除資材", item:"最大残留基準値（MRL）のサンプリング及び試験手順が正しく守られている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:164, code:"32.07.04", category:"農薬及び特定防除資材", item:"最大残留基準値（MRL）のサンプリングで未承認の農薬及び特定防除資材（PPP）が検出された場合の対処方法を記述した行動計画書が利用可能である。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:165, code:"32.07.05", category:"農薬及び特定防除資材", item:"最大残留基準値（MRL）を超過した場合に取るべき措置を記述した行動計画書が利用可能である。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:166, code:"32.08.01", category:"農薬及び特定防除資材", item:"どの項目にも該当しない全てのその他資材について、現状を反映した使用記録がある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:167, code:"32.09.01", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材(PPP)、生物的防除剤、その他の処理製品を、関連するリスクを確実に管理する方法で保管している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:168, code:"32.09.02", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）保管庫は、構造的に頑丈で堅固である。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:169, code:"32.09.03", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）の保管が、作業者にリスクを与えたり、交差汚染の機会を作ったりしていない。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:170, code:"32.09.04", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）は適切な温度で保管している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:171, code:"32.09.05", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）保管庫内は明るさがある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:172, code:"32.09.06", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）保管庫は、流出を貯留及び管理できる。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:173, code:"32.10.01", category:"農薬及び特定防除資材", item:"リスク評価又は製品の暴露や毒性に応じて、該当する農薬及び特定防除資材（PPP）に暴露される作業者は、健康診断を受けることができる。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:174, code:"32.10.02", category:"農薬及び特定防除資材", item:"農薬及び特定防除資材（PPP）をラベルの要求事項に従って混合し、取り扱っている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:175, code:"32.10.03", category:"農薬及び特定防除資材", item:"事故対応手順書は、農薬及び特定防除資材（PPP）/化学物質保管庫の近くで利用可能である。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:176, code:"32.10.04", category:"農薬及び特定防除資材", item:"作業者の偶発的な汚染事故に対処するための設備が利用可能である。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:177, code:"32.10.05", category:"農薬及び特定防除資材", item:"生産サイト間において、農薬及び特定防除資材（PPP）を、安全かつ確実な方法で運搬している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:178, code:"32.10.06", category:"農薬及び特定防除資材", item:"農場には農薬及び特定防除資材（PPP）使用後の再入場時期に関する文書化された手順がある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"32_農薬散布/残留手順" },
+  { id:179, code:"32.11.01", category:"農薬及び特定防除資材", item:"すべての農薬及び特定防除資材（PPP）及びポストハーベスト処理資材の請求書及び/又は調達の証拠文書を保管している。", level:"major", schemes:["GGAP"], is_cleared:false, auto:"pest_purchase", doc:"32_農薬散布/残留手順" },
+  // -- ポストハーベスト処理 --
+  { id:180, code:"33.01.01", category:"ポストハーベスト処理", item:"収穫及び包装した生産物は食品安全リスクを最小限に抑えるように保管している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:181, code:"33.01.02", category:"ポストハーベスト処理", item:"包装した生産物の集荷、保管、分配のためのすべての場所を清掃し維持している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:182, code:"33.01.03", category:"ポストハーベスト処理", item:"包装資材は、使用目的に適い、汚染を防止する条件下で保管している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:183, code:"33.01.04", category:"ポストハーベスト処理", item:"清掃用具、薬剤、潤滑剤などは、生産物の化学的汚染を防ぐ方法で保管及び使用され、食品業界での使用が認められている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:184, code:"33.02.01", category:"ポストハーベスト処理", item:"生産物への異物混入を防ぐことを確実にする仕組みがある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:185, code:"33.02.02", category:"ポストハーベスト処理", item:"異物混入に対処する仕組みがある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:186, code:"33.03.01", category:"ポストハーベスト処理", item:"コントロールした保管状態を維持している。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:187, code:"33.04.01", category:"ポストハーベスト処理", item:"害虫・害獣管理計画があり、実施している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:188, code:"33.04.02", category:"ポストハーベスト処理", item:"害虫・害獣駆除の検査と実施した是正処置の記録がある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:189, code:"33.05.01", category:"ポストハーベスト処理", item:"最終生産物の表示は適切である。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
+  { id:190, code:"33.06.01", category:"ポストハーベスト処理", item:"生産物取扱い区域では、リスクに基づく微生物環境モニタリングプログラムがある。", level:"minor", schemes:["GGAP"], is_cleared:false, doc:"33_衛生/トイレ掃除" },
 ]
 
 // GAP項目の自動達成判定: システムに該当記録があれば true（人手のチェック不要にする）。
@@ -658,12 +843,10 @@ function isGapAutoCleared(item, ctx) {
   }
 }
 
-// 各GAP項目に「適用スキーム(JGAP/GGAP)」と「自動達成の根拠ラベル」を付与。
-// 記録・帳票・トレーサビリティ系はJGAP/GGAP共通。IPM・エネルギー/資源はGGAP色が濃い(JGAPは推奨寄り)。
-const _GAP_GGAP_LEANING = new Set([13, 29])
+// 各GAP項目に「自動達成の根拠ラベル」を付与。スキームは生成時に GGAP を設定済み。
 const _GAP_EVIDENCE = { records_exist:'作業記録', spray_record:'農薬散布記録', pesticide_master:'農薬マスタ', pest_purchase:'農薬仕入記録', fert_record:'施肥記録', fert_purchase:'肥料仕入記録', harvest_record:'収穫記録', shipment_record:'出荷記録', machine_maint:'機械整備記録', worker_managed:'作業者名簿', trainee_visa:'ビザ管理', traceability:'ロット追跡', seed_lot:'種苗ロット' }
 INITIAL_GAP_CHECKS.forEach(c => {
-  c.schemes  = _GAP_GGAP_LEANING.has(c.id) ? ['GGAP'] : ['JGAP', 'GGAP']
+  if (!c.schemes) c.schemes = ['GGAP']
   c.evidence = c.auto ? (_GAP_EVIDENCE[c.auto] || '記録') : null
 })
 // =====================================================

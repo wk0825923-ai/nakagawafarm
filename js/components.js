@@ -10082,6 +10082,12 @@ function GapProgressBar({ done, total, pct }) {
 }
 
 // ── 共通UI: チェックリスト＋カテゴリ別進捗 ─────────────────
+// GGAPの管理点レベル表示メタ（上位=Major Must / 下位=Minor Must / 推奨=Recommendation）
+const GAP_LEVEL_META = {
+  major: { label:'上位', color:'#DC2626', bg:'#FEF2F2', bd:'#FCA5A5' },
+  minor: { label:'下位', color:'#B45309', bg:'#FFFBEB', bd:'#FDE68A' },
+  rec:   { label:'推奨', color:'#475569', bg:'#F1F5F9', bd:'#E2E8F0' },
+}
 function GapChecklistPanel({ gap, cats, open, setOpen, onToggle, ctx }) {
   const auto = (c) => isGapAutoCleared(c, ctx)
   const eff  = (c) => c.is_cleared || auto(c)
@@ -10119,9 +10125,15 @@ function GapChecklistPanel({ gap, cats, open, setOpen, onToggle, ctx }) {
                     flexShrink:0, fontSize:12, color:'#fff'
                   }
                 }, checked ? '✓' : ''),
-                React.createElement('span', { style:{ flex:1 } }, c.item),
-                // 適用スキーム（JGAP/GGAP）
-                ...((c.schemes || ['JGAP','GGAP']).map(sc => React.createElement('span', { key:sc, style:{ fontSize:9.5, fontWeight:700, color:'#64748B', background:'#F1F5F9', border:'1px solid #E2E8F0', borderRadius:4, padding:'1px 5px', flexShrink:0 } }, sc === 'GGAP' ? 'G.GAP' : sc))),
+                React.createElement('div', { style:{ flex:1, minWidth:0 } },
+                  React.createElement('span', null,
+                    c.code && React.createElement('span', { style:{ fontSize:10, fontWeight:700, color:'#94A3B8', marginRight:6, fontVariantNumeric:'tabular-nums' } }, c.code),
+                    c.item
+                  ),
+                  (!isAuto && c.doc) && React.createElement('div', { style:{ fontSize:10, color:'#94A3B8', marginTop:2 } }, '要書類: ' + c.doc)
+                ),
+                // 管理点レベル（上位/下位/推奨）
+                c.level && GAP_LEVEL_META[c.level] && React.createElement('span', { style:{ fontSize:9.5, fontWeight:700, color:GAP_LEVEL_META[c.level].color, background:GAP_LEVEL_META[c.level].bg, border:'1px solid '+GAP_LEVEL_META[c.level].bd, borderRadius:4, padding:'1px 5px', flexShrink:0 } }, GAP_LEVEL_META[c.level].label),
                 // 自動達成の根拠 / 手動チェック
                 isAuto
                   ? React.createElement('span', { style:{ fontSize:10, fontWeight:700, color:'#0A6B52', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:5, padding:'1px 6px', flexShrink:0 } }, '自動✓ ' + (c.evidence || '記録あり'))
@@ -10173,9 +10185,9 @@ function GapChecklist({ gap, onToggle, ctx }) {
   const { open, setOpen, isDone } = useGapBase({ gap, records:[], fields:[], pesticides:[], ctx })
   // UX-06: タブ状態管理（'all' | 'incomplete'）
   const [activeTab, setActiveTab] = React.useState('all')
-  // 【GAP認証対応】スキーム切替（both / JGAP / GGAP）
-  const [scheme, setScheme] = React.useState('both')
-  const inScheme = (c) => scheme === 'both' || (c.schemes || ['JGAP','GGAP']).includes(scheme)
+  // 【GAP認証対応】GLOBALG.A.P. Ver6 の管理点レベルで絞り込み（all / major / minor / rec）
+  const [scheme, setScheme] = React.useState('all')
+  const inScheme = (c) => scheme === 'all' || c.level === scheme
 
   // スキームで絞った母集合と対応度（システム自動達成／手動／要対応）
   const schemeGap = gap.filter(inScheme)
@@ -10197,7 +10209,7 @@ function GapChecklist({ gap, onToggle, ctx }) {
 
   // 未完了タブ時は空カテゴリを除外
   const filteredCats = cats.filter(cat => filteredGap.some(c => c.category === cat))
-  const schemeLabel = scheme === 'JGAP' ? 'JGAP' : scheme === 'GGAP' ? 'GLOBALG.A.P.' : 'JGAP / GLOBALG.A.P.'
+  const schemeLabel = 'GLOBALG.A.P. Ver6'
 
   // タブスタイル定義
   const tabBase = {
@@ -10226,16 +10238,16 @@ function GapChecklist({ gap, onToggle, ctx }) {
       React.createElement('div',null,
         React.createElement('div',{className:'eyebrow'},'GAP CHECKLIST'),
         React.createElement('div',{className:'page-title'},'GAP対応チェックリスト'),
-        React.createElement('div',{className:'page-sub'},'JGAP / GLOBALG.A.P.（GGAP）両対応。記録・帳票・トレーサビリティの管理点はシステムが自動で満たします（審査に提出可能）。物理・書面の管理点は現場でご対応ください。')
+        React.createElement('div',{className:'page-sub'},'GLOBALG.A.P. Ver6(2024) FV-Smart 標準の管理点（190項目）に対応。記録・帳票・トレーサビリティの管理点はシステムが自動で満たします（審査に提出可能）。物理・書面の管理点は現場でご対応ください。')
       ),
       React.createElement('button',{ onClick:()=>window.print(), style:{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', border:'1px solid #0A6B52', background:'#fff', color:'#0A6B52', borderRadius:8, fontSize:13, fontWeight:700, cursor:'pointer', flexShrink:0 } },
         React.createElement('i',{ className:'ti ti-printer', style:{ fontSize:15 } }), '審査用に印刷 / PDF')
     ),
 
-    // 対象スキーム切替
+    // 管理点レベルで絞り込み（GLOBALG.A.P. Ver6: 上位=Major必須 / 下位=Minor必須 / 推奨）
     React.createElement('div',{ style:{ display:'flex', gap:8, alignItems:'center', margin:'8px 0 16px', flexWrap:'wrap' } },
-      React.createElement('span',{ style:{ fontSize:12, color:'#6B7280', fontWeight:600 } }, '対象スキーム'),
-      ...[['both','JGAP / GLOBALG.A.P.'],['JGAP','JGAP'],['GGAP','GLOBALG.A.P.']].map(([k,lab]) =>
+      React.createElement('span',{ style:{ fontSize:12, color:'#6B7280', fontWeight:600 } }, '管理点レベル'),
+      ...[['all','すべて'],['major','上位（必須）'],['minor','下位（必須）'],['rec','推奨']].map(([k,lab]) =>
         React.createElement('button',{ key:k, onClick:()=>setScheme(k),
           style:{ padding:'6px 14px', borderRadius:16, fontSize:12, fontWeight:700, cursor:'pointer', border:'1px solid',
             borderColor: scheme===k ? '#0A6B52' : '#DDE2EC', background: scheme===k ? '#ECFDF5' : '#fff', color: scheme===k ? '#0A6B52' : '#64748B' } }, lab))

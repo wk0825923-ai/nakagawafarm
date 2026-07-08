@@ -841,8 +841,8 @@ const INITIAL_GAP_CHECKS = [
   { id:208, code:"McD 5.9.1", category:"McD: 灌漑と水管理", item:"灌漑用水の一次および二次（非常用）供給源に関して、青 果物食品安全基準の5.11.2項のフローチャートが順守されていますか？", schemes:["McD"], is_cleared:false, doc:"水質検査/使用水リスク評価" },
   { id:209, code:"McD 5.10.1", category:"McD: 灌漑と水管理", item:"作物の食用部分と接触する可能性のある、収穫 および/または収穫後の作業中に使用される水が、5.10 項 で要求される微生物の基準を確実に満たすのに十分な頻度で、 定期的に検査されているという証拠がありますか?", schemes:["McD"], is_cleared:false, doc:"水質検査/使用水リスク評価" },
   // -- McD: 肥料・土壌改良剤・農薬 --
-  { id:210, code:"McD 6.2.1", category:"McD: 肥料・土壌改良剤・農薬", item:"禁止されている肥料、土壌添加物、農薬が使用されていない", schemes:["McD"], is_cleared:false, doc:"農薬散布マニュアル/残留農薬記録" },
-  { id:211, code:"McD 6.7.1", category:"McD: 肥料・土壌改良剤・農薬", item:"動物の糞尿又は動物の副産物を含む非合成の作物処理剤が作物又は栽培地域に適用されたことがあり、それらは6.7項の要求事項を満たしていますか？", schemes:["McD"], is_cleared:false, doc:"農薬散布マニュアル/残留農薬記録" },
+  { id:210, code:"McD 6.2.1", category:"McD: 肥料・土壌改良剤・農薬", item:"禁止されている肥料、土壌添加物、農薬が使用されていない", schemes:["McD"], is_cleared:false, doc:"農薬散布マニュアル/残留農薬記録", auto:"pesticide_master" },
+  { id:211, code:"McD 6.7.1", category:"McD: 肥料・土壌改良剤・農薬", item:"動物の糞尿又は動物の副産物を含む非合成の作物処理剤が作物又は栽培地域に適用されたことがあり、それらは6.7項の要求事項を満たしていますか？", schemes:["McD"], is_cleared:false, doc:"農薬散布マニュアル/残留農薬記録", auto:"fert_record" },
   // -- McD: 個人衛生・圃場衛生・労働条件 --
   { id:212, code:"McD 7.5.1", category:"McD: 個人衛生・圃場衛生・労働条件", item:"トイレは職場から 1/4 マイル（400m）以内（徒歩or車で 5 分）の場所にありますか？そうでない場合、従業員がトイレ施設にアクセスするための交通手段を提供できますか？", schemes:["McD"], is_cleared:false, doc:"衛生リスク評価/トイレ掃除チェック" },
   { id:213, code:"McD 7.6.1", category:"McD: 個人衛生・圃場衛生・労働条件", item:"トイレ施設の点検の証拠が近接して掲示されていますか？", schemes:["McD"], is_cleared:false, doc:"衛生リスク評価/トイレ掃除チェック" },

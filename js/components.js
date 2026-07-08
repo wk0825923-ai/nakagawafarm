@@ -4893,6 +4893,36 @@ function LotRiskClearBadge() {
 // 【畝マップ Step1】parseRowRange — 畝範囲文字列をSet<number>に変換するヘルパー
 // 対応形式: "1-6"（連続範囲） / "47"（単独番号）/ "1-6,8,10-12"（混在）
 // ─────────────────────────────────────────────────────
+// 【畝マップ（衛星）】圃場の中心(lat/lng)・面積(are)・畝の総本数(row_count)・植え方角から、
+// 各畝の矩形ポリゴン([[lat,lng]×4])を自動生成する。圃場を正方形近似し、畝は南北(縦)に走る前提。
+// 方角に「東西/横/EW」があれば畝を東西向きにする。boundaryが無くても衛星上に畝レイアウトを表示できる。
+function generateBedPolygons(field) {
+  const n = Math.round(Number(field && field.row_count))
+  const lat0 = Number(field && field.lat), lng0 = Number(field && field.lng)
+  if (!n || n < 1 || !Number.isFinite(lat0) || !Number.isFinite(lng0)) return []
+  const areaM2 = (Number(field.area_are) || 1) * 100
+  const side = Math.max(2, Math.sqrt(areaM2))       // 一辺(m)。正方形近似
+  const half = side / 2
+  const bedW = side / n                              // 1畝の幅(m)
+  const mPerLat = 111320
+  const mPerLng = 111320 * Math.cos(lat0 * Math.PI / 180) || 111320
+  const ew = /東西|横|E-?W/i.test(String(field.bed_direction || field.direction || field.plant_direction || ''))
+  const polys = []
+  for (let i = 0; i < n; i++) {
+    const off = (i - (n - 1) / 2) * bedW             // 幅方向オフセット(m)
+    let corners
+    if (!ew) { // 縦畝(南北): 幅=東西(lng)、長さ=南北(lat)
+      const dLng = off / mPerLng, w2 = (bedW / 2) * 0.9 / mPerLng, dLat = half / mPerLat
+      corners = [[lat0 - dLat, lng0 + dLng - w2], [lat0 + dLat, lng0 + dLng - w2], [lat0 + dLat, lng0 + dLng + w2], [lat0 - dLat, lng0 + dLng + w2]]
+    } else {   // 横畝(東西): 幅=南北(lat)、長さ=東西(lng)
+      const dLat = off / mPerLat, w2 = (bedW / 2) * 0.9 / mPerLat, dLng = half / mPerLng
+      corners = [[lat0 + dLat - w2, lng0 - dLng], [lat0 + dLat - w2, lng0 + dLng], [lat0 + dLat + w2, lng0 + dLng], [lat0 + dLat + w2, lng0 - dLng]]
+    }
+    polys.push({ bed: i + 1, corners })
+  }
+  return polys
+}
+
 function parseRowRange(rangeStr) {
   const set = new Set()
   if (!rangeStr) return set
@@ -8303,7 +8333,17 @@ function FieldList({ fields, onAdd, onDelete, mode='full', cropCycles=[], onNavi
   },[])
   React.useEffect(()=>{
     const map=mapInstanceRef.current; if (!map) return
-    map.eachLayer(l=>{if (l instanceof L.CircleMarker) map.removeLayer(l)})
+    map.eachLayer(l=>{if (l instanceof L.CircleMarker || l instanceof L.Polygon) map.removeLayer(l)})
+    // 【畝マップ】row_count と緯度経度がある圃場は、衛星の上に畝の矩形を自動生成して重ねる。
+    // 畝をタップすると圃場詳細へ。輪郭の手動登録が無くても畝レイアウトが見える（自動生成）。
+    fields.filter(f=>Number.isFinite(Number(f.lat))&&Number.isFinite(Number(f.lng))&&Number(f.row_count)>0).forEach(f=>{
+      generateBedPolygons(f).forEach(bp=>{
+        L.polygon(bp.corners,{color:f.color||'#0A6B52',weight:1,fillColor:f.color||'#0A6B52',fillOpacity:.35})
+          .bindTooltip(f.name+' 畝'+bp.bed,{direction:'top',opacity:.9})
+          .on('click',()=>{ onNavigate && onNavigate('field:'+f.id+':dashboard') })
+          .addTo(map)
+      })
+    })
     // 緯度経度が未設定の圃場（地図でピン留めせずに登録した圃場）はマーカーを作らない。
     // Leafletは(undefined,undefined)で例外を投げアプリ全体を巻き込んで落ちるため、必ずガードする。
     fields.filter(f=>Number.isFinite(Number(f.lat))&&Number.isFinite(Number(f.lng))).forEach(f=>L.circleMarker([Number(f.lat),Number(f.lng)],{color:f.color,fillColor:f.color,fillOpacity:.7,radius:10,weight:2}).bindPopup(

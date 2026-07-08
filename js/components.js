@@ -314,6 +314,10 @@ function StaffQuickView(props) {
         React.createElement('div', { style:{ marginTop:8, fontSize:11, color:'#94A3B8', lineHeight:1.5 } },
           '※「なおす」で内容を修正、「けす」で消して入力し直せます。農薬散布・施肥・収穫は、消してから正しく入れ直してください。')
       ),
+      // ── 保存時の演出の設定（スタッフもこの端末で切り替え可能） ──
+      React.createElement('div', { style:{ marginTop:22 } },
+        React.createElement(SaveEffectSetting, { compact:true })
+      ),
       React.createElement('div', { style:{ height:40 } })
     ),
 
@@ -4356,8 +4360,21 @@ function compressImageFile(file) {
 // 「ただのデータ入力」を少しでも報われる体験にする。DOMを直接生成するので全フォームから
 // 1行で呼べる（Reactの状態を各フォームに配線しなくてよい）。CSSは app.css に定義。
 // =====================================================
+// 保存演出の設定（端末ごとに保存）。full=紙吹雪 / lite=一瞬の軽い通知 / off=なし。
+// 毎日何十回も入力する熟練スタッフが、演出の重さを避けて軽快に使えるようにする。
+const SAVE_EFFECT_KEY = 'sb_save_effect'
+function getSaveEffectPref() {
+  try { const v = localStorage.getItem(SAVE_EFFECT_KEY); return (v === 'lite' || v === 'off') ? v : 'full' } catch (_) { return 'full' }
+}
+function setSaveEffectPref(v) {
+  try { localStorage.setItem(SAVE_EFFECT_KEY, v) } catch (_) {}
+}
+
 function celebrateSave(message) {
   try {
+    const pref = getSaveEffectPref()
+    if (pref === 'off') return                                              // 演出なし（最速）
+    if (pref === 'lite') { showToast(message || '記録しました', 'success', { ttl: 1100 }); return } // 一瞬の軽い通知
     document.querySelectorAll('.sb-celeb-overlay').forEach(n => n.remove())
     const colors = ['#10B981','#34D399','#FBBF24','#60A5FA','#F472B6','#0A6B52','#F97316']
     let confetti = ''
@@ -4391,7 +4408,7 @@ function celebrateSave(message) {
 // 【エラー/通知トースト】showToast — 画面右上に積み上がる通知。エラーは目立つ赤、警告は橙、
 // 成功/情報は緑。celebrateSaveと同じくDOM直生成なので、Reactの外(素のalert置換・未捕捉エラー・
 // ErrorBoundary)からも1行で呼べる。メッセージはescHtmlでエスケープ。同一メッセージの連投は抑制。
-function showToast(message, type) {
+function showToast(message, type, opts) {
   try {
     const meta = ({
       error:   { icon:'alert-triangle', cls:'error',   ttl: 8000 },
@@ -4399,6 +4416,7 @@ function showToast(message, type) {
       success: { icon:'circle-check',   cls:'success', ttl: 3500 },
       info:    { icon:'info-circle',    cls:'info',    ttl: 4500 },
     })[type || 'info'] || { icon:'info-circle', cls:'info', ttl: 4500 }
+    const ttl = (opts && opts.ttl) ? opts.ttl : meta.ttl
     let wrap = document.getElementById('sb-toast-wrap')
     if (!wrap) { wrap = document.createElement('div'); wrap.id = 'sb-toast-wrap'; document.body.appendChild(wrap) }
     // 同じ文言のトーストが既に出ていれば連投しない（エラーループでの氾濫を防ぐ）
@@ -4418,7 +4436,7 @@ function showToast(message, type) {
       setTimeout(() => { try { el.remove() } catch (_) {} }, 260)
     }
     el.querySelector('.sb-toast-close').addEventListener('click', dismiss)
-    setTimeout(dismiss, meta.ttl)
+    setTimeout(dismiss, ttl)
     return dismiss
   } catch (e) { try { console.warn('[showToast]', e) } catch (_) {} }
 }
@@ -4447,6 +4465,38 @@ class ErrorBoundary extends React.Component {
     }
     return this.props.children
   }
+}
+
+// 【保存演出の設定】管理者(設定ページ)とスタッフ(簡易画面)の両方から選べる共有UI。
+// この端末のsb_save_effectに保存され、次からの保存演出に即反映される。compactでスタッフ画面向けに小型化。
+function SaveEffectSetting({ compact }) {
+  const [pref, setPref] = React.useState(getSaveEffectPref())
+  const choose = (v) => { setPref(v); setSaveEffectPref(v); if (v === 'full') celebrateSave('プレビュー'); else if (v === 'lite') showToast('プレビュー', 'success', { ttl: 1100 }) }
+  const opts = [
+    { v:'full', label:'にぎやか', desc:'紙吹雪でお祝い（初期設定）' },
+    { v:'lite', label:'あっさり', desc:'一瞬の軽い通知だけ' },
+    { v:'off',  label:'オフ',     desc:'演出なし（最速）' },
+  ]
+  const buttons = React.createElement('div', { style:{ display:'flex', gap:8, flexWrap:'wrap' } },
+    ...opts.map(o => React.createElement('button', {
+      key:o.v, onClick:()=>choose(o.v),
+      style:{ flex:'1 1 110px', textAlign:'left', padding: compact ? '8px 10px' : '10px 12px', borderRadius:10, cursor:'pointer',
+        border:'2px solid ' + (pref===o.v ? '#0A6B52' : '#E5E7EB'), background: pref===o.v ? '#F0FDF4' : '#fff' } },
+      React.createElement('div', { style:{ fontSize:13, fontWeight:700, color: pref===o.v ? '#0A6B52' : '#374151' } }, (pref===o.v?'✓ ':'') + o.label),
+      React.createElement('div', { style:{ fontSize:11, color:'#6B7280', marginTop:2 } }, o.desc)
+    ))
+  )
+  const intro = React.createElement('div', { style:{ fontSize:12, color:'#6B7280', marginBottom:12 } }, '毎日たくさん入力する方は「あっさり」や「オフ」にすると動作が軽く感じられます。')
+  if (compact) {
+    return React.createElement('div', { style:{ background:'#fff', border:'1px solid #E5E7EB', borderRadius:12, padding:'14px 16px' } },
+      React.createElement('div', { style:{ fontSize:13, fontWeight:700, color:'#374151', marginBottom:6 } }, '🎉 保存時の演出'),
+      intro, buttons
+    )
+  }
+  return React.createElement('div', { className:'card', style:{ marginBottom:'16px' } },
+    React.createElement('div', { className:'section-title' }, '🎉 保存時の演出'),
+    intro, buttons
+  )
 }
 
 // 現在のlocalStorage使用量(概算バイト・UTF-16換算)。写真追加前の容量ガードに使用。
@@ -12967,8 +13017,9 @@ function Settings() {
         React.createElement('button',{className:'btn btn-primary',style:{width:'100%'}},'保存する')
       ),
 
-      // 右: Supabase設定 + その他
+      // 右: 保存演出 + Supabase設定 + その他
       React.createElement('div',null,
+        React.createElement(SaveEffectSetting, null),
         React.createElement('div',{className:'card',style:{marginBottom:'16px'}},
           React.createElement('div',{className:'section-title'},'🔌 Supabase 接続設定'),
           React.createElement('div',{className:'sup-note',style:{marginBottom:'16px'}},'現在: モックデータ動作中 — Supabase URL を設定するとリアルDBに切り替わります'),

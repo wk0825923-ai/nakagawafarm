@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中川農園システム 機能棚卸</title>
+<style>
+  :root{
+    --green:#0D9972; --green-d:#0a7a5b; --ink:#1f2937; --sub:#6b7280;
+    --line:#e5e7eb; --bg:#f7f8f7; --card:#ffffff; --warn:#EA580C; --warn-bg:#fff7ed;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic UI",Meiryo,sans-serif;
+    line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:32px 20px 80px;}
+  header.hero{
+    background:linear-gradient(135deg,var(--green),var(--green-d));
+    color:#fff; border-radius:20px; padding:34px 34px 30px; margin-bottom:28px;
+    box-shadow:0 10px 30px rgba(13,153,114,.25);
+  }
+  header.hero h1{margin:0 0 8px; font-size:1.9rem; letter-spacing:.02em;}
+  header.hero p{margin:2px 0; opacity:.95; font-size:.95rem;}
+  header.hero .meta{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px;}
+  header.hero .chip{
+    background:rgba(255,255,255,.18); border:1px solid rgba(255,255,255,.35);
+    padding:5px 12px; border-radius:999px; font-size:.82rem; backdrop-filter:blur(4px);
+  }
+  header.hero a{color:#fff; text-decoration:underline; text-underline-offset:2px;}
+  section.block{margin-bottom:34px;}
+  h2.sec{
+    font-size:1.25rem; margin:0 0 4px; display:flex; align-items:center; gap:10px;
+  }
+  h2.sec .tag{
+    font-size:.72rem; font-weight:700; color:#fff; background:var(--green);
+    padding:3px 10px; border-radius:8px; letter-spacing:.03em;
+  }
+  .sec-note{color:var(--sub); font-size:.86rem; margin:0 0 14px;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px;}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:16px 18px; transition:.15s; position:relative;
+  }
+  .card:hover{border-color:var(--green); box-shadow:0 4px 14px rgba(13,153,114,.1); transform:translateY(-1px);}
+  .card h3{margin:0 0 6px; font-size:1rem; color:var(--green-d); display:flex; align-items:center; gap:8px;}
+  .card h3 .dot{width:8px; height:8px; border-radius:50%; background:var(--green); flex:none;}
+  .card p{margin:0; font-size:.88rem; color:#374151;}
+  .freq{
+    position:absolute; top:14px; right:14px; font-size:.68rem; color:var(--sub);
+    background:var(--bg); border:1px solid var(--line); padding:2px 8px; border-radius:6px;
+  }
+  ul.plain{margin:6px 0 0; padding-left:1.1em;}
+  ul.plain li{font-size:.88rem; margin:3px 0;}
+  .warnbox{
+    background:var(--warn-bg); border:1px solid #fed7aa; border-left:5px solid var(--warn);
+    border-radius:12px; padding:18px 22px;
+  }
+  .warnbox h2{margin:0 0 10px; font-size:1.15rem; color:var(--warn);}
+  .warnbox ul{margin:0; padding-left:1.2em;}
+  .warnbox li{margin:6px 0; font-size:.9rem;}
+  .warnbox b{color:#9a3412;}
+  code{background:#eef2f0; padding:1px 6px; border-radius:5px; font-size:.83em; color:#0a7a5b;}
+  footer{margin-top:40px; text-align:center; color:var(--sub); font-size:.8rem;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>🌱 中川農園システム 機能棚卸</h1>
+    <p>畝（ロット）単位で農作業・農薬・施肥・収穫・GAP書類を管理する農家向けWebアプリ</p>
+    <p>レタス・とうもろこし・米／技能実習生含む小規模法人向け</p>
+    <div class="meta">
+      <span class="chip">本番: syatyo-suport.vercel.app</span>
+      <span class="chip">React 18（ビルドなし）+ Supabase</span>
+      <span class="chip">農場データは localStorage 保存</span>
+      <span class="chip">全 push 済み</span>
+    </div>
+  </header>
+
+  <!-- A -->
+  <section class="block">
+    <h2 class="sec"><span class="tag">A</span> 毎日〜週次で使う「記録・確認」系（メイン導線）</h2>
+    <p class="sec-note">左メニュー上段。使用頻度順（毎日→季節ごと→稀）に配置。</p>
+    <div class="grid">
+      <div class="card"><span class="freq">毎日</span><h3><span class="dot"></span>総合ダッシュボード</h3><p>月次サマリー・今日のタスク・直近記録・GAP進捗・収穫リスク警告・作物提案・圃場カード一覧。</p></div>
+      <div class="card"><span class="freq">毎日</span><h3><span class="dot"></span>日報入力</h3><p>4ステップ入力（日付/圃場→作業内容+写真→農薬/施肥→確認・保存）。複数圃場の一括記録対応。写真圧縮・音声転記・二重登録ガード付き。</p></div>
+      <div class="card"><span class="freq">毎日</span><h3><span class="dot"></span>日報管理</h3><p>記録の一覧／閲覧／編集／削除。</p></div>
+      <div class="card"><span class="freq">週次</span><h3><span class="dot"></span>圃場まとめ</h3><p>ロット別の生産履歴を表形式で表示。CSV出力（数式インジェクション対策済み）。</p></div>
+      <div class="card"><span class="freq">週次</span><h3><span class="dot"></span>収穫予測</h3><p>積算温度ベースで収穫時期を予測。</p></div>
+      <div class="card"><span class="freq">随時</span><h3><span class="dot"></span>出荷記録</h3><p>収穫→ストック→出荷の流れとストック残管理。出荷先マスタ付き。</p></div>
+      <div class="card"><span class="freq">突合せ</span><h3><span class="dot"></span>整合性チェック</h3><p>入力ミス／食い違いを点検。該当記録へ一発ジャンプ、収穫↔出荷の増減を要確認扱い。</p></div>
+    </div>
+  </section>
+
+  <!-- B -->
+  <section class="block">
+    <h2 class="sec"><span class="tag">B</span> 圃場詳細（圃場ごとのタブ画面）</h2>
+    <p class="sec-note">各圃場を開くと出るタブ群。作業の実データはここに溜まる。</p>
+    <div class="grid">
+      <div class="card"><h3><span class="dot"></span>圃場ダッシュボード / 畝マップ</h3><p>圃場サマリーと Leaflet 畝マップ（緯度経度未設定でもクラッシュしない）。ロット追加・編集、ロット別リスク警告。</p></div>
+      <div class="card"><h3><span class="dot"></span>農薬散布・施肥・収穫</h3><p>ロット単位で記録（各 Form / List / Section）。二重登録ガード対応。</p></div>
+      <div class="card"><h3><span class="dot"></span>作付サイクル・評価</h3><p>作付サイクル選択と履歴、米の生育ステージタイムライン、圃場評価タブ。</p></div>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section class="block">
+    <h2 class="sec"><span class="tag">C</span> 季節ごと・監査時</h2>
+    <div class="grid">
+      <div class="card"><span class="freq">季節</span><h3><span class="dot"></span>作付計画 / 経営予測</h3><p>作付スケジュールと経営見込みの試算。</p></div>
+      <div class="card"><span class="freq">監査時</span><h3><span class="dot"></span>GAP帳票出力</h3><p>GAP書類の PDF / Excel 出力（HTMLエスケープ済み＝XSS対策）。</p></div>
+      <div class="card"><span class="freq">監査時</span><h3><span class="dot"></span>GAPチェックリスト</h3><p>GAP項目の点検。</p></div>
+    </div>
+  </section>
+
+  <!-- D -->
+  <section class="block">
+    <h2 class="sec"><span class="tag">D</span> マスタ・管理（下段「管理・設定」・既定で折りたたみ）</h2>
+    <p class="sec-note">初期設定中心で頻度は低い。関連機能はタブ統合済み。</p>
+    <div class="grid">
+      <div class="card"><h3><span class="dot"></span>マスタ管理</h3><p>農薬／肥料／作物カテゴリをタブ統合。在庫ウィジェット・仕入れ／使用履歴付き。</p></div>
+      <div class="card"><h3><span class="dot"></span>スタッフ管理</h3><p>スタッフ一覧＋ビザ管理。</p></div>
+      <div class="card"><h3><span class="dot"></span>技能実習生 作業日誌</h3><p>実習生ごとの作業日誌。</p></div>
+      <div class="card"><h3><span class="dot"></span>多言語マニュアル</h3><p>多言語対応のマニュアルライブラリ。</p></div>
+      <div class="card"><h3><span class="dot"></span>機器予約 / 機械整備記録</h3><p>機器予約と機械整備記録（GAP機械管理・直アクセス）。</p></div>
+      <div class="card"><h3><span class="dot"></span>収益シミュレーター</h3><p>収益の試算ツール。</p></div>
+      <div class="card"><h3><span class="dot"></span>設定</h3><p>各種システム設定。</p></div>
+    </div>
+  </section>
+
+  <!-- E -->
+  <section class="block">
+    <h2 class="sec"><span class="tag">E</span> 基盤・横断機能</h2>
+    <div class="grid">
+      <div class="card"><h3><span class="dot"></span>認証・テナント</h3><p>Supabase で認証と組織／農場情報を管理。<b>農場データ本体は localStorage 保存</b>（本番化の最重要論点）。</p></div>
+      <div class="card"><h3><span class="dot"></span>エラー堅牢化</h3><p>統一トースト通知＋ ErrorBoundary ＋未捕捉エラーの受け皿。読込・保存失敗を握り潰さず可視化。</p></div>
+      <div class="card"><h3><span class="dot"></span>UX演出・共通部品</h3><p>保存演出（紙吹雪）、共通削除確認モーダル、不足項目のトースト案内。</p></div>
+      <div class="card"><h3><span class="dot"></span>データ整合・修正済み</h3><p>日付のUTC/JSTズレ修正、圃場番号の法人間分離漏れ修正。</p></div>
+      <div class="card"><h3><span class="dot"></span>QAハーネス</h3><p>実ブラウザ E2E テスト同梱（<code>qa/</code>・puppeteer-core）。全ページ巡回・20圃場シナリオ。</p></div>
+    </div>
+  </section>
+
+  <!-- 整理候補 -->
+  <section class="block">
+    <div class="warnbox">
+      <h2>⚠️ 棚卸で見えた整理候補</h2>
+      <ul>
+        <li><b>重複</b>：<code>PesticideStockWidget</code> が2箇所定義／<code>LoginScreen</code> が auth.js と components.js に重複の可能性。</li>
+        <li><b>デッドコード</b>：<code>PlanCompareCard</code>・<code>LotsStep2DebugPanel</code>（未レンダリング、削除可）。</li>
+        <li><b>構造リスク</b>：<code>components.js</code> が約15,000行・106関数の1ファイル（COMPONENT_MAP.md の索引で運用中）。</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    中川農園システム（syatyo-suport / nakagawafarm）機能棚卸 ／ 2026-07-08 時点
+  </footer>
+
+</div>
+</body>
+</html>

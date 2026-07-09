@@ -4686,7 +4686,11 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   // 下書きの復元 / 破棄
   const restoreDraft = () => {
     if (!restorableDraft) return
-    if (restorableDraft.form) setForm(f => ({ ...f, ...restorableDraft.form, photos: [] }))
+    if (restorableDraft.form) {
+      setForm(f => ({ ...f, ...restorableDraft.form, photos: [] }))
+      // 【P4×P2 番人監査 High-1】復元した天気はユーザーが選んだ値。日付追従で勝手に上書きしないよう手動相当にする
+      if (restorableDraft.form.weather) weatherTouchedRef.current = true
+    }
     if (restorableDraft.step) setStep(restorableDraft.step)
     if (restorableDraft.dilution) setDilution(restorableDraft.dilution)
     setRestorableDraft(null)

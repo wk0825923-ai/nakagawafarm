@@ -26,15 +26,8 @@
     window.addEventListener('unhandledrejection', onRej)
     return () => { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej) }
   }, [])
-  // 【まっさら表示】?reset で現在ブラウザの農場ローカルデータ(farm_*)を消去して空状態に。
-  // デモの逆。ログイン状態(sb-*)は保持。消去後はクリーンURLへ遷移してリロード。
-  React.useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('reset') && !window.__farmReset) {
-      window.__farmReset = true
-      try { Object.keys(localStorage).filter(k => k.indexOf('farm_') === 0).forEach(k => localStorage.removeItem(k)) } catch (e) {}
-      window.location.replace(window.location.pathname)
-    }
-  }, [])
+  // 【まっさら表示】?reset の farm_* 消去は index.html 冒頭で同期実行済み（認証/マウント前）。
+  // 以前ここの useEffect にあったが認証済み再マウントで走らないことがあったため移設（番人監査 BUG#1）。
   const [page,      setPage]     = React.useState('dashboard')
   // 【スタッフ画面】'admin'(経営者フル機能) / 'staff'(日報だけの簡易入力)。
   // ?view=staff で初期表示をスタッフ画面に。データは同じstate/localStorageなので同一端末で連動。

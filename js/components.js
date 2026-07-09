@@ -10516,7 +10516,8 @@ function GapChecklist({ gap, onToggle, ctx }) {
   const inScheme = (c) => {
     const sc = c.schemes || ['GGAP']
     if (!(schemeSel === 'both' || sc.includes(schemeSel))) return false
-    if (scheme !== 'all' && c.level && c.level !== scheme) return false  // レベル絞込はGGAP項目のみ
+    // レベル絞込: レベルを持つ項目のみ対象。McD等レベル無し項目は絞込時に除外（推奨等への誤混入を防ぐ）
+    if (scheme !== 'all' && c.level !== scheme) return false
     return true
   }
 
@@ -10579,7 +10580,7 @@ function GapChecklist({ gap, onToggle, ctx }) {
     React.createElement('div',{ style:{ display:'flex', gap:8, alignItems:'center', margin:'8px 0 8px', flexWrap:'wrap' } },
       React.createElement('span',{ style:{ fontSize:12, color:'#6B7280', fontWeight:600 } }, '対象スキーム'),
       ...[['GGAP','GLOBALG.A.P.'],['McD','McD Addendum'],['GRASP','GRASP（労務）'],['both','全スキーム']].map(([k,lab]) =>
-        React.createElement('button',{ key:k, onClick:()=>setSchemeSel(k),
+        React.createElement('button',{ key:k, onClick:()=>{ setSchemeSel(k); setScheme('all') },   // スキーム切替時はレベル絞込をリセット（stale 0件表示を防ぐ）
           style:{ padding:'6px 14px', borderRadius:16, fontSize:12, fontWeight:700, cursor:'pointer', border:'1px solid',
             borderColor: schemeSel===k ? '#0A6B52' : '#DDE2EC', background: schemeSel===k ? '#ECFDF5' : '#fff', color: schemeSel===k ? '#0A6B52' : '#64748B' } }, lab))
     ),

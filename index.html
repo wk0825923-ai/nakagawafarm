@@ -27,6 +27,21 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<!-- 【?reset まっさら化】認証(非同期)やReactマウントより前に同期実行して確実に消す。
+     以前は App の useEffect 内にあり、認証済み再マウントの綱引きで走らないことがあった(番人監査 BUG#1)。
+     farm_* のみ消し、ログイン状態(sb_*)は保持。消したら履歴だけ書き換え(リロード不要)。 -->
+<script>
+(function(){
+  try {
+    var p = new URLSearchParams(window.location.search);
+    if (p.has('reset')) {   // 値なし ?reset でも効くよう has() を使う（get() は '' を返し falsy になる）
+      Object.keys(localStorage).filter(function(k){ return k.indexOf('farm_') === 0; })
+        .forEach(function(k){ localStorage.removeItem(k); });
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  } catch (e) {}
+})();
+</script>
 <div id="app"></div>
 <!-- PDF プレビュー領域（画面外に隠す） -->
 <div id="pdf-preview"></div>

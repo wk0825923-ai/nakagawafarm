@@ -38,7 +38,6 @@ function confirmDownload(opts) {
     }
     document.querySelectorAll('.sb-confirm-overlay').forEach(n => n.remove())
 
-    const icon     = opts.icon || '📄'
     const title    = opts.title || 'ファイルを出力します'
     const desc     = opts.desc || 'この内容でファイルをダウンロードします。よろしいですか？'
     const filename = opts.filename || ''
@@ -48,11 +47,10 @@ function confirmDownload(opts) {
     ov.className = 'sb-confirm-overlay'
     ov.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:sbCfFade .18s ease'
     ov.innerHTML =
-      '<div class="sb-confirm-card" style="background:#fff;border-radius:14px;max-width:400px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.28);animation:sbCfPop .22s cubic-bezier(.34,1.4,.64,1)">' +
-        '<div style="font-size:34px;text-align:center;margin-bottom:6px">' + icon + '</div>' +
-        '<div style="font-size:16px;font-weight:700;color:#1F2937;text-align:center;margin-bottom:8px">' + esc(title) + '</div>' +
-        '<div style="font-size:12.5px;color:#6B7280;text-align:center;line-height:1.65;margin-bottom:' + (filename ? '12px' : '20px') + '">' + esc(desc) + '</div>' +
-        (filename ? '<div style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:8px 12px;font-size:12px;color:#334155;text-align:center;margin-bottom:20px;word-break:break-all"><span style="opacity:.55">ファイル名：</span>' + esc(filename) + '</div>' : '') +
+      '<div class="sb-confirm-card" style="background:#fff;border-radius:14px;max-width:400px;width:100%;padding:26px 24px 22px;box-shadow:0 20px 60px rgba(0,0,0,.28);animation:sbCfPop .22s cubic-bezier(.34,1.4,.64,1)">' +
+        '<div style="font-size:16.5px;font-weight:700;color:#1F2937;margin-bottom:10px">' + esc(title) + '</div>' +
+        '<div style="font-size:12.5px;color:#6B7280;line-height:1.7;margin-bottom:' + (filename ? '14px' : '22px') + '">' + esc(desc) + '</div>' +
+        (filename ? '<div style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:9px 12px;font-size:12px;color:#334155;margin-bottom:22px;word-break:break-all"><span style="opacity:.55">ファイル名：</span>' + esc(filename) + '</div>' : '') +
         '<div style="display:flex;gap:10px">' +
           '<button class="sb-cf-cancel" style="flex:1;padding:11px;border-radius:9px;border:1px solid #D1D5DB;background:#fff;color:#374151;font-weight:600;font-size:14px;cursor:pointer">キャンセル</button>' +
           '<button class="sb-cf-ok" style="flex:1;padding:11px;border-radius:9px;border:none;background:#0A6B52;color:#fff;font-weight:700;font-size:14px;cursor:pointer">' + esc(okLabel) + '</button>' +

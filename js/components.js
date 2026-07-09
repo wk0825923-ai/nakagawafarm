@@ -579,7 +579,7 @@ function FarmIntegrityPage(props) {
       : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:12 } },
           ...findings.map(f => {
             const m = SEV_META[f.severity] || SEV_META.low
-            return React.createElement('div', { key:f.id, style:{ background:'#fff', border:'1px solid #E5E7EB', borderLeft:'4px solid '+m.color, borderRadius:12, padding:'14px 16px' } },
+            return React.createElement('div', { key:f.id, style:{ background:'#fff', border:'1px solid #E5E7EB', borderRadius:12, padding:'14px 16px' } },
               React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', marginBottom:6 } },
                 React.createElement('span', { style:{ fontSize:11, fontWeight:700, color:m.color, background:m.bg, border:'1px solid '+m.border, borderRadius:999, padding:'2px 8px' } }, m.label),
                 React.createElement('span', { style:{ fontSize:11, fontWeight:600, color:'#6B7280', background:'#F3F4F6', borderRadius:999, padding:'2px 8px' } }, f.category),
@@ -9781,7 +9781,7 @@ function FieldPerformancePage({ fields, harvestRecords, fieldPerformance, perfor
                   key: c.crop,
                   style:{
                     background:'#FFFFFF', border:'1px solid var(--border-color)', borderRadius:'8px',
-                    borderTop:'3px solid '+accent, padding:'14px 16px', boxShadow:'var(--shadow-flat)'
+                    padding:'14px 16px', boxShadow:'var(--shadow-flat)'
                   }
                 },
                   React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'10px' } },

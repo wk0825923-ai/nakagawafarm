@@ -537,6 +537,8 @@
           staff,
           // 圃場情報(所在地など)の更新。既存圃場に後から住所を入れられるように。
           onUpdateField: patch => setFields(p => p.map(f => f.id === field.id ? { ...f, ...patch } : f)),
+          // 作物別詳細(温度・積算温度など)の保存。従来どこからも渡されず保存が無効だったため配線。
+          onUpdateFieldCropDetails: (id, details) => setFields(p => p.map(f => f.id === id ? { ...f, crop_specific_details: details } : f)),
           sub
         })
       : (pageMap.dashboard)()

@@ -44,6 +44,7 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
   const [cropName, setCropName] = React.useState('')
   const [area,     setArea]     = React.useState('')
   const [address,  setAddress]  = React.useState('')   // 所在地(GAP登録圃場リストで必要)
+  const [emaffNo,  setEmaffNo]  = React.useState('')   // eMAFF農地番号(農地一連番号/筆番号)=eMAFF連携キー
   const COLORS = ['#0D9972','#2563EB','#EA580C','#7C3AED','#B45309','#DC2626']
   const selectedCat = categories.find(c => c.key === catKey) || defaultCat
   const [color, setColor] = React.useState(selectedCat.color || COLORS[0])
@@ -65,6 +66,7 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
       crop_category: catKey,
       area_are:     Number(area),
       address:      address.trim(),
+      emaff_no:     emaffNo.trim(),
       lat:          initialLatLng ? initialLatLng.lat : 35.385,
       lng:          initialLatLng ? initialLatLng.lng : 139.926,
       status:       '栽培中',
@@ -148,6 +150,19 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
           'GAPの登録圃場リストで必要です。地番は ',
           React.createElement('a', { href:'https://map.maff.go.jp/', target:'_blank', rel:'noopener', style:{ color:'#0A6B52', fontWeight:600 } }, 'eMAFF農地ナビ'),
           '（農水省・筆ポリゴン）で確認できます。'
+        )
+      ),
+      // eMAFF農地番号（任意）— eMAFF連携のキー。行政報告CSVの紐付けに使う。
+      React.createElement('div', { style:{ marginBottom:'14px' } },
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, 'eMAFF農地番号（任意）'),
+        React.createElement('input', {
+          className:'form-input',
+          placeholder: '例: 1234567890123（農地一連番号）',
+          value: emaffNo,
+          onChange: e => setEmaffNo(e.target.value),
+        }),
+        React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', marginTop:'4px', lineHeight:1.5 } },
+          'eMAFF農地ナビで各農地に割り振られた番号。入れておくと行政報告CSVで自動的に紐付きます。'
         )
       ),
       // カラー
@@ -7948,9 +7963,11 @@ function FieldDetailPage({ field, fields, records, pesticides, onSaveRecord, onU
   lots, onAddLot, onUpdateLot, onDeleteLot,
   onUpdateField }) {
   const fieldRecords = records.filter(r => r.field_id === field.id)
-  // 所在地(住所)のインライン編集。既存圃場に後から住所を入れられるように。
-  const [addrEditing, setAddrEditing] = React.useState(false)
-  const [addrDraft, setAddrDraft]     = React.useState('')
+  // 所在地(住所)・eMAFF農地番号のインライン編集。既存圃場に後から入れられるように。
+  const [addrEditing, setAddrEditing]   = React.useState(false)
+  const [addrDraft, setAddrDraft]       = React.useState('')
+  const [emaffEditing, setEmaffEditing] = React.useState(false)
+  const [emaffDraft, setEmaffDraft]     = React.useState('')
   const fieldRows    = lots || []
   const [selectedRowNo, setSelectedRowNo] = React.useState(null)
 
@@ -8073,6 +8090,22 @@ function FieldDetailPage({ field, fields, records, pesticides, onSaveRecord, onU
                   field.address ? React.createElement('span', null, '📍 ' + field.address) : React.createElement('span', { style:{ color:'#94A3B8' } }, '📍 所在地 未登録'),
                   React.createElement('button', { onClick:()=>{ setAddrDraft(field.address||''); setAddrEditing(true) },
                     style:{ fontSize:11, color:'#0A6B52', background:'none', border:'none', cursor:'pointer', fontWeight:600 } }, field.address ? '編集' : '登録')
+                )
+          ),
+          // eMAFF農地番号 — eMAFF連携キー。既存圃場にも後から登録/編集できる。
+          React.createElement('div', { style:{ fontSize:'11px', color:'#6B7280', marginTop:'3px', display:'flex', alignItems:'center', gap:'6px', flexWrap:'wrap' } },
+            emaffEditing
+              ? React.createElement(React.Fragment, null,
+                  React.createElement('input', { autoFocus:true, value:emaffDraft, onChange:e=>setEmaffDraft(e.target.value), placeholder:'例: 1234567890123（農地一連番号）',
+                    style:{ fontSize:'12px', padding:'3px 7px', border:'1px solid #D8E4D8', borderRadius:5, width:'230px', outline:'none' } }),
+                  React.createElement('button', { onClick:()=>{ if(onUpdateField) onUpdateField({ emaff_no: emaffDraft.trim() }); setEmaffEditing(false); try{ if(typeof showToast==='function') showToast('eMAFF農地番号を保存しました','success') }catch(e){} },
+                    style:{ fontSize:11, fontWeight:700, color:'#fff', background:'#0A6B52', border:'none', borderRadius:5, padding:'3px 10px', cursor:'pointer' } }, '保存'),
+                  React.createElement('button', { onClick:()=>setEmaffEditing(false), style:{ fontSize:11, color:'#6B7280', background:'none', border:'none', cursor:'pointer' } }, '取消')
+                )
+              : React.createElement(React.Fragment, null,
+                  field.emaff_no ? React.createElement('span', null, '🗺 eMAFF農地番号: ' + field.emaff_no) : React.createElement('span', { style:{ color:'#94A3B8' } }, '🗺 eMAFF農地番号 未登録'),
+                  React.createElement('button', { onClick:()=>{ setEmaffDraft(field.emaff_no||''); setEmaffEditing(true) },
+                    style:{ fontSize:11, color:'#0A6B52', background:'none', border:'none', cursor:'pointer', fontWeight:600 } }, field.emaff_no ? '編集' : '登録')
                 )
           ),
         ),
@@ -10301,9 +10334,13 @@ function useGapBase({ gap, records, fields, pesticides, ctx }) {
     try { exportFertilizerExcel(records, fields) }
     catch(e) { showToast('Excel出力に失敗しました: ' + e.message, 'error') }
   }
+  const handleExportEmaff = () => {
+    try { exportEmaffCSV(records, fields, pesticides) }
+    catch(e) { showToast('eMAFF連携CSV出力に失敗しました: ' + e.message, 'error') }
+  }
 
   return { open, setOpen, exporting, cats, total, done, pct, sprayCount, isDone,
-           handleExportPDF, handleExportExcel }
+           handleExportPDF, handleExportExcel, handleExportEmaff }
 }
 
 // ── 共通UI: 全体進捗バー ────────────────────────────────────
@@ -10411,8 +10448,8 @@ function GapChecklistPanel({ gap, cats, open, setOpen, onToggle, ctx }) {
 }
 
 // ── 共通UI: 帳票出力ボタン群 ────────────────────────────────
-function GapExportButtons({ exporting, sprayCount, handleExportPDF, handleExportExcel }) {
-  return React.createElement('div',{style:{display:'flex',gap:'8px',flexShrink:0,marginTop:'4px'}},
+function GapExportButtons({ exporting, sprayCount, handleExportPDF, handleExportExcel, handleExportEmaff }) {
+  return React.createElement('div',{style:{display:'flex',gap:'8px',flexShrink:0,marginTop:'4px',flexWrap:'wrap'}},
     React.createElement('button',{
       className:'btn btn-primary', onClick:handleExportPDF, disabled:exporting,
       style:{ background: exporting ? CONFIG.COLOR.primaryDark : CONFIG.COLOR.primary }
@@ -10420,7 +10457,12 @@ function GapExportButtons({ exporting, sprayCount, handleExportPDF, handleExport
     React.createElement('button',{
       className:'btn btn-ghost', onClick:handleExportExcel,
       style:{ borderColor:'#0D9972', color:'#0D9972' }
-    }, '📊 施肥記録 Excel')
+    }, '📊 施肥記録 Excel'),
+    React.createElement('button',{
+      className:'btn btn-ghost', onClick:handleExportEmaff,
+      style:{ borderColor:'#0D9972', color:'#0D9972' },
+      title:'農薬散布・施肥・収穫の記録に圃場のeMAFF農地番号を紐づけたCSVを出力します'
+    }, '🗺 eMAFF連携CSV')
   )
 }
 
@@ -10676,7 +10718,7 @@ function GapExportHero({ done, total, pct, sprayCount, onGenerateAll, isGenerati
 // ── GapExport: 帳票出力 / 申請パッケージ専用ページ ─────────
 function GapExport({ gap, records, fields, pesticides, ctx }) {
   const { exporting, done, total, pct, sprayCount,
-          handleExportPDF, handleExportExcel } = useGapBase({ gap, records, fields, pesticides, ctx })
+          handleExportPDF, handleExportExcel, handleExportEmaff } = useGapBase({ gap, records, fields, pesticides, ctx })
 
   const [isGenerating, setIsGenerating] = React.useState(false)
   const [justCompleted, setJustCompleted] = React.useState(false)
@@ -10728,6 +10770,25 @@ function GapExport({ gap, records, fields, pesticides, ctx }) {
       onGenerateAll: handleGenerateAll,
       isGenerating, justCompleted
     }),
+    /* ── eMAFF連携CSV出力 ── */
+    React.createElement('div',{className:'card',style:{marginBottom:'16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px',flexWrap:'wrap'}},
+      React.createElement('div',{style:{flex:1,minWidth:'240px'}},
+        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}},
+          React.createElement('span',{style:{fontSize:'16px'}},'🗺'),
+          React.createElement('span',{style:{fontSize:'14px',fontWeight:700,color:'#1F2937'}},'eMAFF連携用CSV'),
+          React.createElement('span',{style:{fontSize:'10px',padding:'2px 8px',borderRadius:'20px',background:'#EFF6FF',color:'#1D4ED8',border:'1px solid #BFDBFE',fontWeight:600}},'農地番号つき実績台帳')
+        ),
+        React.createElement('div',{style:{fontSize:'11.5px',color:'#6B7280',lineHeight:1.6}},
+          '農薬散布・施肥・収穫の記録に、各圃場の eMAFF農地番号・所在地を紐づけて出力します。',
+          React.createElement('br',null),
+          '※ eMAFFの正式インポート様式は申請メニューごとに列並びが異なります。本CSVはその転記元となる台帳です。'
+        )
+      ),
+      React.createElement('button',{
+        className:'btn btn-ghost', onClick:handleExportEmaff,
+        style:{ borderColor:'#0D9972', color:'#0D9972', flexShrink:0, fontWeight:600 }
+      }, '🗺 eMAFF連携CSVを出力')
+    ),
     /* ── 様式プレビューカード ── */
     React.createElement('div',{className:'card',style:{marginBottom:'16px'}},
       React.createElement('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}},
@@ -10831,9 +10892,9 @@ function GapExport({ gap, records, fields, pesticides, ctx }) {
 }
 
 // ── GapFull: チェックリスト＋出力ボタンのフルページ ────────
-function GapFull({ gap, onToggle, records, fields, pesticides }) {
+function GapFull({ gap, onToggle, records, fields, pesticides, ctx }) {
   const { open, setOpen, exporting, done, total, pct, cats, sprayCount,
-          handleExportPDF, handleExportExcel } = useGapBase({ gap, records, fields, pesticides })
+          handleExportPDF, handleExportExcel, handleExportEmaff } = useGapBase({ gap, records, fields, pesticides, ctx })
   return React.createElement('div',{className:'page'},
     React.createElement('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'6px'}},
       React.createElement('div',null,
@@ -10841,7 +10902,7 @@ function GapFull({ gap, onToggle, records, fields, pesticides }) {
         React.createElement('div',{className:'page-title'},'GAP申請サポート'),
         React.createElement('div',{className:'page-sub'},'JGAP / GlobalGAP 対応チェックリスト')
       ),
-      React.createElement(GapExportButtons,{ exporting, sprayCount, handleExportPDF, handleExportExcel })
+      React.createElement(GapExportButtons,{ exporting, sprayCount, handleExportPDF, handleExportExcel, handleExportEmaff })
     ),
     React.createElement(GapProgressBar,{ done, total, pct }),
     React.createElement(GapChecklistPanel,{ gap, cats, open, setOpen, onToggle })

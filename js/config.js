@@ -538,3 +538,89 @@ async function exportFertilizerExcel(records, fields) {
   }
 }
 
+// =====================================================
+// eMAFF連携用 CSV出力
+// 農薬散布 / 施肥 / 収穫 の記録に、圃場のeMAFF農地番号・所在地を紐づけ、
+// eMAFF（農林水産省 共通申請サービス）へ取り込みやすい中間フォーマットで出力する。
+//
+// ※注意: eMAFFの正式インポートテンプレートは申請メニュー（作目・様式）ごとに
+//   列並び・セル位置が異なり、単一の固定公開フォーマットが存在しない。
+//   本CSVは「農地番号つきの実績台帳」として、各農家が自分のeMAFF様式へ
+//   転記・貼り付けする土台。そのままアップロードで完了、とは謳わない。
+// =====================================================
+async function exportEmaffCSV(records, fields, pesticides) {
+  // CSVインジェクション対策（=,+,-,@ で始まるセルを ' で無害化）＋ クォート
+  const csvCell = (v) => {
+    let s = (v == null) ? '' : String(v)
+    if (/^[=+\-@]/.test(s)) s = "'" + s
+    if (/[",\r\n]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"'
+    return s
+  }
+
+  const KINDS = ['農薬散布', '施肥', '収穫']
+  const rows = (records || []).filter(r => KINDS.includes(r.work_type))
+
+  if (rows.length === 0) {
+    showToast('eMAFFに連携できる記録（農薬散布・施肥・収穫）がまだありません。', 'warn')
+    return
+  }
+
+  const header = [
+    'eMAFF農地番号', '所在地', '圃場名', '作物',
+    '作業日', '作業区分', '使用資材', '登録番号', '希釈倍数', '数量', '単位',
+    '作業者', '天気', '備考',
+  ]
+
+  const findField = (id) => (fields || []).find(f => f.id === id) || {}
+  const findPest  = (id) => (pesticides || []).find(p => p.id === id) || null
+
+  const lines = [header.map(csvCell).join(',')]
+
+  rows.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+       .forEach(r => {
+    const f = findField(r.field_id)
+    let material = '', regNo = '', dilution = '', qty = '', unit = ''
+
+    if (r.work_type === '農薬散布') {
+      const p  = findPest(r.pesticide_id)
+      material = p ? p.name : (r.pesticide_name || '')
+      regNo    = p ? (p.reg_no || '') : ''
+      dilution = r.dilution || ''
+      qty      = (r.amount != null ? r.amount : '')
+      unit     = r.amount != null ? 'L' : ''
+    } else if (r.work_type === '施肥') {
+      material = r.fertilizer_name || ''
+      qty      = (r.amount != null ? r.amount : '')
+      unit     = r.amount != null ? 'kg' : ''
+    } else if (r.work_type === '収穫') {
+      qty  = (r.total_cases != null ? r.total_cases : (r.amount != null ? r.amount : ''))
+      unit = r.total_cases != null ? 'ケース' : (r.amount != null ? 'kg' : '')
+    }
+
+    lines.push([
+      f.emaff_no || '', f.address || '', f.name || '', f.crop || '',
+      r.date || '', r.work_type, material, regNo, dilution, qty, unit,
+      r.worker || '', r.weather || '', r.note || '',
+    ].map(csvCell).join(','))
+  })
+
+  // Excel（日本語Windows）での文字化け防止に BOM 付き UTF-8
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  a.href = url
+  a.download = 'eMAFF連携_実績台帳_' + stamp + '.csv'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+
+  const missing = new Set(rows.map(r => findField(r.field_id)).filter(f => !f.emaff_no).map(f => f.name || '?'))
+  if (missing.size > 0) {
+    showToast('CSVを出力しました。ただし ' + [...missing].slice(0,3).join('・') + (missing.size>3?' 他':'') + ' はeMAFF農地番号が未登録です（圃場詳細で登録できます）。', 'warn')
+  } else {
+    showToast('eMAFF連携用CSVを出力しました（' + rows.length + '件）。', 'success')
+  }
+}
+

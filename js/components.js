@@ -5400,6 +5400,22 @@ function RowMap({ lots, totalRows, selectable, selectedRows, onSelectRows, highl
       )
     ),
 
+    // 【P3: 複数畝の一括登録】「全畝を選択／クリア」ワンタップ。「1〜6畝ぜんぶ同じ薬を散布」を素早く。
+    selectable && onSelectRows && React.createElement('div', {
+      style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }
+    },
+      React.createElement('button', {
+        type: 'button',
+        onClick: () => { const s = new Set(); for (let i = 1; i <= totalRows; i++) s.add(i); onSelectRows(s) },
+        style: { fontSize: '11.5px', fontWeight: 700, color: '#0A6B52', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '7px', padding: '5px 12px', cursor: 'pointer' }
+      }, '全畝を選択（' + totalRows + '畝）'),
+      (selectedRows && selectedRows.size > 0) && React.createElement('button', {
+        type: 'button', onClick: () => onSelectRows(new Set()),
+        style: { fontSize: '11.5px', fontWeight: 600, color: '#6B7280', background: 'none', border: '1px solid #E2E8F0', borderRadius: '7px', padding: '5px 12px', cursor: 'pointer' }
+      }, 'クリア'),
+      (selectedRows && selectedRows.size > 0) && React.createElement('span', { style: { fontSize: '11px', color: '#0A6B52', fontWeight: 700 } }, selectedRows.size + '畝 選択中')
+    ),
+
     // 畝グリッド
     // ダッシュボード表示モード(selectable=false)では横スクロールの畝帯レイアウト
     // 記録入力モーダル(selectable=true)では従来の折り返しグリッドを維持

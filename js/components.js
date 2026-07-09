@@ -10701,9 +10701,12 @@ function GapDocumentList({ sprayCount }) {
 
 // ── GAP達成率ヒーロー：①書類確認→②生成中→③完成 の「わー！」体験 ─
 function GapExportHero({ done, total, pct, sprayCount, onGenerateAll, isGenerating, justCompleted }) {
-  // 昨年度の達成率（モック：今年から-12ptの想定値を逆算して+表示する）
-  const lastYearPct = Math.max(0, pct - 12)
-  const delta = pct - lastYearPct
+  // 【主張を代作しない】昨年度の達成率は実データが無い（前年の達成率を保存していない）ため、
+  // 以前の「昨年比+12pt」は逆算した常時プラスのモック値だった＝根拠なき改善主張（景表法/優良誤認リスク）。
+  // 前年実績が保存されるまで昨年比バッジは表示しない。達成率%と項目数は事実なので残す。
+  const lastYearPct = null            // 前年の達成率実績（未保存）。保存する仕組みを入れたら値を渡す。
+  const hasLastYear = lastYearPct != null
+  const delta = hasLastYear ? (pct - lastYearPct) : null
 
   return React.createElement('div',{
     style:{
@@ -10715,10 +10718,11 @@ function GapExportHero({ done, total, pct, sprayCount, onGenerateAll, isGenerati
   },
     React.createElement('div',{style:{display:'flex',alignItems:'flex-end',justifyContent:'space-between',flexWrap:'wrap',gap:'20px',marginBottom:'22px'}},
       React.createElement('div',null,
-        React.createElement('div',{style:{fontSize:'12px',opacity:.65,letterSpacing:'.08em',marginBottom:'6px'}},'GAP 審査基準 達成率'),
+        React.createElement('div',{style:{fontSize:'12px',opacity:.65,letterSpacing:'.08em',marginBottom:'6px'}},'GAP 審査基準 達成率（全スキーム ' + total + '項目 基準）'),
         React.createElement('div',{style:{display:'flex',alignItems:'baseline',gap:'12px'}},
           React.createElement('span',{style:{fontSize:'46px',fontWeight:700,lineHeight:1,letterSpacing:'-.02em'}},pct+'%'),
-          React.createElement('span',{
+          // 昨年比バッジ: 前年実績が保存されている時だけ表示（無根拠のモック表示を廃止）
+          hasLastYear && React.createElement('span',{
             style:{fontSize:'12px',fontWeight:700,padding:'4px 10px',borderRadius:'20px',
                    background: delta >= 0 ? 'rgba(74,222,128,.18)' : 'rgba(248,113,113,.18)',
                    color: delta >= 0 ? '#86EFAC' : '#FCA5A5',

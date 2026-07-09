@@ -498,9 +498,10 @@ body.field-mode .form-input,
 body.field-mode .form-select{ font-size:16px !important; min-height:48px; }
 /* 主要ボタン */
 body.field-mode .btn{ min-height:50px; font-size:16px; padding:12px 20px; }
-/* .main 内のボタン/タップ要素のタップ領域を拡大（アイコン小ボタンも押しやすく） */
-body.field-mode .main button,
-body.field-mode .main [role=button]{ min-height:46px; }
+/* .main 内のボタン/タップ要素のタップ領域を拡大。ただし丸ボタン(border-radius:50%)や
+   背景なしのアイコン/×小ボタン(background:none)は形状破壊するため除外（番人監査 P5 M-1/L-1）。 */
+body.field-mode .main button:not([style*="border-radius: 50%"]):not([style*="border-radius:50%"]):not([style*="background: none"]):not([style*="background:none"]),
+body.field-mode .main [role=button]:not([style*="border-radius: 50%"]):not([style*="border-radius:50%"]){ min-height:46px; }
 /* サイドバーのメニューも大きく */
 body.field-mode .nav-item{ font-size:15px; padding:12px 12px; }
 body.field-mode .nav-icon{ font-size:20px; }

@@ -4645,11 +4645,13 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
         const { photos, ...rest } = form
         localStorage.setItem(draftKey, JSON.stringify({ form: { ...rest, photos: [] }, step, dilution, savedAt: Date.now() }))
         setDraftSaved(true)
-      } else {
+      } else if (!restorableDraft) {
+        // 【番人監査 P2 High-1】未復元の下書きが待機中は消さない。マウント直後は live フォームが
+        // pristine のためこの分岐に入るが、復元前に永続下書きを消すと再リロードで復元不能になる。
         localStorage.removeItem(draftKey); setDraftSaved(false)
       }
     } catch (e) { /* 容量超過等は握り潰さないが、下書きは記録本体の保存を妨げないため通知は最小 */ }
-  }, [form, step, dilution])
+  }, [form, step, dilution, restorableDraft])
 
   // 下書きの復元 / 破棄
   const restoreDraft = () => {

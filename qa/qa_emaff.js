@@ -96,16 +96,24 @@ const expand=(page)=>page.evaluate(()=>{const b=[...document.querySelectorAll('b
   await sleep(400); await expand(page); await sleep(200)
   await clickText(page,'圃場管理'); await sleep(500)
   await clickText(page,'圃場一覧へ'); await sleep(600)   // 追加ボタンは圃場一覧ページにある
+  await page.evaluate(()=>{const btn=[...document.querySelectorAll('button')].find(b=>/圃場を追加|新規圃場|圃場追加/.test(b.textContent)&&b.offsetParent);if(btn)btn.click()})
+  await sleep(500)
+  // 折りたたみ前: エリアは常時表示・GAP詳細(所在地/eMAFF/チェック)は非表示。モーダルは高さ制限あり
+  R.addModalBefore = await page.evaluate(()=>{
+    const card=[...document.querySelectorAll('div')].find(d=>d.style&&d.style.maxHeight&&d.style.maxHeight.indexOf('vh')>=0&&/圃場を追加/.test(d.textContent))
+    const ov=[...document.querySelectorAll('div')].find(d=>d.style&&d.style.position==='fixed'&&/圃場を追加/.test(d.textContent))
+    const t=ov?ov.innerText:''
+    return { modalOpen:!!ov, hasArea:/エリア/.test(t), hasAreaSize:/面積/.test(t),
+      boundedHeight:!!card, gapCollapsed:!/GGAP認証の対象圃場/.test(t), hasToggle:/GAP・所在地の詳細/.test(t) }
+  })
+  // GAP詳細トグルを開く
+  await page.evaluate(()=>{const b=[...document.querySelectorAll('button')].find(x=>/GAP・所在地の詳細/.test(x.textContent)&&x.offsetParent);if(b)b.click()})
+  await sleep(400)
   R.addModal = await page.evaluate(()=>{
-    const btn=[...document.querySelectorAll('button')].find(b=>/圃場を追加|新規圃場|圃場追加/.test(b.textContent)&&b.offsetParent)
-    if(btn)btn.click()
-    return new Promise(res=>setTimeout(()=>{
-      // 実際に開いた position:fixed モーダルの中身だけを見る（ページ本文の誤検出を防ぐ）
-      const ov=[...document.querySelectorAll('div')].find(d=>d.style&&d.style.position==='fixed'&&/圃場を追加/.test(d.textContent))
-      const t=ov?ov.innerText:''
-      res({ modalOpen:!!ov, hasEmaffInput:/eMAFF農地番号|農地一連番号/i.test(t), hasAddress:/所在地|住所/.test(t), hasNavLink:/農地ナビ/.test(t),
-        hasArea:/エリア/.test(t), hasGgapTarget:/GGAP認証の対象圃場/.test(t), hasCheckbox:!!(ov&&ov.querySelector('input[type=checkbox]')) })
-    },500))
+    const ov=[...document.querySelectorAll('div')].find(d=>d.style&&d.style.position==='fixed'&&/圃場を追加/.test(d.textContent))
+    const t=ov?ov.innerText:''
+    return { hasEmaffInput:/eMAFF農地番号|農地一連番号/i.test(t), hasAddress:/所在地|住所/.test(t), hasNavLink:/農地ナビ/.test(t),
+      hasArea:/エリア/.test(t), hasGgapTarget:/GGAP認証の対象圃場/.test(t), hasCheckbox:!!(ov&&ov.querySelector('input[type=checkbox]')) }
   })
   // モーダルを閉じる
   await page.evaluate(()=>{const b=[...document.querySelectorAll('button')].find(x=>/キャンセル|閉じる|×/.test(x.textContent)&&x.offsetParent);if(b)b.click()})
@@ -146,9 +154,12 @@ const expand=(page)=>page.evaluate(()=>{const b=[...document.querySelectorAll('b
     ['確認: ダイアログ表示', R.confirm&&R.confirm.overlayShown===true],
     ['確認: 出力/キャンセルボタン', R.confirm&&R.confirm.hasOkCancel===true],
     ['確認: キャンセルで未ダウンロード', R.confirm&&R.confirm.downloadedAfterCancel===false],
-    ['圃場追加: eMAFF入力欄あり', R.addModal&&R.addModal.hasEmaffInput===true],
-    ['圃場追加: エリア入力欄あり', R.addModal&&R.addModal.hasArea===true],
-    ['圃場追加: GGAP対象チェックあり', R.addModal&&R.addModal.hasGgapTarget===true&&R.addModal.hasCheckbox===true],
+    ['圃場追加: モーダル高さ制限あり(縦いっぱい解消)', R.addModalBefore&&R.addModalBefore.boundedHeight===true],
+    ['圃場追加: エリア/面積は常時表示', R.addModalBefore&&R.addModalBefore.hasArea===true&&R.addModalBefore.hasAreaSize===true],
+    ['圃場追加: GAP詳細は既定で折りたたみ', R.addModalBefore&&R.addModalBefore.gapCollapsed===true&&R.addModalBefore.hasToggle===true],
+    ['圃場追加: 展開でeMAFF入力欄あり', R.addModal&&R.addModal.hasEmaffInput===true],
+    ['圃場追加: 展開で所在地あり', R.addModal&&R.addModal.hasAddress===true],
+    ['圃場追加: 展開でGGAP対象チェックあり', R.addModal&&R.addModal.hasGgapTarget===true&&R.addModal.hasCheckbox===true],
     ['帳票: eMAFF CSVボタンあり', R.exportBtn&&R.exportBtn.hasEmaffCsvBtn===true],
     ['巡回: 異常表示なし', R.pageScan.every(x=>!x.bad)],
     ['JSエラーなし', errors.length===0],

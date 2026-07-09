@@ -48,6 +48,7 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
   const [address,  setAddress]  = React.useState('')   // 所在地(GAP登録圃場リストで必要)
   const [emaffNo,  setEmaffNo]  = React.useState('')   // eMAFF農地番号(農地一連番号/筆番号)=eMAFF連携キー
   const [gapTarget, setGapTarget] = React.useState(true) // GGAP認証対象(★)か対象外(NG)か
+  const [showGap,  setShowGap]  = React.useState(false)  // GAP関連(所在地/eMAFF/対象)の折りたたみ。既定は閉じてモーダルを短く保つ
   const COLORS = ['#0D9972','#2563EB','#EA580C','#7C3AED','#B45309','#DC2626']
   const selectedCat = categories.find(c => c.key === catKey) || defaultCat
   const [color, setColor] = React.useState(selectedCat.color || COLORS[0])
@@ -88,149 +89,115 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
     onClose()
   }
 
+  // 共通ラベル/フィールド（コンパクト化）
+  const lbl = (t) => React.createElement('label', { style:{ fontSize:'10.5px', fontWeight:700, color:'#374151', display:'block', marginBottom:'4px', letterSpacing:'.04em' } }, t)
+  const field = (label, el) => React.createElement('div', null, lbl(label), el)
+
   return React.createElement('div', {
     style:{
       position:'fixed', inset:0, background:'rgba(0,0,0,.38)',
-      display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999
+      display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:'20px'
     },
     onClick: e => { if (e.target === e.currentTarget) onClose() }
   },
     React.createElement('div', {
       style:{
-        background:'#fff', borderRadius:'12px', padding:'24px',
-        width:'340px', boxShadow:'0 8px 32px rgba(0,0,0,.18)'
+        background:'#fff', borderRadius:'14px', width:'400px', maxWidth:'100%',
+        maxHeight:'88vh', display:'flex', flexDirection:'column',
+        boxShadow:'0 8px 32px rgba(0,0,0,.22)', overflow:'hidden'
       }
     },
-      React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827', marginBottom: initialLatLng ? '6px' : '18px' } },
-        '➕ 圃場を追加'
-      ),
-      initialLatLng && React.createElement('div', { style:{ fontSize:'11px', color:'#0A6B52', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'6px', padding:'5px 8px', marginBottom:'14px' } },
-        '📍 選択した地点に登録します（' + initialLatLng.lat.toFixed(5) + ', ' + initialLatLng.lng.toFixed(5) + '）'
-      ),
-      // 圃場名
-      React.createElement('div', { style:{ marginBottom:'12px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '圃場名（圃場記号）'),
-        React.createElement('input', {
-          className:'form-input',
-          placeholder:'例: N-2 / 第21圃場',
-          value: name,
-          onChange: e => setName(e.target.value),
-          onKeyDown: e => e.key === 'Enter' && submit(),
-          autoFocus: true,
-        })
-      ),
-      // エリア（GGAP登録圃場リストの区分。例: 上望陀）
-      React.createElement('div', { style:{ marginBottom:'12px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, 'エリア（任意）'),
-        React.createElement('input', {
-          className:'form-input',
-          placeholder:'例: 上望陀',
-          value: areaName,
-          onChange: e => setAreaName(e.target.value),
-        })
-      ),
-      // 作物カテゴリ
-      React.createElement('div', { style:{ marginBottom:'12px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '作物カテゴリ'),
-        React.createElement('select', {
-          className:'form-select',
-          value: catKey,
-          onChange: e => handleCatChange(e.target.value),
-        },
-          categories.map(c => React.createElement('option', { key:c.key, value:c.key }, c.name))
+      // ── ヘッダー（固定）──
+      React.createElement('div', { style:{ flexShrink:0, padding:'18px 22px 12px', borderBottom:'1px solid #F1F5F9' } },
+        React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '➕ 圃場を追加'),
+        initialLatLng && React.createElement('div', { style:{ fontSize:'11px', color:'#0A6B52', background:'#ECFDF5', border:'1px solid #A7F3D0', borderRadius:'6px', padding:'5px 8px', marginTop:'8px' } },
+          '📍 選択した地点に登録（' + initialLatLng.lat.toFixed(5) + ', ' + initialLatLng.lng.toFixed(5) + '）'
         )
       ),
-      // 品種名（任意）
-      React.createElement('div', { style:{ marginBottom:'12px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '品種名（任意）'),
-        React.createElement('input', {
-          className:'form-input',
-          placeholder: 'グリーンウェーブ など（省略可）',
-          value: cropName,
-          onChange: e => setCropName(e.target.value),
-        })
-      ),
-      // 面積
-      React.createElement('div', { style:{ marginBottom:'14px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '面積 (a)'),
-        React.createElement('input', {
-          className:'form-input',
-          type:'number', min:'1', placeholder:'例: 20',
-          value: area,
-          onChange: e => setArea(e.target.value),
-        })
-      ),
-      // 所在地（住所）— GAPの登録圃場リスト・現場管理で必要。任意だが推奨。
-      React.createElement('div', { style:{ marginBottom:'14px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '所在地（住所）'),
-        React.createElement('input', {
-          className:'form-input',
-          placeholder: '例: 千葉県木更津市○○ 123-4',
-          value: address,
-          onChange: e => setAddress(e.target.value),
-        }),
-        React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', marginTop:'4px', lineHeight:1.5 } },
-          'GAPの登録圃場リストで必要です。地番は ',
-          React.createElement('a', { href:'https://map.maff.go.jp/', target:'_blank', rel:'noopener', style:{ color:'#0A6B52', fontWeight:600 } }, 'eMAFF農地ナビ'),
-          '（農水省・筆ポリゴン）で確認できます。'
-        )
-      ),
-      // eMAFF農地番号（任意）— eMAFF連携のキー。行政報告CSVの紐付けに使う。
-      React.createElement('div', { style:{ marginBottom:'14px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, 'eMAFF農地番号（任意）'),
-        React.createElement('input', {
-          className:'form-input',
-          placeholder: '例: 1234567890123（農地一連番号）',
-          value: emaffNo,
-          onChange: e => setEmaffNo(e.target.value),
-        }),
-        React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', marginTop:'4px', lineHeight:1.5 } },
-          'eMAFF農地ナビで各農地に割り振られた番号。入れておくと行政報告CSVで自動的に紐付きます。'
-        )
-      ),
-      // GGAP認証対象（★=対象 / NG=対象外）
-      React.createElement('div', { style:{ marginBottom:'16px' } },
-        React.createElement('label', { style:{ display:'flex', alignItems:'center', gap:'8px', cursor:'pointer', fontSize:'13px', color:'#374151', fontWeight:600 } },
-          React.createElement('input', {
-            type:'checkbox', checked: gapTarget,
-            onChange: e => setGapTarget(e.target.checked),
-            style:{ width:'16px', height:'16px', accentColor:'#0A6B52', cursor:'pointer' }
-          }),
-          'GGAP認証の対象圃場にする'
-        ),
-        React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', marginTop:'4px', lineHeight:1.5 } },
-          'GGAP登録圃場リストの ★ に相当。外すと認証対象外（NG）として扱います。'
-        )
-      ),
-      // カラー
-      React.createElement('div', { style:{ marginBottom:'20px' } },
-        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'6px', letterSpacing:'.06em', textTransform:'uppercase' } }, 'マップ色'),
-        React.createElement('div', { style:{ display:'flex', gap:'8px' } },
-          COLORS.map(c => React.createElement('button', {
-            key:c,
-            onClick: () => setColor(c),
-            style:{
-              width:'26px', height:'26px', borderRadius:'50%', background:c,
-              border: color === c ? '3px solid #111827' : '2px solid transparent',
-              cursor:'pointer', flexShrink:0,
-            }
+
+      // ── 本文（スクロール）──
+      React.createElement('div', { style:{ flex:1, overflowY:'auto', padding:'16px 22px', display:'flex', flexDirection:'column', gap:'12px' } },
+        // 圃場名（フル幅）
+        field('圃場名（圃場記号）', React.createElement('input', {
+          className:'form-input', placeholder:'例: N-2 / 第21圃場', value:name,
+          onChange:e=>setName(e.target.value), onKeyDown:e=>e.key==='Enter'&&submit(), autoFocus:true,
+        })),
+        // エリア + 面積（2カラム）
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' } },
+          field('エリア（任意）', React.createElement('input', {
+            className:'form-input', placeholder:'例: 上望陀', value:areaName, onChange:e=>setAreaName(e.target.value),
+          })),
+          field('面積 (a)', React.createElement('input', {
+            className:'form-input', type:'number', min:'1', placeholder:'例: 20', value:area, onChange:e=>setArea(e.target.value),
           }))
+        ),
+        // 作物カテゴリ + 品種名（2カラム）
+        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' } },
+          field('作物カテゴリ', React.createElement('select', {
+            className:'form-select', value:catKey, onChange:e=>handleCatChange(e.target.value),
+          }, categories.map(c => React.createElement('option', { key:c.key, value:c.key }, c.name)))),
+          field('品種名（任意）', React.createElement('input', {
+            className:'form-input', placeholder:'グリーンウェーブ 等', value:cropName, onChange:e=>setCropName(e.target.value),
+          }))
+        ),
+        // マップ色
+        field('マップ色', React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+          COLORS.map(c => React.createElement('button', {
+            key:c, onClick:()=>setColor(c),
+            style:{ width:'26px', height:'26px', borderRadius:'50%', background:c,
+              border: color === c ? '3px solid #111827' : '2px solid transparent', cursor:'pointer', flexShrink:0 }
+          }))
+        )),
+
+        // ── GAP関連（折りたたみ・任意）──
+        React.createElement('div', { style:{ borderTop:'1px solid #F1F5F9', paddingTop:'10px' } },
+          React.createElement('button', {
+            onClick:()=>setShowGap(v=>!v),
+            style:{ display:'flex', alignItems:'center', gap:'6px', width:'100%', background:'none', border:'none', cursor:'pointer', padding:'2px 0', color:'#0A6B52', fontSize:'12px', fontWeight:700 }
+          },
+            React.createElement('i', { className:'ti ti-chevron-'+(showGap?'down':'right'), style:{ fontSize:'14px' } }),
+            'GAP・所在地の詳細（任意）',
+            !showGap && React.createElement('span', { style:{ marginLeft:'auto', fontSize:'10px', color:'#94A3B8', fontWeight:500 } }, '所在地・eMAFF番号・認証対象')
+          ),
+          showGap && React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'12px', marginTop:'12px' } },
+            // 所在地
+            field('所在地（住所）', React.createElement(React.Fragment, null,
+              React.createElement('input', {
+                className:'form-input', placeholder:'例: 千葉県木更津市○○ 123-4', value:address, onChange:e=>setAddress(e.target.value),
+              }),
+              React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', marginTop:'4px', lineHeight:1.5 } },
+                '地番は ',
+                React.createElement('a', { href:'https://map.maff.go.jp/', target:'_blank', rel:'noopener', style:{ color:'#0A6B52', fontWeight:600 } }, 'eMAFF農地ナビ'),
+                ' で確認できます。'
+              )
+            )),
+            // eMAFF農地番号
+            field('eMAFF農地番号（任意）', React.createElement('input', {
+              className:'form-input', placeholder:'例: 1234567890123', value:emaffNo, onChange:e=>setEmaffNo(e.target.value),
+            })),
+            // GGAP認証対象
+            React.createElement('label', { style:{ display:'flex', alignItems:'center', gap:'8px', cursor:'pointer', fontSize:'13px', color:'#374151', fontWeight:600 } },
+              React.createElement('input', {
+                type:'checkbox', checked:gapTarget, onChange:e=>setGapTarget(e.target.checked),
+                style:{ width:'16px', height:'16px', accentColor:'#0A6B52', cursor:'pointer' }
+              }),
+              'GGAP認証の対象圃場にする（★）'
+            )
+          )
         )
       ),
-      // ボタン
-      React.createElement('div', { style:{ display:'flex', gap:'8px' } },
+
+      // ── フッター（固定）──
+      React.createElement('div', { style:{ flexShrink:0, display:'flex', gap:'8px', padding:'14px 22px', borderTop:'1px solid #F1F5F9' } },
         React.createElement('button', {
           onClick: onClose,
           style:{ flex:1, padding:'10px', borderRadius:'8px', border:'1.5px solid #D8E4D8', background:'#fff', color:'#374151', fontSize:'13px', fontWeight:600, cursor:'pointer' }
         }, 'キャンセル'),
         React.createElement('button', {
-          onClick: submit,
-          disabled,
-          style:{
-            flex:1, padding:'10px', borderRadius:'8px', border:'none',
+          onClick: submit, disabled,
+          style:{ flex:1, padding:'10px', borderRadius:'8px', border:'none',
             background: disabled ? '#D1D5DB' : '#0A6B52',
-            color:'#fff', fontSize:'13px', fontWeight:700, cursor: disabled ? 'not-allowed' : 'pointer'
-          }
+            color:'#fff', fontSize:'13px', fontWeight:700, cursor: disabled ? 'not-allowed' : 'pointer' }
         }, '追加する')
       )
     )

@@ -62,13 +62,21 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
 
   const submit = () => {
     if (disabled) return
+    // 面積は有限の非負数のみ許可（'abc'→NaN / '1e999'→Infinity / 負数 を弾いて集計汚染を防ぐ・番人監査 BUG#8）
+    const areaNum = Number(area)
+    if (!Number.isFinite(areaNum) || areaNum < 0) {
+      try { if (typeof showToast === 'function') showToast('面積には0以上の数値を入力してください。', 'warn') } catch (e) {}
+      return
+    }
     onAdd({
-      id:           Date.now(),
+      // id衝突耐性: Date.now()はms解像度で連続追加時に衝突しうる。時刻*1000+乱数で衝突を避ける。
+      // ※ field.id === Number(fieldId) の数値比較が各所にあるため、id は必ず「数値」を維持する（UUID化は不可・番人監査 BUG#8）
+      id:           Date.now() * 1000 + Math.floor(Math.random() * 1000),
       name:         name.trim(),
       area_name:    areaName.trim(),
       crop:         cropName.trim() || selectedCat.name,
       crop_category: catKey,
-      area_are:     Number(area),
+      area_are:     areaNum,
       address:      address.trim(),
       emaff_no:     emaffNo.trim(),
       gap_target:   gapTarget,
@@ -8742,10 +8750,20 @@ function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCy
   })
 
   // 削除確認モーダル（おしゃれ版・アプリ共通デザイン準拠）
+  // 【番人監査 BUG#6】圃場を消すと、その圃場を参照する記録が圃場未紐付け（孤児）になる。
+  // 消える前に「この圃場を参照している記録が何件あるか」を数えて確認文で明示し、不意のデータ濁りを防ぐ。
+  const refCount = deleteTarget ? (() => {
+    const fid = deleteTarget.id
+    const lotN   = (farmLots && farmLots[fid]) ? farmLots[fid].length : 0
+    const sprayN = (lotSprayRecords || []).filter(r => r.field_id === fid).length
+    const harvN  = (harvestRecords  || []).filter(r => r.field_id === fid).length
+    return lotN + sprayN + harvN
+  })() : 0
   const deleteModalEl = deleteTarget && React.createElement(ConfirmDeleteModal, {
     title: '圃場を削除しますか？',
     targetName: deleteTarget.name,
-    detail: cropOf(deleteTarget) + '　·　' + deleteTarget.area_are + 'a　·　' + deleteTarget.status,
+    detail: cropOf(deleteTarget) + '　·　' + deleteTarget.area_are + 'a　·　' + deleteTarget.status
+      + (refCount > 0 ? '　／　⚠ この圃場に紐づく記録 ' + refCount + '件（ロット・散布・収穫）は圃場未紐付けになります' : ''),
     onCancel: () => setDeleteTarget(null),
     onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) },
   })
@@ -8830,8 +8848,9 @@ function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCy
 function FieldMapPage({ fields, onAdd, onDelete, onUpdateField, cropCycles, onNavigate, cropCategories, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides }) {
   return React.createElement(FieldList, { fields, onAdd, onDelete, onUpdateField, mode:'map', cropCycles, onNavigate, cropCategories, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides })
 }
-function FieldTablePage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories }) {
-  return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'list', cropCycles, onNavigate, cropCategories })
+function FieldTablePage({ fields, onAdd, onDelete, cropCycles, onNavigate, cropCategories, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides }) {
+  // farmLots/harvestRecords 等を渡すことで、削除確認の「紐づく記録N件」警告(BUG#6)を list モードでも機能させる
+  return React.createElement(FieldList, { fields, onAdd, onDelete, mode:'list', cropCycles, onNavigate, cropCategories, farmLots, lotSprayRecords, topDressingRecords, harvestRecords, pesticides })
 }
 
 // =====================================================

@@ -52,7 +52,7 @@ const expand=(page)=>page.evaluate(()=>{const b=[...document.querySelectorAll('b
     HTMLAnchorElement.prototype.click=function(){}
     URL.createObjectURL=(blob)=>{ captured=blob; return 'blob:mock' }
     URL.revokeObjectURL=()=>{}
-    try{ exportEmaffCSV(records,fields,pesticides) }catch(e){ return {err:String(e.message)} }
+    try{ exportEmaffCSV(records,fields,pesticides,true) }catch(e){ return {err:String(e.message)} } // skipConfirm=true（内容検証用）
     finally{ URL.createObjectURL=origCreate; URL.revokeObjectURL=origRevoke; HTMLAnchorElement.prototype.click=origClick }
     if(!captured) return {err:'Blob未生成'}
     const buf=new Uint8Array(await captured.arrayBuffer())
@@ -71,6 +71,25 @@ const expand=(page)=>page.evaluate(()=>{const b=[...document.querySelectorAll('b
       regNo: /第123号/.test(text),
       sample: lines.slice(0,4).join('\\n').slice(0,400),
     }
+  })
+
+  // ④-2 確認ダイアログ: skipConfirm無しだとオーバーレイが出る／キャンセルでダウンロードされない
+  R.confirm = await page.evaluate(async ()=>{
+    const fields=[{id:1,name:'第1圃場',crop:'レタス',emaff_no:'1',address:'x'}]
+    const records=[{id:1,work_type:'施肥',field_id:1,date:'2026-05-01',fertilizer_name:'化成',amount:20}]
+    let created=false
+    const origCreate=URL.createObjectURL
+    URL.createObjectURL=(b)=>{created=true;return 'blob:mock'}
+    const p=exportEmaffCSV(records,fields,[]) // 確認あり（awaitしない）
+    await new Promise(r=>setTimeout(r,300))
+    const overlayShown=!!document.querySelector('.sb-confirm-overlay')
+    const hasOkCancel=!!(document.querySelector('.sb-cf-ok')&&document.querySelector('.sb-cf-cancel'))
+    // キャンセルを押す
+    const cancel=document.querySelector('.sb-cf-cancel'); if(cancel)cancel.click()
+    await p
+    await new Promise(r=>setTimeout(r,100))
+    URL.createObjectURL=origCreate
+    return { overlayShown, hasOkCancel, downloadedAfterCancel:created }
   })
 
   // ① AddFieldModal に eMAFF農地番号入力欄
@@ -120,6 +139,9 @@ const expand=(page)=>page.evaluate(()=>{const b=[...document.querySelectorAll('b
     ['CSV: addressインジェクション無害化', c.injectAddr===true],
     ['CSV: noteインジェクション無害化', c.injectNote===true],
     ['CSV: 農薬登録番号', c.regNo===true],
+    ['確認: ダイアログ表示', R.confirm&&R.confirm.overlayShown===true],
+    ['確認: 出力/キャンセルボタン', R.confirm&&R.confirm.hasOkCancel===true],
+    ['確認: キャンセルで未ダウンロード', R.confirm&&R.confirm.downloadedAfterCancel===false],
     ['圃場追加: eMAFF入力欄あり', R.addModal&&R.addModal.hasEmaffInput===true],
     ['帳票: eMAFF CSVボタンあり', R.exportBtn&&R.exportBtn.hasEmaffCsvBtn===true],
     ['巡回: 異常表示なし', R.pageScan.every(x=>!x.bad)],

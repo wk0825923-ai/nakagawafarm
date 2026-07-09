@@ -22,6 +22,63 @@ function escHtml(v) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
+// 【出力の確認ダイアログ】confirmDownload — ファイル出力の前に「出力する / キャンセル」を挟む。
+// いきなりダウンロードが始まるのを防ぐ。Promise<boolean> を返す（出力する=true / キャンセル=false）。
+// showToast / celebrateSave と同じくDOM直生成なので config.js からも components.js からも呼べる。
+function confirmDownload(opts) {
+  opts = opts || {}
+  return new Promise((resolve) => {
+    const esc = (typeof escHtml === 'function') ? escHtml : (s) => String(s == null ? '' : s)
+    // アニメーション用styleを一度だけ注入
+    if (!document.getElementById('sb-cf-style')) {
+      const st = document.createElement('style')
+      st.id = 'sb-cf-style'
+      st.textContent = '@keyframes sbCfFade{from{opacity:0}to{opacity:1}}@keyframes sbCfPop{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}'
+      document.head.appendChild(st)
+    }
+    document.querySelectorAll('.sb-confirm-overlay').forEach(n => n.remove())
+
+    const icon     = opts.icon || '📄'
+    const title    = opts.title || 'ファイルを出力します'
+    const desc     = opts.desc || 'この内容でファイルをダウンロードします。よろしいですか？'
+    const filename = opts.filename || ''
+    const okLabel  = opts.okLabel || '出力する'
+
+    const ov = document.createElement('div')
+    ov.className = 'sb-confirm-overlay'
+    ov.style.cssText = 'position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;animation:sbCfFade .18s ease'
+    ov.innerHTML =
+      '<div class="sb-confirm-card" style="background:#fff;border-radius:14px;max-width:400px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.28);animation:sbCfPop .22s cubic-bezier(.34,1.4,.64,1)">' +
+        '<div style="font-size:34px;text-align:center;margin-bottom:6px">' + icon + '</div>' +
+        '<div style="font-size:16px;font-weight:700;color:#1F2937;text-align:center;margin-bottom:8px">' + esc(title) + '</div>' +
+        '<div style="font-size:12.5px;color:#6B7280;text-align:center;line-height:1.65;margin-bottom:' + (filename ? '12px' : '20px') + '">' + esc(desc) + '</div>' +
+        (filename ? '<div style="background:#F1F5F9;border:1px solid #E2E8F0;border-radius:8px;padding:8px 12px;font-size:12px;color:#334155;text-align:center;margin-bottom:20px;word-break:break-all"><span style="opacity:.55">ファイル名：</span>' + esc(filename) + '</div>' : '') +
+        '<div style="display:flex;gap:10px">' +
+          '<button class="sb-cf-cancel" style="flex:1;padding:11px;border-radius:9px;border:1px solid #D1D5DB;background:#fff;color:#374151;font-weight:600;font-size:14px;cursor:pointer">キャンセル</button>' +
+          '<button class="sb-cf-ok" style="flex:1;padding:11px;border-radius:9px;border:none;background:#0A6B52;color:#fff;font-weight:700;font-size:14px;cursor:pointer">' + esc(okLabel) + '</button>' +
+        '</div>' +
+      '</div>'
+    document.body.appendChild(ov)
+
+    let done = false
+    const close = (val) => {
+      if (done) return
+      done = true
+      document.removeEventListener('keydown', onKey)
+      ov.style.transition = 'opacity .15s ease'
+      ov.style.opacity = '0'
+      setTimeout(() => ov.remove(), 160)
+      resolve(val)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') close(false); else if (e.key === 'Enter') close(true) }
+    document.addEventListener('keydown', onKey)
+    ov.querySelector('.sb-cf-ok').addEventListener('click', () => close(true))
+    ov.querySelector('.sb-cf-cancel').addEventListener('click', () => close(false))
+    ov.addEventListener('click', (e) => { if (e.target === ov) close(false) })
+    setTimeout(() => { const b = ov.querySelector('.sb-cf-ok'); if (b) b.focus() }, 60)
+  })
+}
+
 // 重い出力ライブラリ(jsPDF/html2canvas/xlsx=計約1.5MB)は初期ロードから外し、PDF/Excel出力を
 // 押した時に遅延ロードする。日々の記録入力（特に低速回線の現場スタッフ）の初期表示を軽くするため。
 function loadScriptOnce(src) {
@@ -406,7 +463,8 @@ function buildSprayTableHTML(sprayRecords, fields, pesticides) {
 // 【フェーズ2】散布記録サマリーカード — 単票PDF出力
 // 入力完了直後の1件分の散布記録を buildSprayTableHTML で様式化してPDF出力
 // =====================================================
-async function exportSingleSprayRecordPDF(record, fields, pesticides) {
+async function exportSingleSprayRecordPDF(record, fields, pesticides, skipConfirm) {
+  if (!skipConfirm && !(await confirmDownload({ icon:'📄', title:'農薬散布記録をPDF出力', desc:'この記録1件をPDFで出力します。', filename:'農薬散布記録_' + record.date + '.pdf' }))) return
   const el = document.getElementById('pdf-preview')
   try {
     await ensurePdfLibs()
@@ -471,7 +529,9 @@ function printSingleSprayRecord(record, fields, pesticides) {
 // 日本語対応: html2canvasがbodyフォントをそのままキャプチャするため
 //             pdf-previewのfont-familyに日本語フォントを指定して対処
 // =====================================================
-async function exportSprayPDF(records, fields, pesticides) {
+async function exportSprayPDF(records, fields, pesticides, skipConfirm) {
+  const sprayCnt = records.filter(r => r.work_type === '農薬散布').length
+  if (!skipConfirm && !(await confirmDownload({ icon:'📄', title:'農薬散布記録簿をPDF出力', desc:'農薬散布の記録 ' + sprayCnt + '件 をGAP様式のPDFで出力します。', filename:'農薬散布記録簿_農場名.pdf' }))) return
   // CAT-07-1: try-catch でキャプチャ・PDF生成エラーを捕捉
   const el = document.getElementById('pdf-preview')
   try {
@@ -502,7 +562,7 @@ async function exportSprayPDF(records, fields, pesticides) {
 // C-3: 施肥記録 Excel出力（SheetJS）
 // fertilizer_records モックデータを xlsx として出力
 // =====================================================
-async function exportFertilizerExcel(records, fields) {
+async function exportFertilizerExcel(records, fields, skipConfirm) {
   const fertRecords = records.filter(r => r.work_type === '施肥')
 
   // CAT-07-2: 0件の場合は空ファイルを渡すのではなく早期returnでユーザーに通知
@@ -510,6 +570,7 @@ async function exportFertilizerExcel(records, fields) {
     showToast('施肥記録がまだありません。日次作業入力から施肥作業を記録してください。', 'warn')
     return
   }
+  if (!skipConfirm && !(await confirmDownload({ icon:'📊', title:'施肥記録をExcel出力', desc:'施肥の記録 ' + fertRecords.length + '件 をExcel(.xlsx)で出力します。', filename:'施肥記録簿_農場名.xlsx' }))) return
 
   const data = fertRecords.map(r => {
     const field = fields.find(f => f.id === r.field_id)
@@ -548,7 +609,11 @@ async function exportFertilizerExcel(records, fields) {
 //   本CSVは「農地番号つきの実績台帳」として、各農家が自分のeMAFF様式へ
 //   転記・貼り付けする土台。そのままアップロードで完了、とは謳わない。
 // =====================================================
-async function exportEmaffCSV(records, fields, pesticides) {
+async function exportEmaffCSV(records, fields, pesticides, skipConfirm) {
+  const _kinds = ['農薬散布', '施肥', '収穫']
+  const _cnt = (records || []).filter(r => _kinds.includes(r.work_type)).length
+  if (_cnt === 0) { showToast('eMAFFに連携できる記録（農薬散布・施肥・収穫）がまだありません。', 'warn'); return }
+  if (!skipConfirm && !(await confirmDownload({ icon:'🗺', title:'eMAFF連携用CSVを出力', desc:'農薬散布・施肥・収穫の記録 ' + _cnt + '件 に農地番号を紐づけたCSVを出力します。', filename:'eMAFF連携_実績台帳_' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '.csv' }))) return
   // CSVインジェクション対策（=,+,-,@ で始まるセルを ' で無害化）＋ クォート
   const csvCell = (v) => {
     let s = (v == null) ? '' : String(v)

@@ -8967,7 +8967,8 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
     if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d/.test(s)) s = "'" + s
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
-  const downloadCsv = () => {
+  const downloadCsv = async () => {
+    if (!(await confirmDownload({ icon:'📊', title:'圃場まとめをCSV出力', desc:'表示中の圃場・畝の管理表をCSV(Excel対応)で出力します。', filename:`圃場まとめ_${season === 'all' ? '全シーズン' : season}.csv` }))) return
     const header = ['圃場','畝範囲','品種','は種日','定植日','育苗日数','状態','農薬散布(回)','施肥(回)','収穫(回)','収穫ケース計','農薬原価(円)','肥料原価(円)','資材原価計(円)','円/ケース','初回収穫','最終収穫','シーズン']
     const lines = [header.map(csvCell).join(',')]
     visible.forEach(e => {
@@ -10725,14 +10726,16 @@ function GapExport({ gap, records, fields, pesticides, ctx }) {
   const [packageToast, setPackageToast] = React.useState(null)
 
   const handleGenerateAll = async () => {
+    // まとめて出力は個別確認を出さず、ここで1回だけ確認する（二重ポップアップ防止）
+    if (!(await confirmDownload({ icon:'🗂', title:'GAP書類3点をまとめて出力', desc:'農薬散布PDF・施肥Excelをまとめて出力します。', okLabel:'出力する' }))) return
     setIsGenerating(true)
     setJustCompleted(false)
     try {
       await Promise.all([
         new Promise(r => setTimeout(r, 800)),
-        handleExportPDF(),
+        exportSprayPDF(records, fields, pesticides, true),   // skipConfirm=true
       ])
-      handleExportExcel()
+      exportFertilizerExcel(records, fields, true)           // skipConfirm=true
       setJustCompleted(true)
       setPackageToast('3点の書類が完成しました')
       setTimeout(() => setPackageToast(null), 3000)
@@ -12254,6 +12257,7 @@ function StaffList({ staff, onAdd, onDelete, onUpdate }) {
 // 既存の exportCropPlanPDF と同じパターン（非表示プレビュー→キャプチャ→jsPDF）を流用
 // =====================================================
 async function exportTraineeDiaryPDF(staffMember, monthLabel, diaryRows, summary) {
+  if (!(await confirmDownload({ icon:'📄', title:'作業日誌をPDF出力', desc:(staffMember && staffMember.name ? staffMember.name + 'さんの' : '') + monthLabel + 'の作業日誌をPDFで出力します。', filename:'作業日誌_' + ((staffMember && staffMember.name) || '') + '_' + monthLabel + '.pdf' }))) return
   await ensurePdfLibs()
   const el = document.getElementById('diary-pdf-preview')
   const today = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })
@@ -13386,6 +13390,7 @@ function Settings() {
 // 作付計画: PDF出力（html2canvas利用）
 // =====================================================
 async function exportCropPlanPDF(plans, fields) {
+  if (!(await confirmDownload({ icon:'📄', title:'栽培計画書をPDF出力', desc:'作付計画（栽培計画書）をPDFで出力します。', filename:'栽培計画書_農場名.pdf' }))) return
   await ensurePdfLibs()
   const el = document.getElementById('crop-plan-pdf-preview')
   const today = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })

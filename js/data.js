@@ -672,7 +672,7 @@ const INITIAL_GAP_CHECKS = [
   // -- 現場管理 --
   { id:57, code:"21.01", category:"現場管理", item:"登録されたすべてのサイトについて、文書化されたリスク評価が完了している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
   { id:58, code:"21.02", category:"現場管理", item:"管理計画に、運用の適切性に関するリスク評価で特定したリスクを最小限に抑える戦略を定めており、その計画を策定・実行し、定期的に見直している。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
-  { id:59, code:"21.03", category:"現場管理", item:"生産に使用するサイトと設備を識別する仕組みがある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
+  { id:59, code:"21.03", category:"現場管理", item:"生産に使用するサイトと設備を識別する仕組みがある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ", auto:"site_identified" },
   { id:60, code:"21.04", category:"現場管理", item:"サイトは整理整頓されている。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
   { id:61, code:"21.05", category:"現場管理", item:"生産者は、農場を周囲の景観と影響しあう農業生態系の一部として認識している（ただし、生産者の法的責任は農場内にとどまる）。", level:"rec", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
   { id:62, code:"21.06", category:"現場管理", item:"アレルゲンを取扱う、又は保管する場合、その作業についての文書化されたアレルゲン管理プログラムがある。", level:"major", schemes:["GGAP"], is_cleared:false, doc:"21_圃場カルテ" },
@@ -875,6 +875,7 @@ function isGapAutoCleared(item, ctx) {
     case 'shipment_record':  return has(ctx.shipmentRecords)
     case 'machine_maint':    return has(ctx.maintenanceRecords)
     case 'waste_record':     return (ctx.records || []).some(r => r.waste && String(r.waste).trim())
+    case 'site_identified':  return (ctx.fields || []).some(f => (f.address && String(f.address).trim()) || (Number.isFinite(Number(f.lat)) && Number.isFinite(Number(f.lng))))
     case 'worker_managed':   return has(ctx.staff)
     case 'trainee_visa':     return (ctx.staff || []).some(s => s.role === 'trainee' && s.visa_expires_at)
     case 'traceability':     return has(ctx.harvestRecords) && lots().some(a => (a || []).length > 0)
@@ -884,7 +885,7 @@ function isGapAutoCleared(item, ctx) {
 }
 
 // 各GAP項目に「自動達成の根拠ラベル」を付与。スキームは生成時に GGAP を設定済み。
-const _GAP_EVIDENCE = { records_exist:'作業記録', spray_record:'農薬散布記録', pesticide_master:'農薬マスタ', pest_purchase:'農薬仕入記録', fert_record:'施肥記録', fert_purchase:'肥料仕入記録', harvest_record:'収穫記録', shipment_record:'出荷記録', machine_maint:'機械整備記録', worker_managed:'作業者名簿', trainee_visa:'ビザ管理', traceability:'ロット追跡', seed_lot:'種苗ロット', waste_record:'廃棄物記録' }
+const _GAP_EVIDENCE = { records_exist:'作業記録', spray_record:'農薬散布記録', pesticide_master:'農薬マスタ', pest_purchase:'農薬仕入記録', fert_record:'施肥記録', fert_purchase:'肥料仕入記録', harvest_record:'収穫記録', shipment_record:'出荷記録', machine_maint:'機械整備記録', worker_managed:'作業者名簿', trainee_visa:'ビザ管理', traceability:'ロット追跡', seed_lot:'種苗ロット', waste_record:'廃棄物記録', site_identified:'圃場の所在地・位置' }
 INITIAL_GAP_CHECKS.forEach(c => {
   if (!c.schemes) c.schemes = ['GGAP']
   c.evidence = c.auto ? (_GAP_EVIDENCE[c.auto] || '記録') : null

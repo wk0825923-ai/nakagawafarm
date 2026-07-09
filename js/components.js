@@ -43,6 +43,7 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
   const [catKey,   setCatKey]   = React.useState(defaultCat.key)
   const [cropName, setCropName] = React.useState('')
   const [area,     setArea]     = React.useState('')
+  const [address,  setAddress]  = React.useState('')   // 所在地(GAP登録圃場リストで必要)
   const COLORS = ['#0D9972','#2563EB','#EA580C','#7C3AED','#B45309','#DC2626']
   const selectedCat = categories.find(c => c.key === catKey) || defaultCat
   const [color, setColor] = React.useState(selectedCat.color || COLORS[0])
@@ -63,6 +64,7 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
       crop:         cropName.trim() || selectedCat.name,
       crop_category: catKey,
       area_are:     Number(area),
+      address:      address.trim(),
       lat:          initialLatLng ? initialLatLng.lat : 35.385,
       lng:          initialLatLng ? initialLatLng.lng : 139.926,
       status:       '栽培中',
@@ -132,6 +134,21 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
           value: area,
           onChange: e => setArea(e.target.value),
         })
+      ),
+      // 所在地（住所）— GAPの登録圃場リスト・現場管理で必要。任意だが推奨。
+      React.createElement('div', { style:{ marginBottom:'14px' } },
+        React.createElement('label', { style:{ fontSize:'11px', fontWeight:700, color:'#374151', display:'block', marginBottom:'5px', letterSpacing:'.06em', textTransform:'uppercase' } }, '所在地（住所）'),
+        React.createElement('input', {
+          className:'form-input',
+          placeholder: '例: 千葉県木更津市○○ 123-4',
+          value: address,
+          onChange: e => setAddress(e.target.value),
+        }),
+        React.createElement('div', { style:{ fontSize:'10px', color:'#94A3B8', marginTop:'4px', lineHeight:1.5 } },
+          'GAPの登録圃場リストで必要です。地番は ',
+          React.createElement('a', { href:'https://map.maff.go.jp/', target:'_blank', rel:'noopener', style:{ color:'#0A6B52', fontWeight:600 } }, 'eMAFF農地ナビ'),
+          '（農水省・筆ポリゴン）で確認できます。'
+        )
       ),
       // カラー
       React.createElement('div', { style:{ marginBottom:'20px' } },
@@ -8473,6 +8490,7 @@ function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCy
     fields.filter(f=>Number.isFinite(Number(f.lat))&&Number.isFinite(Number(f.lng))).forEach(f=>L.circleMarker([Number(f.lat),Number(f.lng)],{color:f.color,fillColor:f.color,fillOpacity:.7,radius:10,weight:2}).bindPopup(
       '<div style="min-width:150px">'
       + '<b>'+f.name+'</b><br>'+f.crop+' / '+f.area_are+'a — '+f.status
+      + (f.address ? '<div style="font-size:11px;color:#6B7280;margin-top:3px">📍 '+((typeof escHtml==='function')?escHtml(f.address):f.address)+'</div>' : '')
       + '<div class="popup-goto-field" data-field-id="'+f.id+'" style="margin-top:8px;padding:6px 10px;background:#0A6B52;color:#fff;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;">圃場詳細を見る →</div>'
       + '</div>'
     ).addTo(map))

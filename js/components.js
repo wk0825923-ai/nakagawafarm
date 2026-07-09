@@ -4615,10 +4615,52 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   // UX-10: 保存後の「続けて入力」ボタン用 state
   const [showContinueButton, setShowContinueButton] = React.useState(false)
   const [photoError, setPhotoError] = React.useState('')
-  
+
+  // 【P2: 電波が弱くても消えない】入力途中を下書き自動保存し、リロード/離脱後に復元できる。
+  // 現場は圏外気味で「入れた気になって消える」不安が大きい。写真は容量肥大するので下書きには含めない。
+  // 対象は主たる日報入力(!inModal)。圃場詳細内の簡易入力は対象外。
+  const draftEnabled = !inModal
+  const draftKey = 'farm_recordform_draft_' + ((typeof CONFIG !== 'undefined' && CONFIG.CURRENT_FARM_ID) ? CONFIG.CURRENT_FARM_ID : 'x')
+  const clearDraft = () => { try { localStorage.removeItem(draftKey) } catch (e) {} }
+  const [draftSaved, setDraftSaved] = React.useState(false)  // 「下書き保存済み ✓」表示
+  const [restorableDraft, setRestorableDraft] = React.useState(() => {
+    if (inModal) return null
+    try {
+      const d = localStorage.getItem(draftKey); const p = d ? JSON.parse(d) : null
+      return (p && p.form && (p.form.work_type || (p.form.note || '').trim() || (p.step || 1) > 1)) ? p : null
+    } catch (e) { return null }
+  })
+
+  // UX-10: 保存後の「続けて入力」ボタン用 state
   // 多重送信ガード用（保存ボタン連打で二重登録を防ぐ）。フォーム編集で解除。
   const savingRef = React.useRef(false)
   const updateField = (k, v) => { savingRef.current = false; setForm(f => ({ ...f, [k]: v })) }
+
+  // 下書き自動保存（意味のある入力がある時だけ書く。空に戻したら下書きも消す）
+  React.useEffect(() => {
+    if (!draftEnabled) return
+    const meaningful = form.work_type || (form.note || '').trim() || step > 1
+    try {
+      if (meaningful) {
+        const { photos, ...rest } = form
+        localStorage.setItem(draftKey, JSON.stringify({ form: { ...rest, photos: [] }, step, dilution, savedAt: Date.now() }))
+        setDraftSaved(true)
+      } else {
+        localStorage.removeItem(draftKey); setDraftSaved(false)
+      }
+    } catch (e) { /* 容量超過等は握り潰さないが、下書きは記録本体の保存を妨げないため通知は最小 */ }
+  }, [form, step, dilution])
+
+  // 下書きの復元 / 破棄
+  const restoreDraft = () => {
+    if (!restorableDraft) return
+    if (restorableDraft.form) setForm(f => ({ ...f, ...restorableDraft.form, photos: [] }))
+    if (restorableDraft.step) setStep(restorableDraft.step)
+    if (restorableDraft.dilution) setDilution(restorableDraft.dilution)
+    setRestorableDraft(null)
+    try { if (typeof showToast === 'function') showToast('入力途中の下書きを復元しました', 'success') } catch (e) {}
+  }
+  const discardDraft = () => { clearDraft(); setRestorableDraft(null); setDraftSaved(false) }
 
   const selP    = pesticides.find(p => p.id === Number(form.pesticide_id))
   const isOver  = isPesticideOverLimit(records, form.field_id, selP, lotSprayRecords || [])
@@ -4669,6 +4711,7 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
       })
     })
     celebrateSave(targetIds.length > 1 ? targetIds.length + '圃場に記録！' : '記録しました！')
+    clearDraft(); setDraftSaved(false)   // 保存できたので下書きは破棄（P2）
     // UX-10: 保存完了後、「続けて入力」ボタンを3秒表示
     setShowContinueButton(true)
     setTimeout(() => setShowContinueButton(false), 3000)
@@ -4711,9 +4754,9 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
       (form.field_ids && form.field_ids.length > 1) ? React.createElement('span', { style:{ fontSize:12, color:'#B45309' } }, '※畝の記録は主圃場のみ') : null
     )
     let el
-    if (kind === 'spray')     el = React.createElement(LotSprayRecordForm,    { field:selField, pesticides:pesticides||[], lots, staff, onCancel:backToStep2, onSave:(r)=>{ onSaveLotSpray(r); backToStep2() } })
-    else if (kind === 'fert') el = React.createElement(TopDressingRecordForm, { field:selField, fertilizers:fertilizers||[], lots, staff, onCancel:backToStep2, onSave:(r)=>{ onSaveTopDressing(r); backToStep2() } })
-    else                      el = React.createElement(HarvestRecordForm,     { field:selField, lots, destinations:destinations||[], harvestRecords:harvestRecords||[], staff, onCancel:backToStep2, onSave:onSaveHarvest })
+    if (kind === 'spray')     el = React.createElement(LotSprayRecordForm,    { field:selField, pesticides:pesticides||[], lots, staff, onCancel:backToStep2, onSave:(r)=>{ onSaveLotSpray(r); clearDraft(); setDraftSaved(false); backToStep2() } })
+    else if (kind === 'fert') el = React.createElement(TopDressingRecordForm, { field:selField, fertilizers:fertilizers||[], lots, staff, onCancel:backToStep2, onSave:(r)=>{ onSaveTopDressing(r); clearDraft(); setDraftSaved(false); backToStep2() } })
+    else                      el = React.createElement(HarvestRecordForm,     { field:selField, lots, destinations:destinations||[], harvestRecords:harvestRecords||[], staff, onCancel:backToStep2, onSave:(r)=>{ onSaveHarvest(r); clearDraft(); setDraftSaved(false) } })
     return React.createElement('div', null, header, el)
   }
   const useRich = richMode && !!RICH_FORM[form.work_type] && !!selField && step >= 3
@@ -4722,9 +4765,28 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
     !inModal && React.createElement('div', { className:'eyebrow' }, 'DAILY REPORT'),
     !inModal && React.createElement('div', { className:'page-title' }, '日報入力'),
     !inModal && React.createElement('div', { className:'page-sub' }, '作業内容を記録してGAP書類を自動生成します'),
+    // 【P2】入力途中の下書き復元バナー（現場の圏外・リロードで消える不安への保険）
+    restorableDraft && React.createElement('div', {
+      style:{ display:'flex', alignItems:'center', gap:'10px', flexWrap:'wrap', background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'10px', padding:'10px 14px', marginBottom:'12px' }
+    },
+      React.createElement('i', { className:'ti ti-file-pencil', 'aria-hidden':'true', style:{ fontSize:'18px', color:'#B45309', flexShrink:0 } }),
+      React.createElement('div', { style:{ flex:1, minWidth:'180px' } },
+        React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:'#92400E' } }, '入力途中の下書きが残っています'),
+        React.createElement('div', { style:{ fontSize:'11px', color:'#B45309' } }, '前回この端末で入力途中だった内容を復元できます（写真は除く）')
+      ),
+      React.createElement('button', { onClick:restoreDraft, style:{ flexShrink:0, fontSize:'12px', fontWeight:700, color:'#fff', background:'#0A6B52', border:'none', borderRadius:'7px', padding:'7px 14px', cursor:'pointer' } }, '復元する'),
+      React.createElement('button', { onClick:discardDraft, style:{ flexShrink:0, fontSize:'12px', fontWeight:600, color:'#6B7280', background:'none', border:'none', cursor:'pointer' } }, '破棄')
+    ),
     React.createElement('div', { className: inModal ? '' : 'card' },
       React.createElement(StepBar, { step, steps:STEPS }),
-      useRich ? renderRich() : (stepComponents[step] && stepComponents[step]())
+      useRich ? renderRich() : (stepComponents[step] && stepComponents[step]()),
+      // 【P2】下書き自動保存の見える化（保存されている安心を明示）
+      (draftEnabled && draftSaved && !restorableDraft) && React.createElement('div', {
+        style:{ display:'flex', alignItems:'center', gap:'5px', marginTop:'10px', fontSize:'11px', color:'#0A6B52' }
+      },
+        React.createElement('i', { className:'ti ti-cloud-check', 'aria-hidden':'true', style:{ fontSize:'13px' } }),
+        'この端末に下書きを自動保存しました（電波が無くても消えません）'
+      )
     )
   )
 }

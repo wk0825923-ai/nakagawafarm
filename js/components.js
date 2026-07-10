@@ -2035,24 +2035,38 @@ function RecordLogRow({ record, fields }) {
 // 最近の作業記録パネル（折りたたみ対応）
 // ダッシュボード「今日の作業配置」右側に並べる
 // =====================================================
-function RecentRecordsPanel({ records, fields, onSelectRecord, embedded, selectedId }) {
+function RecentRecordsPanel({ records, fields, onSelectRecord, embedded, selectedId, lotSprayRecords, topDressingRecords, harvestRecords, onNavigate }) {
   const [open, setOpen] = React.useState(true)
   const [showPast, setShowPast] = React.useState(false)
 
   // 【A案】本日の作業記録を主役に（0時で自動リセット・記録で増える）＋過去も辿れる
+  // 基本日報だけでなく 農薬散布/施肥/収穫（リッチ記録）も横断して数える＝現場の最重要作業を取りこぼさない。
+  // 基本日報＝編集モーダルを開く / リッチ記録＝該当圃場の詳細へ（読み取り導線）。
   const today = todayYmd()
-  const all = [...(records || [])].reverse()
-  const todayRecs = all.filter(r => r.date === today)
-  const pastRecs  = all.filter(r => r.date !== today).slice(0, 10)
+  const items = []
+  ;(records || []).forEach(r => items.push({ key:'d'+r.id, kind:'daily', id:r.id, work_type:r.work_type || '作業', field_id:r.field_id, date:r.date, sub:r.worker || '', raw:r }))
+  ;(lotSprayRecords || []).forEach(r => items.push({ key:'s'+r.id, kind:'spray', id:r.id, work_type:'農薬散布', field_id:r.field_id, date:r.date, sub:r.row_range ? ('畝 '+r.row_range) : '', tab:'pesticide' }))
+  ;(topDressingRecords || []).forEach(r => items.push({ key:'f'+r.id, kind:'fert', id:r.id, work_type:'施肥', field_id:r.field_id, date:r.date, sub:r.row_range ? ('畝 '+r.row_range) : '', tab:'dashboard' }))
+  ;(harvestRecords || []).forEach(r => items.push({ key:'h'+r.id, kind:'harvest', id:r.id, work_type:'収穫', field_id:r.field_id, date:r.date, sub:(r.total_cases != null ? (r.total_cases+'ケース') : ''), tab:'harvest' }))
+  // 日付降順→id降順（新しい記録が上）
+  items.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || (Number(b.id) || 0) - (Number(a.id) || 0))
+  const todayRecs = items.filter(r => r.date === today)
+  const pastRecs  = items.filter(r => r.date !== today).slice(0, 10)
+
+  const handleRowClick = (it) => {
+    if (it.kind === 'daily') { onSelectRecord && onSelectRecord(it.raw); return }
+    // リッチ記録（農薬/施肥/収穫）は基本日報用の編集モーダルに載らないため、該当圃場の詳細へ遷移
+    if (onNavigate && it.field_id != null) onNavigate('field:' + it.field_id + ':' + (it.tab || 'dashboard'))
+  }
 
   // 1行の描画（本日／過去で共用）
-  const renderRow = (r, isLast) => {
-    const field = fields.find(f => f.id === r.field_id)
-    const cfg = WORK_ICON_MAP[r.work_type] || WORK_ICON_MAP['その他']
-    const isSel = selectedId != null && r.id === selectedId
+  const renderRow = (it, isLast) => {
+    const field = fields.find(f => f.id === it.field_id)
+    const cfg = WORK_ICON_MAP[it.work_type] || WORK_ICON_MAP['その他']
+    const isSel = selectedId != null && it.kind === 'daily' && it.id === selectedId
     return React.createElement('div', {
-      key: r.id,
-      onClick: () => onSelectRecord && onSelectRecord(r),
+      key: it.key,
+      onClick: () => handleRowClick(it),
       style: {
         display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 16px',
         borderBottom: isLast ? 'none' : '1px solid #F1F5F9', cursor: 'pointer', transition: 'background .1s',
@@ -2065,8 +2079,8 @@ function RecentRecordsPanel({ records, fields, onSelectRecord, embedded, selecte
         React.createElement('i', { className: 'ti ti-' + cfg.icon, style: { fontSize: '13px', color: '#fff' } })
       ),
       React.createElement('div', { style: { flex: 1, minWidth: 0 } },
-        React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, r.work_type + (field ? ' — ' + field.name : '')),
-        React.createElement('div', { style: { fontSize: '11px', color: '#94A3B8', marginTop: '1px' } }, r.date + (r.worker ? ' · ' + r.worker : ''))
+        React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, it.work_type + (field ? ' — ' + field.name : '')),
+        React.createElement('div', { style: { fontSize: '11px', color: '#94A3B8', marginTop: '1px' } }, it.date + (it.sub ? ' · ' + it.sub : ''))
       ),
       field && React.createElement('div', { style: { width: 7, height: 7, borderRadius: '50%', background: field.color || '#0A6B52', flexShrink: 0 } })
     )
@@ -2427,7 +2441,13 @@ function Dashboard({ fields, records, staff, gap, todayTasks, onToggleTodayTask,
   // 【UX】最近の作業記録を右上の通知ベル→ポップアップで表示
   const [showRecentPopup, setShowRecentPopup] = React.useState(false)
   // バッジ＝本日の作業記録件数（0時で自動リセット。記録が入ると増える）
-  const todayRecordCount = (records || []).filter(r => r.date === todayYmd()).length
+  // 基本日報＋農薬散布＋施肥＋収穫の4種を横断（スタッフ画面の「今日N件」と同じ数え方）。
+  const _todayY = todayYmd()
+  const _todayFert    = (gapCtx.topDressingRecords || []).filter(r => r.date === _todayY).length
+  const _todayHarvest = (gapCtx.harvestRecords || []).filter(r => r.date === _todayY).length
+  const _todaySpray   = (lotSprayRecords || []).filter(r => r.date === _todayY).length
+  const _todayDaily   = (records || []).filter(r => r.date === _todayY).length
+  const todayRecordCount = _todayDaily + _todaySpray + _todayFert + _todayHarvest
 
   // --- 先月比計算ヘルパー ---
   const now = new Date()
@@ -2543,7 +2563,7 @@ function Dashboard({ fields, records, staff, gap, todayTasks, onToggleTodayTask,
           React.createElement('div', {
             style:{ position:'absolute', top:'48px', right:0, width:'360px', maxWidth:'92vw', maxHeight:'70vh', overflowY:'auto', zIndex:2600, background:'#fff', borderRadius:'12px', boxShadow:'0 12px 40px rgba(0,0,0,.22)', border:'1px solid #E2E8F0' }
           },
-            React.createElement(RecentRecordsPanel, { records, fields, selectedId: selectedRecord && selectedRecord.id, onSelectRecord: r => setSelectedRecord(r), embedded:true })
+            React.createElement(RecentRecordsPanel, { records, fields, selectedId: selectedRecord && selectedRecord.id, onSelectRecord: r => setSelectedRecord(r), embedded:true, lotSprayRecords, topDressingRecords: gapCtx.topDressingRecords, harvestRecords: gapCtx.harvestRecords, onNavigate })
           )
         )
       )

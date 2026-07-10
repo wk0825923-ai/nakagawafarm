@@ -235,6 +235,7 @@ function StaffQuickView(props) {
   // 編集・削除の対象（間違えた日報を直せるように）
   const [detailRecord, setDetailRecord] = React.useState(null)  // 基本日報 → RecordDetailModal(編集/削除)
   const [deleteTarget, setDeleteTarget] = React.useState(null)  // リッチ記録 → 削除確認 {kind,id,label}
+  const [showRecent, setShowRecent] = React.useState(false)     // 【#B】直近の記録（過去）の折りたたみ（既定は閉じる）
   const fieldName = (id) => { const f = (fields || []).find(x => x.id === id); return f ? f.name : '圃場不明' }
 
   // 今日入力ぶんを4種横断で1リストに（スタッフが「ちゃんと届いた」実感＋間違いを直せる導線）
@@ -252,6 +253,27 @@ function StaffQuickView(props) {
     todayItems.push({ kind:'harvest', id:r.id, label:'収穫', field:fieldName(r.field_id),
       icon:WORK_ICON_MAP['収穫'], sub:(r.total_cases != null ? (r.total_cases+'ケース') : '') }))
   const todayCount = todayItems.length
+
+  // 【#B】直近の記録（昨日〜3日前）をスタッフ自身が後から確認できるように（読み取り専用）。
+  // スタッフ画面のシンプルさ(USP)を壊さないため、既定は閉じ・明示的に開いた時だけ表示。編集は経営者側へ。
+  const _pad2 = n => String(n).padStart(2, '0')
+  const _cut = new Date(today + 'T00:00:00'); _cut.setDate(_cut.getDate() - 3)
+  const recentCutoff = _cut.getFullYear() + '-' + _pad2(_cut.getMonth() + 1) + '-' + _pad2(_cut.getDate())
+  const inRecent = (d) => !!d && d < today && d >= recentCutoff
+  const recentItems = []
+  ;(records || []).filter(r => inRecent(r.date)).forEach(r =>
+    recentItems.push({ kind:'daily', id:r.id, date:r.date, label:r.work_type || '作業', field:fieldName(r.field_id),
+      icon:(WORK_ICON_MAP[r.work_type] || WORK_ICON_MAP['その他']), sub:r.worker || '' }))
+  ;(lotSprayRecords || []).filter(r => inRecent(r.date)).forEach(r =>
+    recentItems.push({ kind:'spray', id:r.id, date:r.date, label:'農薬散布', field:fieldName(r.field_id),
+      icon:WORK_ICON_MAP['農薬散布'], sub:r.row_range ? ('畝 '+r.row_range) : '' }))
+  ;(topDressingRecords || []).filter(r => inRecent(r.date)).forEach(r =>
+    recentItems.push({ kind:'fert', id:r.id, date:r.date, label:'施肥', field:fieldName(r.field_id),
+      icon:WORK_ICON_MAP['施肥'], sub:r.row_range ? ('畝 '+r.row_range) : '' }))
+  ;(harvestRecords || []).filter(r => inRecent(r.date)).forEach(r =>
+    recentItems.push({ kind:'harvest', id:r.id, date:r.date, label:'収穫', field:fieldName(r.field_id),
+      icon:WORK_ICON_MAP['収穫'], sub:(r.total_cases != null ? (r.total_cases+'ケース') : '') }))
+  recentItems.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (Number(b.id)||0)-(Number(a.id)||0))
 
   const DELETERS = { spray:onDeleteSpray, fert:onDeleteTopDressing, harvest:onDeleteHarvest }
   const farmLabel = (currentFarm && currentFarm.name) || (currentOrg && currentOrg.name) || CONFIG.FARM_NAME
@@ -326,6 +348,37 @@ function StaffQuickView(props) {
             ),
         React.createElement('div', { style:{ marginTop:8, fontSize:11, color:'#94A3B8', lineHeight:1.5 } },
           '※「なおす」で内容を修正、「けす」で消して入力し直せます。農薬散布・施肥・収穫は、消してから正しく入れ直してください。')
+      ),
+      // ── 【#B】直近の記録（昨日〜3日前）: スタッフが自分の入力を後から確認できる（読み取り専用・既定は閉じる） ──
+      fields && fields.length > 0 && recentItems.length > 0 && React.createElement('div', { style:{ marginTop:14 } },
+        React.createElement('button', {
+          onClick: () => setShowRecent(v => !v), type:'button',
+          style:{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', gap:8,
+            background:'#fff', border:'1px solid #DDE8DE', borderRadius:12, padding:'12px 14px', cursor:'pointer' }
+        },
+          React.createElement('span', { style:{ fontSize:14, fontWeight:700, color:'#374151' } }, '直近の記録（昨日〜3日前）'),
+          React.createElement('span', { style:{ display:'flex', alignItems:'center', gap:8 } },
+            React.createElement('span', { style:{ fontSize:12, color:'#6B7280' } }, recentItems.length + '件'),
+            React.createElement('i', { className:'ti ti-chevron-' + (showRecent ? 'up' : 'down'), style:{ fontSize:16, color:'#94A3B8' } })
+          )
+        ),
+        showRecent && React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8, marginTop:8 } },
+          ...recentItems.map(it =>
+            React.createElement('div', { key:'recent-'+it.kind+'-'+it.id,
+              style:{ display:'flex', alignItems:'center', gap:10, background:'#FBFCFB', border:'1px solid #E8EEE8', borderRadius:12, padding:'10px 12px' } },
+              React.createElement('div', { style:{ width:30, height:30, borderRadius:'50%', background:(it.icon&&it.icon.color)||'#9CA3AF', opacity:.85, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 } },
+                React.createElement('i', { className:'ti ti-'+((it.icon&&it.icon.icon)||'dots'), style:{ fontSize:15, color:'#fff' } })),
+              React.createElement('div', { style:{ flex:1, minWidth:0 } },
+                React.createElement('div', { style:{ fontSize:13, fontWeight:700, color:'#374151' } }, it.label),
+                React.createElement('div', { style:{ fontSize:12, color:'#94A3B8', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' } },
+                  it.date + '　' + it.field + (it.sub ? '　' + it.sub : ''))
+              ),
+              React.createElement('span', { style:{ flexShrink:0, fontSize:11, color:'#94A3B8' } }, '確認のみ')
+            )
+          ),
+          React.createElement('div', { style:{ marginTop:2, fontSize:11, color:'#94A3B8', lineHeight:1.5 } },
+            '※ 過去の記録は確認のみです。直したい時は今日ぶんを入れ直すか、経営者にお伝えください。')
+        )
       ),
       // ── 保存時の演出の設定（スタッフもこの端末で切り替え可能） ──
       React.createElement('div', { style:{ marginTop:22 } },

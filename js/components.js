@@ -2570,9 +2570,10 @@ function Dashboard({ fields, records, staff, gap, todayTasks, onToggleTodayTask,
           style:{ position:'relative', display:'inline-flex', alignItems:'center', justifyContent:'center', width:'40px', height:'40px', borderRadius:'50%', background: showRecentPopup ? '#ECFDF5' : '#F8FAF9', border:'1px solid ' + (showRecentPopup ? '#A7F3D0' : '#E2E8E2'), cursor:'pointer' }
         },
           React.createElement('i', { className:'ti ti-bell', 'aria-hidden':'true', style:{ fontSize:'19px', color:'#0A6B52' } }),
+          // バッジはポップアップの「最近の作業記録 N件」（直近＝最大7件）と一致させる
           (records && records.length > 0) && React.createElement('span', {
             style:{ position:'absolute', top:'-2px', right:'-2px', minWidth:'17px', height:'17px', padding:'0 4px', borderRadius:'9px', background:'#DC2626', color:'#fff', fontSize:'10px', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid #fff' }
-          }, records.length > 99 ? '99+' : String(records.length))
+          }, String(Math.min(records.length, 7)))
         ),
         // ポップアップ（詳細を開いても閉じない＝連続閲覧OK。外側クリック捕捉は詳細モーダルより下のz）
         showRecentPopup && React.createElement(React.Fragment, null,

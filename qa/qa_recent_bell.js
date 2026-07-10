@@ -47,7 +47,8 @@ const ensureApp=async(page)=>{ if(!(await page.evaluate(()=>!!document.querySele
   // ③ ベルクリック → ポップアップに記録
   await page.evaluate(()=>{const bell=[...document.querySelectorAll('button')].find(b=>b.querySelector('i.ti-bell')&&b.offsetParent);if(bell)bell.click()})
   await sleep(500)
-  R.popup = await page.evaluate(()=>{const t=document.body.innerText;return{ opened:/最近の作業記録/.test(t), hasRecords:/圃場/.test(t)&&/最近の作業記録/.test(t) }})
+  R.popup = await page.evaluate(()=>{const t=document.body.innerText;const m=t.match(/最近の作業記録\s*(\d+)件/);return{ opened:/最近の作業記録/.test(t), hasRecords:/圃場/.test(t)&&/最近の作業記録/.test(t), count:m?parseInt(m[1]):null }})
+  R.badgeMatches = (R.bell.badge!=null) && (parseInt(R.bell.badge)===R.popup.count)
 
   // ④ ポップアップ内の記録(1件目)をクリック → 詳細モーダル。リストは開いたまま＋選択強調
   const clickRow=async(idx)=>{ await page.evaluate((idx)=>{
@@ -73,6 +74,7 @@ const ensureApp=async(page)=>{ if(!(await page.evaluate(()=>!!document.querySele
   const checks=[
     ['右上に通知ベルあり', R.bell.has===true],
     ['件数バッジあり', R.bell.badge && /\d/.test(R.bell.badge)],
+    ['バッジがポップアップの件数と一致', R.badgeMatches===true],
     ['本文に常時パネル無し(ベルに移設)', R.noInline===true],
     ['農薬リスクなしがti-shield-check', R.icons.hasShield===true],
     ['ベルクリックでポップアップに記録', R.popup.opened===true],

@@ -2048,7 +2048,7 @@ function RecentRecordsPanel({ records, fields, onSelectRecord }) {
     className: 'card',
     style: {
       padding: '0', overflow: 'hidden',
-      width: '300px', flexShrink: 0,
+      width: '100%',   // ダッシュボード単独配置に合わせて全幅（旧2カラムの300px固定を解除）
       transition: 'all .2s',
     }
   },

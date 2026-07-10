@@ -1272,7 +1272,10 @@ function runFarmIntegrityChecks(ctx) {
       })
     }
     sprays.forEach(r => chk(r, 'spray', '散布'))
-    ferts.forEach(r => chk(r, 'fert', '施肥'))
+    // 元肥・堆肥は定植より前に入れるのが正常な作業（実データの管理表も施肥→定植の順）。
+    // 一律に警告すると通常運用で偽陽性が量産されるため、追肥（と区分未記入）のみ点検する。
+    ferts.filter(r => r.fertilizing_type !== '元肥' && r.fertilizing_type !== '堆肥')
+         .forEach(r => chk(r, 'fert', '施肥'))
   })
 
   // R2 天気が未記入の農薬散布（GAP・ドリフト管理で必要）

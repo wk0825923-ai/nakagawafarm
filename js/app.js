@@ -9,7 +9,8 @@
   // 【デモ】?demo=20 付きで開いたら20圃場デモデータを自動投入（tools/demo-seed.js）。
   // リンクを踏むだけで見られるようにするための仕組み。投入後は自身でクリーンURLへ遷移する。
   React.useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('demo') && !window.__demoSeeding) {
+    // 値なし ?demo でも効くよう has() を使う（get() は '' を返し falsy になる。?reset と同じ罠）
+    if (new URLSearchParams(window.location.search).has('demo') && !window.__demoSeeding) {
       window.__demoSeeding = true
       const s = document.createElement('script')
       s.src = '/tools/demo-seed.js?' + Date.now()

@@ -1,8 +1,13 @@
 /* 20圃場デモデータ投入（ブックマークレットから読み込む用のツール。アプリ本体からは参照しない）
    使い方: アプリにログインした状態でブックマークレットをクリックするとこのスクリプトが読み込まれ実行される。 */
 (async () => {
-  let fid = Object.keys(localStorage).find(k => k.startsWith('farm_fields_v2_') || k.startsWith('farm_monthly_temps_'));
-  fid = fid ? fid.slice(fid.lastIndexOf('_') + 1) : null;
+  // 農場ID: ①アプリが設定する CONFIG.CURRENT_FARM_ID を最優先（まっさら直後でも確実） →
+  // ②既存の farm_ キーから推定 → ③Supabase から取得
+  let fid = (typeof CONFIG !== 'undefined' && CONFIG.CURRENT_FARM_ID) ? CONFIG.CURRENT_FARM_ID : null;
+  if (!fid) {
+    const k = Object.keys(localStorage).find(k => k.startsWith('farm_fields_v2_') || k.startsWith('farm_monthly_temps_'));
+    fid = k ? k.slice(k.lastIndexOf('_') + 1) : null;
+  }
   if (!fid) {
     try {
       const { data: { user } } = await sb.auth.getUser();

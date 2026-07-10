@@ -2513,12 +2513,23 @@ function Dashboard({ fields, records, staff, gap, todayTasks, onToggleTodayTask,
         display:'flex', alignItems:'center', gap:24,
       } },
         React.createElement('i', { className:'ti ti-plant-2', 'aria-hidden':'true', style:{ fontSize:52, lineHeight:1, color:'#0D9972', flexShrink:0 } }),
-        React.createElement('div', null,
+        React.createElement('div', { style:{ flex:1 } },
           React.createElement('div', { style:{ fontSize:20, fontWeight:800, color:'#065F46', marginBottom:6 } }, 'ようこそ！農場管理を始めましょう'),
-          React.createElement('div', { style:{ fontSize:14, color:'#047857', lineHeight:1.7 } },
+          React.createElement('div', { style:{ fontSize:14, color:'#047857', lineHeight:1.7, marginBottom:14 } },
             '圃場の登録から始めると、作業記録・農薬管理・収穫実績の自動集計まで一元管理できます。',
             React.createElement('br', null),
             '下のステップを順番に進めてください。'
+          ),
+          // 【デモ】1から入力せずに試せるよう、デモデータ(20圃場・記録・履歴)をワンクリック投入。?demoで自動seed。
+          React.createElement('div', { style:{ display:'flex', gap:'10px', flexWrap:'wrap', alignItems:'center' } },
+            React.createElement('button', {
+              onClick: () => { if (window.confirm('デモデータ（20圃場・作業記録60件・散布/収穫履歴・農薬/肥料マスタ・スタッフ等）を投入します。今の農場の入力内容は上書きされます。よろしいですか？')) { window.location.href = window.location.pathname + '?demo'; } },
+              style:{ display:'inline-flex', alignItems:'center', gap:'6px', padding:'10px 18px', background:'#0A6B52', color:'#fff', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:700, cursor:'pointer' }
+            },
+              React.createElement('i', { className:'ti ti-database-import', 'aria-hidden':'true', style:{ fontSize:'15px' } }),
+              'デモデータで試す（ワンクリック投入）'
+            ),
+            React.createElement('span', { style:{ fontSize:'11px', color:'#6B7280' } }, '※ 後で「まっさら」に戻すには URL に ?reset を付けて開きます')
           )
         )
       ),

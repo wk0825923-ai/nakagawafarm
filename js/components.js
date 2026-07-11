@@ -16779,13 +16779,16 @@ function usePersistState(key, initial) {
   })
   // 編集済みフラグ: 非同期の初期ロードが遅れて届いても、既にユーザーが編集していたら上書きしない。
   const dirtyRef = React.useRef(false)
+  // リモート更新フラグ: subscribe経由で新しい値を受け取った後は、遅延した初期ロードで巻き戻さない。
+  const remoteRef = React.useRef(false)
   // 非同期ソース（Supabase）からの初期ロード。localStorageは同期で読めているので実質no-op。
   React.useEffect(() => {
     let alive = true
     dirtyRef.current = false // 別コレクション(key変更)に切り替わったら未編集から開始
+    remoteRef.current = false // key変更時はリモート更新もリセット
     Promise.resolve(farmRepo.readAsync ? farmRepo.readAsync(key) : null).then(r => {
-      // 遅れて届いた古いDB値でユーザーの編集を潰さない（Codex High: stale overwrite対策）
-      if (alive && !dirtyRef.current && r && r.ok && r.found) setState(r.value)
+      // 遅れて届いた古いDB値でユーザーの編集・リモート更新を潰さない（stale overwrite対策）
+      if (alive && !dirtyRef.current && !remoteRef.current && r && r.ok && r.found) setState(r.value)
     }).catch(() => {})
     return () => { alive = false }
   }, [key])
@@ -16809,6 +16812,7 @@ function usePersistState(key, initial) {
   // 【同時利用の手戻り防止】別タブ(将来はSupabaseリアルタイム)が同じキーを更新したら自分のstateも追随。
   React.useEffect(() => {
     const unsubscribe = farmRepo.subscribe(key, (value, meta) => {
+      remoteRef.current = true // 以降、遅延した初期ロードでこのリモート更新を上書きさせない
       setState(meta && meta.found ? value : initial)
     })
     return unsubscribe

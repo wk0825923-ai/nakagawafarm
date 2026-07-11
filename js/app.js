@@ -5,6 +5,9 @@
   CONFIG.CURRENT_FARM_ID = farmKey
   CONFIG.FARM_NAME    = currentOrg.type === 'corp' ? currentOrg.name + ' / ' + currentFarm.name : (currentFarm.name || currentOrg.name)
   CONFIG.JGAP_CERT_NO = currentFarm.jgap_cert_no || currentOrg.jgap_cert_no || 'JGAP-XXXX-XXXXX'
+  // 【フルスタック移行】Supabase経路の安全ガード用コンテキストを配線。
+  // org_id未確定だと書き込み全拒否・farmIds外は越境拒否になるため、起動時(＋農場切替時)に必ず渡す。
+  farmRepo.setContext({ orgId: currentOrg.id, farmIds: (availableFarms || []).map(f => f.id) })
   const useFPS = (k, i) => usePersistState(k + '_' + farmKey, i)
   // 【デモ】?demo=20 付きで開いたら20圃場デモデータを自動投入（tools/demo-seed.js）。
   // リンクを踏むだけで見られるようにするための仕組み。投入後は自身でクリーンURLへ遷移する。

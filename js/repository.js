@@ -158,7 +158,9 @@
       const client = getSb()
       if (!table || !client || !client.channel) return function () {}
       try {
-        const ch = client.channel('rt_' + table + '_' + farmId)
+        // チャンネル名は購読ごとに一意化: 同一キーを複数箇所が購読した時に同名topicの二重joinで
+        // 2本目が死ぬ(実測: CHANNEL_ERROR)のを防ぐ。realtimeサーバ側はtopic名でなくfilterで配信判定する。
+        const ch = client.channel('rt_' + table + '_' + farmId + '_' + Math.random().toString(36).slice(2, 10))
           .on('postgres_changes', { event: '*', schema: 'public', table: table, filter: 'farm_id=eq.' + farmId }, async () => {
             const r = await SupabaseRepository.readAsync(key)
             if (r.ok && r.found) cb(r.value, { found: true })

@@ -82,28 +82,29 @@ function makeRuntime() {
 // ── モックfarmRepo: readAsyncは手動resolve（遅延を再現）・subscribeはコールバックを外に晒す ──
 // asyncMode=true でDB経路(isAsync→writeガード対象)、false でlocalStorage経路を再現。
 function makeMockRepo(asyncMode) {
-  let resolveRead = null
+  const resolvers = [] // readAsync呼び出し順のキュー（農場切替レース再現用に古い読込を後から解決できる）
   let subCb = null
   const writes = []
   return {
     writes,
     isAsync() { return !!asyncMode },
     readSync() { return { ok: true, found: false, value: undefined } },
-    readAsync() { return new Promise(r => { resolveRead = r }) },
+    readAsync() { return new Promise(r => { resolvers.push(r) }) },
     write(key, value) { writes.push(value); return Promise.resolve({ ok: true }) },
     subscribe(key, cb) { subCb = cb; return () => { subCb = null } },
     fireRemote(value) { if (subCb) subCb(value, { found: true }) },
-    resolveInitialLoad(r) { if (resolveRead) { const f = resolveRead; resolveRead = null; f(r) } },
+    resolveInitialLoad(r) { const f = resolvers.shift(); if (f) f(r) }, // 最も古い未解決readを解決
   }
 }
 
 const tick = () => new Promise(r => setImmediate(r))
-const build = (repo) => {
+const build = (repo, keyBox) => {
   const rt = makeRuntime()
   const toasts = []
+  const box = keyBox || { k: 'farm_x_1' }
   const showToast = (msg) => toasts.push(msg)
   const usePersistState = new Function('React', 'farmRepo', 'showToast', 'window', 'return ' + fnSrc)(rt.React, repo, showToast, {})
-  rt.mount(() => usePersistState('farm_x_1', ['initial']))
+  rt.mount(() => usePersistState(box.k, ['initial']))
   return { rt, toasts }
 }
 
@@ -201,6 +202,29 @@ const build = (repo) => {
     ok('R7: 読込失敗中の編集は保留(初期値のまま・write0件)',
       state[0] === 'initial' && repo.writes.length === 0 && toasts.length === 1,
       'state=' + JSON.stringify(state) + ' writes=' + repo.writes.length)
+  }
+
+  // R8: [DB経路] 農場切替レース — 農場Aの読込中にBへ切替→遅れてAの読込完了→Bの読込前の編集は保留のまま
+  // （Codexレビュー High: 旧読込完了が新農場の編集ロックを解除してはならない）
+  {
+    const repo = makeMockRepo(true)
+    const keyBox = { k: 'farm_x_A' }
+    const { rt, toasts } = build(repo, keyBox)          // 農場Aの読込開始(未解決)
+    keyBox.k = 'farm_x_B'; rt.render()                  // 農場Bへ切替(Aはcleanupでalive=false・Bの読込開始)
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['A-db'] }) // 遅れてAの読込完了
+    await tick()
+    rt.result[1](['edit-before-B-load'])                // Bの読込前に編集を試みる → 保留されるべき
+    await tick()
+    const blockedState = rt.result[0]
+    const blockedWrites = repo.writes.length
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['B-db'] }) // Bの読込完了
+    await tick()
+    const [state] = rt.result
+    ok('R8a: 旧農場の遅延読込完了では編集ロックが解除されない(切替レース)',
+      blockedState[0] === 'initial' && blockedWrites === 0 && toasts.length === 1,
+      'state=' + JSON.stringify(blockedState) + ' writes=' + blockedWrites + ' toasts=' + toasts.length)
+    ok('R8b: 旧農場の値も混入せず、新農場の読込値が反映される',
+      state[0] === 'B-db', 'state=' + JSON.stringify(state))
   }
 
   const pass = checks.filter(c => c.pass).length

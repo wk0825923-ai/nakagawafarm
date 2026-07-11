@@ -23,9 +23,10 @@ const login = async (page) => {
 
 ;(async () => {
   const b = await puppeteer.launch({ executablePath: CHROME, headless: 'new', args: ['--no-sandbox', '--disable-dev-shm-usage'] })
+  let A = null, key = null
   try {
     // ── タブA: フラグONで開いてログイン ──
-    const A = await b.newPage()
+    A = await b.newPage()
     await A.goto(URL_BASE + '/?dbdest=1', { waitUntil: 'domcontentloaded', timeout: 60000 })
     await login(A)
     ok('A0: アプリ起動・ログイン', await appReady(A))
@@ -35,7 +36,7 @@ const login = async (page) => {
     ok('A1: フラグでSupabase経路にroute', routeKind === 'supabase', 'kind=' + routeKind)
 
     // ② DBから読める
-    const key = await A.evaluate(() => 'farm_shipment_destinations_' + CONFIG.CURRENT_FARM_ID)
+    key = await A.evaluate(() => 'farm_shipment_destinations_' + CONFIG.CURRENT_FARM_ID)
     const before = await A.evaluate(k => farmRepo.readAsync(k), key)
     ok('A2: DBから出荷先を読める', before && before.ok && before.found && Array.isArray(before.value) && before.value.length >= 1,
       'count=' + (before && before.value ? before.value.length : 'x') + ' keys=' + JSON.stringify((before.value || []).map(d => d.key)))
@@ -57,14 +58,31 @@ const login = async (page) => {
     for (let i = 0; i < 20; i++) { got = await B.evaluate(() => (window.__rt || []).find(v => (v || []).some(d => d.key === 'qa_live_test'))); if (got) break; await sleep(500) }
     ok('B1: 別タブへリアルタイム同期が届く', !!got, got ? 'count=' + got.length : '10秒待っても未着')
 
-    // ⑤ 後片付け: 元の内容に書き戻し（差分deleteでテスト行が消えることも同時に検証）
-    const w2 = await A.evaluate((k, orig) => farmRepo.write(k, orig), key, original)
+    // ⑤ 後片付け: 最新のDB値からテスト行「だけ」を除いて書き戻す
+    //（全体をoriginalで上書きすると、QA中に他端末が足した正規データまで消すため。Codexレビュー Med対応）
+    const w2 = await A.evaluate(async (k) => {
+      const cur = await farmRepo.readAsync(k)
+      if (!cur || !cur.ok) return { ok: false, error: 'reread failed' }
+      return farmRepo.write(k, cur.value.filter(d => d.key !== 'qa_live_test'))
+    }, key)
     await sleep(1500)
     const after = await A.evaluate(k => farmRepo.readAsync(k), key)
-    const restored = after && after.ok && after.value.length === original.length && !after.value.some(d => d.key === 'qa_live_test')
-    ok('A4: 原状復帰(差分deleteでテスト行が消える)', w2 && w2.ok && restored,
+    const cleaned = after && after.ok && !after.value.some(d => d.key === 'qa_live_test')
+    const originalsKept = after && after.ok && original.every(o => after.value.some(d => d.key === o.key))
+    ok('A4: 後片付け(差分deleteでテスト行だけ消え、元の行は残る)', w2 && w2.ok && cleaned && originalsKept,
       'count=' + (after && after.value ? after.value.length : 'x') + ' keys=' + JSON.stringify((after.value || []).map(d => d.key)))
   } finally {
+    // 途中で例外終了してもテスト行を残さない（成功時は⑤で消えているので実質no-op）
+    try {
+      if (A && key) {
+        await A.evaluate(async (k) => {
+          const cur = await farmRepo.readAsync(k)
+          if (cur && cur.ok && cur.found && cur.value.some(d => d.key === 'qa_live_test')) {
+            await farmRepo.write(k, cur.value.filter(d => d.key !== 'qa_live_test'))
+          }
+        }, key)
+      }
+    } catch (_) { /* 後片付け失敗は本体の失敗を隠さない */ }
     await b.close()
   }
   const pass = checks.filter(c => c.pass).length

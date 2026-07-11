@@ -16792,7 +16792,9 @@ function usePersistState(key, initial) {
     remoteRef.current = false // key変更時はリモート更新もリセット
     loadedRef.current = !(farmRepo.isAsync && farmRepo.isAsync(key)) // key変更時は読込状態も判定し直す
     Promise.resolve(farmRepo.readAsync ? farmRepo.readAsync(key) : null).then(r => {
-      if (r && r.ok) loadedRef.current = true // 読込成功=以降の編集を許可（失敗時は保留のまま=オフライン等で書けない状況と一致）
+      // alive必須: 農場切替後に旧農場の読込完了が届くと、新農場の読込前なのに編集ロックが解除され
+      // 初期値ベースの差分deleteで新農場のDB行を消し得る（Codexレビュー High対応）
+      if (alive && r && r.ok) loadedRef.current = true // 読込成功=以降の編集を許可（失敗時は保留のまま=オフライン等で書けない状況と一致）
       // 遅れて届いた古いDB値でユーザーの編集・リモート更新を潰さない（stale overwrite対策）
       if (alive && !dirtyRef.current && !remoteRef.current && r && r.ok && r.found) setState(r.value)
     }).catch(() => {})

@@ -1033,8 +1033,11 @@ function runFarmIntegrityChecks(ctx) {
   const lotsMap    = ctx.farmLots || {}
   const pesticides = ctx.pesticides || []
   const today  = todayYmd()  // ローカル日付(config.js)。UTC基準だとJST早朝に未来日付を誤検知するため。
-  const fname  = (id) => { const f = fields.find(x => x.id === id); return f ? f.name : (id != null && id !== '' ? ('圃場#' + id) : '圃場不明') }
-  const pById  = (id) => pesticides.find(p => p.id === id)
+  // 記録とマスタでIDの型（数値/文字列）が混在してもチェックを見逃さないよう文字列比較で突合する
+  // （フォーム入力・localStorage・将来のDB移行でどちらの型も入りうるため）
+  const sameId = (a, b) => a != null && b != null && String(a) === String(b)
+  const fname  = (id) => { const f = fields.find(x => sameId(x.id, id)); return f ? f.name : (id != null && id !== '' ? ('圃場#' + id) : '圃場不明') }
+  const pById  = (id) => pesticides.find(p => sameId(p.id, id))
   const days   = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000)
   const yearOf = (d) => (d || '').slice(0, 4)
   const rowset = (s) => (typeof parseRowRange === 'function' ? parseRowRange(s) : new Set())
@@ -1044,7 +1047,10 @@ function runFarmIntegrityChecks(ctx) {
   const subFor    = (kind) => (kind === 'spray' ? 'pesticide' : kind === 'harvest' ? 'harvest' : 'dashboard')
   let seq = 0
   const push = (o) => findings.push(Object.assign({ id: 'chk' + (++seq), refs: [] }, o))
-  const run  = (fn) => { try { fn() } catch (e) { /* 1チェックの失敗で全体を止めない */ } }
+  // 1チェックの失敗で全体を止めないが、失敗を握り潰すと「問題なし」に見えてしまうため
+  // 失敗したチェックは最後にまとめて1件の所見として可視化する
+  const runErrors = []
+  const run  = (fn) => { try { fn() } catch (e) { runErrors.push(String((e && e.message) || e).slice(0, 120)) } }
 
   // 農薬適用イベントを正規化（畝別散布 + 基本日報の農薬散布）
   const sprayEvents = []
@@ -1059,7 +1065,7 @@ function runFarmIntegrityChecks(ctx) {
     sprayEvents.forEach(e => { const k = e.field_id + '|' + e.pesticide_id + '|' + yearOf(e.date); (cnt[k] = cnt[k] || []).push(e) })
     Object.entries(cnt).forEach(([k, evs]) => {
       const [fid, pid, yr] = k.split('|')
-      const p = pById(Number(pid)); if (!p || !p.max_times) return
+      const p = pById(pid); if (!p || !p.max_times) return
       if (evs.length > p.max_times) push({
         severity: 'high', category: '農薬', title: p.name + ' の使用回数オーバー',
         detail: fname(Number(fid)) + ' で ' + yr + '年に ' + evs.length + '回（上限 ' + p.max_times + '回）',
@@ -1075,11 +1081,13 @@ function runFarmIntegrityChecks(ctx) {
   run(() => {
     harvests.forEach(h => {
       const hset = h.row_range ? rowset(h.row_range) : null
-      sprayEvents.filter(e => e.field_id === h.field_id && e.date && h.date && e.date <= h.date).forEach(e => {
+      sprayEvents.filter(e => sameId(e.field_id, h.field_id) && e.date && h.date && e.date <= h.date).forEach(e => {
         const p = pById(e.pesticide_id); if (!p || p.preharvest_days == null) return
         const gap = days(e.date, h.date)
         if (gap < p.preharvest_days) {
-          if (hset && e.row_range) { const eset = rowset(e.row_range); if (![...eset].some(n => hset.has(n))) return }
+          // 畝範囲がどちらも正しく読めた時だけ「畝が重ならない＝対象外」にする。
+          // 読めない表記（パース結果が空）は「重なりなし」ではなく「不明」なので、安全側に倒して点検対象に含める
+          if (hset && hset.size > 0 && e.row_range) { const eset = rowset(e.row_range); if (eset.size > 0 && ![...eset].some(n => hset.has(n))) return }
           push({
             severity: 'high', category: '食品安全', title: '収穫前日数(PHI)違反の疑い: ' + p.name,
             detail: fname(h.field_id) + ' 収穫' + h.date + ' の ' + gap + '日前に散布（要 ' + p.preharvest_days + '日以上）',
@@ -1195,7 +1203,9 @@ function runFarmIntegrityChecks(ctx) {
   // ロットの定植（無ければ播種）日を、記録の畝範囲に重なるロットから引くヘルパー
   const plantDateFor = (fid, rowStr) => {
     const lots = lotsMap[fid] || []; if (lots.length === 0) return null
-    const rset = rowStr ? rowset(rowStr) : null
+    // 畝範囲が読めない表記（パース結果が空）は畝指定なし扱い＝どのロットにも重なりうるとみなす（安全側）
+    const rset0 = rowStr ? rowset(rowStr) : null
+    const rset = (rset0 && rset0.size > 0) ? rset0 : null
     const match = lots.find(l => { if (!rset) return true; const lset = rowset(l.row_range); return [...rset].some(n => lset.has(n)) })
     return match ? (match.transplant_date || match.seed_date || null) : null
   }
@@ -1339,6 +1349,13 @@ function runFarmIntegrityChecks(ctx) {
 
   const order = { high: 0, mid: 1, low: 2 }
   findings.sort((a, b) => order[a.severity] - order[b.severity])
+  // 実行できなかったチェックがあれば1件の所見として可視化（黙って「問題なし」に見せない）
+  if (runErrors.length > 0) push({
+    severity: 'mid', category: 'システム', title: '一部の点検が実行できませんでした',
+    detail: runErrors.length + '件の点検が内部エラーで完了できていません（例: ' + runErrors[0] + '）',
+    cause: '記録データの形式が想定と異なる可能性があります（破損・手動編集・移行時の型崩れ等）。',
+    fix: '最近手で編集・インポートしたデータがないか確認してください。解消しない場合は開発側に連絡を。',
+  })
   return findings
 }
 

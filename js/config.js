@@ -373,7 +373,7 @@ function buildSprayTableHTML(sprayRecords, fields, pesticides) {
           <td style="text-align:left">${pest  ? escHtml(pest.name)  : '—'}</td>
           <td>${pest  ? escHtml(pest.reg_no) : '—'}</td>
           <td>${r.dilution ? escHtml(r.dilution) + '倍' : '—'}</td>
-          <td>${r.amount || '—'}</td>
+          <td>${r.amount != null && r.amount !== '' ? escHtml(r.amount) : '—'}</td>
           <td>${disposal > 0 ? disposal + 'L' : '—'}</td>
           <td>${r.weather ? escHtml(r.weather) : '—'}</td>
           <td>${r.worker ? escHtml(r.worker) : '—'}</td>
@@ -639,7 +639,8 @@ async function exportEmaffCSV(records, fields, pesticides, skipConfirm) {
 
   const lines = [header.map(csvCell).join(',')]
 
-  rows.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
+  // rowsは加工済みの新配列だが、将来state配列が直接渡されても破壊しないよう防御的にコピーしてからsortする
+  ;[...rows].sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')))
        .forEach(r => {
     const f = findField(r.field_id)
     let material = '', regNo = '', dilution = '', qty = '', unit = ''

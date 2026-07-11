@@ -5186,17 +5186,24 @@ function generateBedPolygons(field) {
 function parseRowRange(rangeStr) {
   const set = new Set()
   if (!rangeStr) return set
-  const parts = String(rangeStr).split(',')
-  parts.forEach(part => {
+  // 実データの管理表は全角数字・全角ダッシュ表記（例「１－７」「15－22」「58-60」）が普通に混ざるため、
+  // まず正規化してから読む。畝は1始まりの整数のみ（0・負数・小数は不正として捨てる）
+  const norm = String(rangeStr)
+    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[－ー−–—〜～~]/g, '-')
+    .replace(/[，、]/g, ',')
+  const MAX_ROWS = 1000 // 異常値（破損データ等の巨大レンジ）で数億回ループして画面が固まるのを防ぐ安全上限
+  norm.split(',').forEach(part => {
     const trimmed = part.trim()
     if (trimmed.includes('-')) {
-      const [start, end] = trimmed.split('-').map(Number)
-      if (!isNaN(start) && !isNaN(end)) {
+      let [start, end] = trimmed.split('-').map(Number)
+      if (Number.isInteger(start) && Number.isInteger(end) && start > 0 && end >= start) {
+        end = Math.min(end, start + MAX_ROWS - 1)
         for (let i = start; i <= end; i++) set.add(i)
       }
     } else {
       const n = Number(trimmed)
-      if (!isNaN(n) && trimmed !== '') set.add(n)
+      if (Number.isInteger(n) && n > 0) set.add(n)
     }
   })
   return set
@@ -8783,7 +8790,9 @@ function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCy
         const col = lot ? (BED_STATUS_COLOR[lot.status] || f.color || '#0A6B52') : (f.color || '#0A6B52')
         const filled = !!lot
         const stLabel = lot && lot.status ? (ROW_STATUS_CONFIG[lot.status] ? ROW_STATUS_CONFIG[lot.status].label : lot.status) : ''
-        const tip = f.name + ' 畝' + bp.bed + (lot ? '｜' + (lot.variety || f.crop || '') + (stLabel ? '（' + stLabel + '）' : '') : '｜空き')
+        // Leafletのtooltip/popupはHTMLとして描画されるため、ユーザー入力値（圃場名・品種・状態）は必ずエスケープする（stored XSS防止）
+        const escT = (typeof escHtml==='function') ? escHtml : (s)=>String(s==null?'':s)
+        const tip = escT(f.name) + ' 畝' + bp.bed + (lot ? '｜' + escT(lot.variety || f.crop || '') + (stLabel ? '（' + escT(stLabel) + '）' : '') : '｜空き')
         // 畝カルテ: この畝に重なる施肥/防除/収穫を集計
         const sprayRecs = bedOverlap(lotSprayRecords, f.id, bp.bed)
         const sprays = sprayRecs.length
@@ -8822,11 +8831,13 @@ function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCy
     })
     // 緯度経度が未設定の圃場（地図でピン留めせずに登録した圃場）はマーカーを作らない。
     // Leafletは(undefined,undefined)で例外を投げアプリ全体を巻き込んで落ちるため、必ずガードする。
+    // ポップアップに入るユーザー入力値（圃場名/作物/状態/住所）は全てエスケープする（stored XSS防止・畝ポリゴン側と同基準）
+    const _escP = (typeof escHtml==='function') ? escHtml : (s)=>String(s==null?'':s)
     fields.filter(f=>Number.isFinite(Number(f.lat))&&Number.isFinite(Number(f.lng))).forEach(f=>L.circleMarker([Number(f.lat),Number(f.lng)],{color:f.color,fillColor:f.color,fillOpacity:.7,radius:10,weight:2}).bindPopup(
       '<div style="min-width:150px">'
-      + '<b>'+f.name+'</b><br>'+f.crop+' / '+f.area_are+'a — '+f.status
-      + (f.address ? '<div style="font-size:11px;color:#6B7280;margin-top:3px">📍 '+((typeof escHtml==='function')?escHtml(f.address):f.address)+'</div>' : '')
-      + '<div class="popup-goto-field" data-field-id="'+f.id+'" style="margin-top:8px;padding:6px 10px;background:#0A6B52;color:#fff;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;">圃場詳細を見る →</div>'
+      + '<b>'+_escP(f.name)+'</b><br>'+_escP(f.crop)+' / '+(Number(f.area_are)||0)+'a — '+_escP(f.status)
+      + (f.address ? '<div style="font-size:11px;color:#6B7280;margin-top:3px">📍 '+_escP(f.address)+'</div>' : '')
+      + '<div class="popup-goto-field" data-field-id="'+_escP(f.id)+'" style="margin-top:8px;padding:6px 10px;background:#0A6B52;color:#fff;border-radius:6px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;">圃場詳細を見る →</div>'
       + '</div>'
     ).addTo(map))
     // ポップアップ内「圃場詳細を見る →」タップで圃場詳細・ダッシュボードへ遷移
@@ -9257,8 +9268,9 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
   const csvCell = (v) => {
     let s = v == null ? '' : String(v)
     // CSVインジェクション対策: 圃場名・品種などに = + @ 等が入るとExcel/Sheetsが数式として
-    // 実行してしまう。数式トリガー文字始まりで通常の数値でないセルは先頭に ' を付けて無害化。
-    if (/^[=+\-@\t\r]/.test(s) && !/^[+-]?\d/.test(s)) s = "'" + s
+    // 実行してしまう。数式トリガー文字始まりのセルは、全体が純粋な数値（-5 や +81）の時だけ
+    // そのまま通し、それ以外（例: +1+SUM(A1:A2) のような数字始まりの式）は先頭に ' を付けて無害化。
+    if (/^[=+\-@\t\r]/.test(s) && !(s.trim() !== '' && Number.isFinite(Number(s)))) s = "'" + s
     return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
   }
   const downloadCsv = async () => {

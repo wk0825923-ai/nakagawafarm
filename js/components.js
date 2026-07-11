@@ -16764,25 +16764,25 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
 // =====================================================
 
 // LS-01: localStorage 永続化ヘルパー
+// 【フェーズ2】localStorageを直接触らず farmRepo（変換アダプタ）経由にする。
+// 呼び出し側(useFPS 26箇所)は無変更・挙動も同じ。フェーズ4でfarmRepoの中身をSupabaseに差し替える。
 function usePersistState(key, initial) {
   const [state, setState] = React.useState(() => {
-    try {
-      const saved = localStorage.getItem(key)
-      return saved ? JSON.parse(saved) : initial
-    } catch (e) {
+    const r = farmRepo.read(key)
+    if (!r.ok) {
       // 破損データは初期値に戻すが、握り潰さず必ず警告（引き継ぎ時の調査のため）
-      console.warn('[usePersistState] 読込失敗（初期値に復帰）:', key, e)
+      console.warn('[usePersistState] 読込失敗（初期値に復帰）:', key, r.error)
       return initial
     }
+    return r.found ? r.value : initial
   })
   const setPersist = React.useCallback(updater => {
     setState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
-      try {
-        localStorage.setItem(key, JSON.stringify(next))
-      } catch (e) {
+      const w = farmRepo.write(key, next)
+      if (!w.ok) {
         // 保存失敗（多くは容量超過）は"見える化"する。データ消失に気づけないのが最大のリスクのため。
-        console.warn('[usePersistState] 保存失敗:', key, e)
+        console.warn('[usePersistState] 保存失敗:', key, w.error)
         if (typeof window !== 'undefined' && !window.__storageWarned) {
           window.__storageWarned = true
           try { showToast('データの保存に失敗しました。ブラウザの空き容量が不足している可能性があります。写真を減らすか不要なデータを整理してください。', 'error') } catch (_) {}
@@ -16792,16 +16792,13 @@ function usePersistState(key, initial) {
     })
   }, [key])
   // 【同時利用の手戻り防止】管理者とスタッフが同じ農場を別タブで開いている時、片方の保存が
-  // もう片方の in-memory state で上書きされて消える(last-write-win)のを防ぐ。別タブが同じキーを
-  // 更新したら storage イベントで自分の state も最新に追随させる（次の保存が古い状態を書き戻さない）。
+  // もう片方の in-memory state で上書きされて消える(last-write-win)のを防ぐ。別タブ(将来はリアルタイム)が
+  // 同じキーを更新したら自分の state も最新に追随させる（次の保存が古い状態を書き戻さない）。
   React.useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key !== key) return
-      try { setState(e.newValue != null ? JSON.parse(e.newValue) : initial) }
-      catch (_) { /* 壊れた値は無視（現状維持） */ }
-    }
-    if (typeof window !== 'undefined') window.addEventListener('storage', onStorage)
-    return () => { if (typeof window !== 'undefined') window.removeEventListener('storage', onStorage) }
+    const unsubscribe = farmRepo.subscribe(key, (value, meta) => {
+      setState(meta && meta.found ? value : initial)
+    })
+    return unsubscribe
   }, [key])
   return [state, setPersist]
 }

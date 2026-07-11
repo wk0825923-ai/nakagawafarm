@@ -5642,8 +5642,19 @@ function LotFormModal({ field, lot, existingLots, onSave, onClose }) {
     seedling_type:    lot?.seedling_type    || '',
     transplant_count: lot?.transplant_count || '',
     status:           lot?.status           || 'growing',
+    // 種苗情報（GGAP 26章「種苗」/ McD 6.1.1 種子供給源の証憑。実データ「種苗購入記録表」に対応・任意入力）
+    seed_supplier:      lot?.seed_supplier      || '',
+    seed_origin:        lot?.seed_origin        || '',
+    seed_purchase_date: lot?.seed_purchase_date || '',
+    seed_purchase_qty:  lot?.seed_purchase_qty  || '',
+    seed_disinfection:  lot?.seed_disinfection  || '',
+    seed_gmo:           lot?.seed_gmo           || '',
   })
   const uf = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  // 種苗情報は普段の畝ロット登録を煩雑にしないよう折りたたみ。既入力があれば開いた状態で出す
+  const [showSeedInfo, setShowSeedInfo] = React.useState(
+    !!(lot && (lot.seed_supplier || lot.seed_origin || lot.seed_purchase_date || lot.seed_purchase_qty || lot.seed_disinfection || lot.seed_gmo))
+  )
 
   const rowSet = parseRowRange(form.row_range)
   // 他ロットとの畝番号重複チェック（編集中の自分自身は除外）
@@ -5667,6 +5678,7 @@ function LotFormModal({ field, lot, existingLots, onSave, onClose }) {
       row_range: form.row_range.trim(),
       transplant_count: Number(form.transplant_count) || null,
       seedling_period_days: seedlingDays,
+      seed_purchase_qty: Number(form.seed_purchase_qty) || null,
     })
     onClose()
   }
@@ -5749,6 +5761,41 @@ function LotFormModal({ field, lot, existingLots, onSave, onClose }) {
               React.createElement('option', { key, value:key }, cfg.label)
             )
           )
+        )
+      ),
+
+      // 種苗情報（GAP証憑・折りたたみ）— GGAP 26章/McD 6.1.1 に対応。実データの「種苗購入記録表」の項目
+      React.createElement('div', { style:{ marginBottom:'18px', border:'1px solid #E2E8E2', borderRadius:'8px', overflow:'hidden' } },
+        React.createElement('button', {
+          onClick: () => setShowSeedInfo(v => !v),
+          style:{ width:'100%', textAlign:'left', background:'#F8FAF8', border:'none', padding:'9px 12px', cursor:'pointer', fontSize:'12px', fontWeight:700, color:'#0A6B52', display:'flex', alignItems:'center', justifyContent:'space-between' }
+        },
+          '🌱 種苗情報（GAP審査用・任意）',
+          React.createElement('span', { style:{ fontSize:'11px', color:'#9CA3AF' } }, showSeedInfo ? '閉じる ▲' : '開く ▼')
+        ),
+        showSeedInfo && React.createElement('div', { style:{ padding:'12px' } },
+          React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px', marginBottom:'12px' } },
+            fieldBox('購入先（育成者）', 'seed_supplier', 'text', '例: ㈲葛田園芸'),
+            fieldBox('生産地（国）', 'seed_origin', 'text', '例: 日本'),
+            fieldBox('購入日', 'seed_purchase_date', 'date'),
+            fieldBox('購入量（枚 = 128セル）', 'seed_purchase_qty', 'number', '例: 80')
+          ),
+          React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' } },
+            fieldBox('種子消毒（薬剤名・回数 / なし）', 'seed_disinfection', 'text', '例: なし'),
+            React.createElement('div', null,
+              React.createElement('label', { style: labelStyle }, '遺伝子組換の有無'),
+              React.createElement('select', {
+                value: form.seed_gmo, onChange: e => uf('seed_gmo', e.target.value),
+                style:{ ...inputStyle, height:'34px' }
+              },
+                React.createElement('option', { value:'' }, '未記入'),
+                React.createElement('option', { value:'無' }, '無'),
+                React.createElement('option', { value:'有' }, '有')
+              )
+            )
+          ),
+          React.createElement('div', { style:{ fontSize:'10.5px', color:'#94A3B8', marginTop:'8px' } },
+            '※ GGAP「26 種苗」/ McD 6.1.1（種子供給源）の証憑になります。ロット№は播種日で管理されます')
         )
       ),
 
@@ -15266,7 +15313,14 @@ function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchase
                 ),
                 React.createElement('div', { style:{ flex:1, minWidth:0 } },
                   React.createElement('div', { style:{ fontSize:'13px', fontWeight:700, color:C.ink, lineHeight:1.3, wordBreak:'break-all' } }, f.name),
-                  React.createElement('div', { style:{ fontSize:'10px', color:C.muted, marginTop:'2px' } }, f.maker || '—'),
+                  React.createElement('div', { style:{ fontSize:'10px', color:C.muted, marginTop:'2px' } },
+                    (f.blend_components && f.blend_components.length > 0)
+                      ? '配合: ' + f.blend_components.map(c => {
+                          const cf = fertilizers.find(x => x.id === c.fertilizer_id)
+                          return (cf ? cf.name : '肥料#' + c.fertilizer_id) + '×' + c.bags
+                        }).join(' + ')
+                      : (f.maker || '—')
+                  ),
                 ),
                 alert && React.createElement('span', {
                   style:{
@@ -15374,7 +15428,7 @@ function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchase
 
     // ── 新規追加モーダル ──
     showAddModal && React.createElement(FertilizerAddModal, {
-      C,
+      C, fertilizers,
       onClose: () => setShowAddModal(false),
       onSave: (payload) => { onAdd(payload); setShowAddModal(false) },
     })
@@ -15454,13 +15508,30 @@ function fertilizerCropRowsToObject(cropRows) {
   return out
 }
 
-function FertilizerAddModal({ C, onClose, onSave }) {
+function FertilizerAddModal({ C, fertilizers, onClose, onSave }) {
   const EMPTY = { name:'', maker:'', weight_per_bag_kg:'', price_per_bag_yen:'', unit_price_yen_per_kg:'', stock_kg:'', alert_threshold_kg:'' }
   const [form, setForm] = React.useState(EMPTY)
   const [saved, setSaved] = React.useState(false)
   // 【肥料 希釈倍率 案③】基本希釈倍率＋作物別の上書き（任意）
   const [defaultDilution, setDefaultDilution] = React.useState('')
   const [cropRows, setCropRows] = React.useState([])
+  // 【配合肥料】実データ「肥料メモ」の 6:1（Dd404 6袋＋苦土重焼燐 1袋）等に対応。
+  // 現場語彙の配合名のまま登録でき、構成肥料からkg単価を自動計算するので原価計算から漏れない。
+  const [isBlend, setIsBlend] = React.useState(false)
+  const [blendRows, setBlendRows] = React.useState([{ fertilizer_id:'', bags:'' }, { fertilizer_id:'', bags:'' }])
+  const blendComponents = blendRows
+    .map(r => ({ fertilizer_id: Number(r.fertilizer_id), bags: Number(r.bags) }))
+    .filter(r => r.fertilizer_id && r.bags > 0)
+  const blendCalc = (() => {
+    if (!isBlend || blendComponents.length === 0) return null
+    let kg = 0, yen = 0, priceOk = true
+    blendComponents.forEach(c => {
+      const f = (fertilizers || []).find(x => x.id === c.fertilizer_id); if (!f) { priceOk = false; return }
+      kg  += (Number(f.weight_per_bag_kg) || 0) * c.bags
+      if (Number(f.price_per_bag_yen) > 0) yen += Number(f.price_per_bag_yen) * c.bags; else priceOk = false
+    })
+    return { kg, yen, unit: (kg > 0 && priceOk) ? Math.round((yen / kg) * 10) / 10 : null }
+  })()
 
   const pf = (k, v) => setForm(prev => {
     const next = { ...prev, [k]: v }
@@ -15478,13 +15549,14 @@ function FertilizerAddModal({ C, onClose, onSave }) {
       onSave({
         name:                  form.name.trim(),
         maker:                 form.maker.trim(),
-        weight_per_bag_kg:     Number(form.weight_per_bag_kg) || 0,
-        price_per_bag_yen:     Number(form.price_per_bag_yen) || 0,
-        unit_price_yen_per_kg: Number(form.unit_price_yen_per_kg) || 0,
+        weight_per_bag_kg:     Number(form.weight_per_bag_kg) || (blendCalc ? blendCalc.kg : 0),
+        price_per_bag_yen:     Number(form.price_per_bag_yen) || (blendCalc && blendCalc.unit != null ? blendCalc.yen : 0),
+        unit_price_yen_per_kg: Number(form.unit_price_yen_per_kg) || (blendCalc && blendCalc.unit != null ? blendCalc.unit : 0),
         stock_kg:              Number(form.stock_kg) || 0,
         alert_threshold_kg:    Number(form.alert_threshold_kg) || 0,
         default_dilution:      Number(defaultDilution) || null,
         crop_dilutions:        fertilizerCropRowsToObject(cropRows),
+        blend_components:      (isBlend && blendComponents.length > 0) ? blendComponents : null,
       })
     }, 600)
   }
@@ -15545,6 +15617,48 @@ function FertilizerAddModal({ C, onClose, onSave }) {
 
       // 希釈倍率（基本＋作物別の上書き・任意）
       React.createElement(FertilizerDilutionEditor, { defaultDilution, setDefaultDilution, cropRows, setCropRows, C }),
+
+      // ── 配合肥料（任意）: 現場の「6:1」等の混合レシピをそのまま登録できる ──
+      React.createElement('div', { style:{ marginTop:6, marginBottom:14, paddingTop:14, borderTop:`1px dashed ${C.border}` } },
+        React.createElement('label', { style:{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:'12px', fontWeight:700, color:C.green, marginBottom: isBlend ? 10 : 0 } },
+          React.createElement('input', { type:'checkbox', checked:isBlend, onChange:e=>setIsBlend(e.target.checked) }),
+          '配合肥料として登録（例: 6:1 ＝ Dd404 6袋 ＋ 苦土重焼燐 1袋）'
+        ),
+        isBlend && React.createElement('div', null,
+          ...blendRows.map((r, idx) =>
+            React.createElement('div', { key:idx, style:{ display:'grid', gridTemplateColumns:'1fr 90px 28px', gap:8, marginBottom:8, alignItems:'center' } },
+              React.createElement('select', {
+                value:r.fertilizer_id,
+                onChange:e=>setBlendRows(prev=>prev.map((x,i)=>i===idx?{ ...x, fertilizer_id:e.target.value }:x)),
+                style:{ padding:'8px 10px', borderRadius:'8px', border:`1.5px solid ${C.border}`, fontSize:'12.5px', color:C.ink, background:'#fff' }
+              },
+                React.createElement('option', { value:'' }, '構成肥料を選択'),
+                ...(fertilizers || []).filter(f => !f.blend_components).map(f =>
+                  React.createElement('option', { key:f.id, value:f.id }, f.name))
+              ),
+              React.createElement('input', {
+                type:'number', min:0, step:'0.5', placeholder:'袋数', value:r.bags,
+                onChange:e=>setBlendRows(prev=>prev.map((x,i)=>i===idx?{ ...x, bags:e.target.value }:x)),
+                style:{ padding:'8px 10px', borderRadius:'8px', border:`1.5px solid ${C.border}`, fontSize:'12.5px', boxSizing:'border-box', width:'100%' }
+              }),
+              React.createElement('button', {
+                onClick:()=>setBlendRows(prev=>prev.filter((_,i)=>i!==idx)),
+                style:{ background:'none', border:'none', color:'#DC2626', cursor:'pointer', fontSize:'15px', padding:0 }
+              }, '✕')
+            )
+          ),
+          React.createElement('button', {
+            onClick:()=>setBlendRows(prev=>[...prev, { fertilizer_id:'', bags:'' }]),
+            style:{ background:'none', border:`1px dashed ${C.border}`, borderRadius:'8px', padding:'6px 12px', fontSize:'12px', color:C.sub, cursor:'pointer', marginBottom:8 }
+          }, '＋ 構成肥料を追加'),
+          blendCalc && blendCalc.kg > 0 && React.createElement('div', {
+            style:{ fontSize:'11px', color:C.green, background:C.greenL, borderRadius:6, padding:'6px 10px' }
+          },
+            `✓ 1セット ${blendCalc.kg}kg` +
+            (blendCalc.unit != null ? ` / ¥${blendCalc.yen.toLocaleString()} → 1kg単価 ¥${blendCalc.unit} を自動計算` : '（構成肥料に価格未登録があるため単価は手入力してください）')
+          )
+        )
+      ),
 
       // ── ボタン ──
       React.createElement('div', { style:{ display:'flex', gap:'10px', marginTop:4 } },
@@ -16515,10 +16629,21 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
     .map(v => ({ variety:v, harvested:harvBy[v] || 0, shipped:shipBy[v] || 0, stock:(harvBy[v] || 0) - (shipBy[v] || 0) }))
     .sort((a, b) => b.stock - a.stock)
 
-  const blank = { date: today, variety: varieties[0] || '', harvest_date:'', dest: destList[0] || '', cases:'', note:'' }
+  const blank = { date: today, variety: varieties[0] || '', harvest_date:'', lot_code:'', dest: destList[0] || '', cases:'', note:'' }
   const [form, setForm] = React.useState(blank)
   const [deleteTarget, setDeleteTarget] = React.useState(null)
   const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  // 選択中の品目の収穫ロット候補（新しい順）。実運用の出荷記録表は収穫ロット単位でトレースするため（GGAP トレーサビリティ）
+  const fieldNameOf = (id) => { const f = (fields || []).find(x => x.id === id); return f ? f.name : '' }
+  const lotOptions = (harvestRecords || [])
+    .filter(r => r.variety === form.variety && r.lot_code)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    .slice(0, 30)
+  // ロットを選んだら収穫日も自動で埋める（手入力の手間と転記ミスを減らす）
+  const pickLot = (code) => {
+    const rec = lotOptions.find(r => r.lot_code === code)
+    setForm(f => ({ ...f, lot_code: code, harvest_date: (rec && rec.date) ? rec.date : f.harvest_date }))
+  }
   const valid = form.variety && form.dest && Number(form.cases) > 0
   const submit = () => {
     if (!valid) { showToast('品目・出荷先・数量を入力してください', 'warn'); return }
@@ -16562,8 +16687,20 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
           varieties.length > 0
             ? React.createElement('select', { className:'form-input', value:form.variety, onChange:e=>up('variety', e.target.value) }, ...varieties.map(v=>React.createElement('option', { key:v, value:v }, v)))
             : React.createElement('input', { type:'text', className:'form-input', value:form.variety, onChange:e=>up('variety', e.target.value), placeholder:'収穫記録が必要です' })),
+        React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '収穫ロット（任意）'),
+          lotOptions.length > 0
+            ? React.createElement('select', { className:'form-input', value:form.lot_code, onChange:e=>pickLot(e.target.value) },
+                React.createElement('option', { value:'' }, '— 指定しない —'),
+                ...lotOptions.map(r=>React.createElement('option', { key:r.id, value:r.lot_code },
+                  r.lot_code + '（' + r.date + (fieldNameOf(r.field_id) ? '・' + fieldNameOf(r.field_id) : '') + '）')))
+            : React.createElement('input', { type:'text', className:'form-input', value:form.lot_code, onChange:e=>up('lot_code', e.target.value), placeholder:'例: (45)11120106' })),
+      ),
+      React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:'14px' } },
         React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '収穫日（任意）'),
           React.createElement('input', { type:'date', className:'form-input', value:form.harvest_date, onChange:e=>up('harvest_date', e.target.value) })),
+        React.createElement('div', { className:'form-group', style:{ alignSelf:'end' } },
+          React.createElement('div', { style:{ fontSize:'11px', color:'#94A3B8', paddingBottom:'10px' } },
+            'ロットを選ぶと収穫日は自動で入ります。ロット単位の記録は回収（リコール）時のトレーサビリティに使えます')),
       ),
       React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 2fr', gap:'14px' } },
         React.createElement('div', { className:'form-group' }, React.createElement('label', { className:'form-label' }, '出荷先 *'),
@@ -16586,13 +16723,14 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
         : React.createElement('div', { style:{ overflowX:'auto' } },
             React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', minWidth:640 } },
               React.createElement('thead', null, React.createElement('tr', null,
-                ...['出荷日','品目','出荷先','数量','収穫日','備考',''].map((h,i)=>React.createElement('th', { key:i, style:th }, h)))),
+                ...['出荷日','品目','出荷先','数量','収穫ロット','収穫日','備考',''].map((h,i)=>React.createElement('th', { key:i, style:th }, h)))),
               React.createElement('tbody', null,
                 ...rows.map(r => React.createElement('tr', { key:r.id },
                   React.createElement('td', { style:td }, r.date),
                   React.createElement('td', { style:{ ...td, fontWeight:600 } }, r.variety),
                   React.createElement('td', { style:td }, r.dest),
                   React.createElement('td', { style:{ ...td, textAlign:'right', fontWeight:700, color:'#0A6B52' } }, (Number(r.cases)||0).toLocaleString()),
+                  React.createElement('td', { style:{ ...td, fontVariantNumeric:'tabular-nums' } }, r.lot_code || '—'),
                   React.createElement('td', { style:td }, r.harvest_date || '—'),
                   React.createElement('td', { style:td }, r.note || '—'),
                   React.createElement('td', { style:td }, React.createElement('button', { onClick:()=>setDeleteTarget(r),

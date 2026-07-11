@@ -16777,15 +16777,20 @@ function usePersistState(key, initial) {
     }
     return r.found ? r.value : initial
   })
+  // 編集済みフラグ: 非同期の初期ロードが遅れて届いても、既にユーザーが編集していたら上書きしない。
+  const dirtyRef = React.useRef(false)
   // 非同期ソース（Supabase）からの初期ロード。localStorageは同期で読めているので実質no-op。
   React.useEffect(() => {
     let alive = true
+    dirtyRef.current = false // 別コレクション(key変更)に切り替わったら未編集から開始
     Promise.resolve(farmRepo.readAsync ? farmRepo.readAsync(key) : null).then(r => {
-      if (alive && r && r.ok && r.found) setState(r.value)
+      // 遅れて届いた古いDB値でユーザーの編集を潰さない（Codex High: stale overwrite対策）
+      if (alive && !dirtyRef.current && r && r.ok && r.found) setState(r.value)
     }).catch(() => {})
     return () => { alive = false }
   }, [key])
   const setPersist = React.useCallback(updater => {
+    dirtyRef.current = true // この瞬間以降、初期ロードでの上書きを禁止
     setState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
       // 楽観的更新: 画面は即反映。永続化は成否を受け取り、失敗時だけ"見える化"する（Codex #04の土台）。

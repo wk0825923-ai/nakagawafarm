@@ -66,6 +66,7 @@
   const CONVERTERS = {
     // 出荷先マスタ（参照なし・列名もほぼ一致＝最初に切り替える一番やさしいテーブル）
     farm_shipment_destinations: {
+      conflict: 'farm_id,key', // upsertの衝突キー（DBに unique(farm_id,key) あり）＝全置換をやめて安全に同期
       toRows(value, ctx) {
         return (Array.isArray(value) ? value : []).map(d => ({
           org_id: ctx.orgId, farm_id: ctx.farmId,
@@ -87,8 +88,16 @@
   // ── 実装その2: Supabase（本物のDB。端末をまたいで同期する） ──
   const SupabaseRepository = {
     kind: 'supabase',
-    _ctx: { orgId: null },
+    _ctx: { orgId: null, farmIds: null },
     setContext(ctx) { this._ctx = Object.assign({}, this._ctx, ctx || {}) },
+
+    // farm_idがキーから取れて、かつ許可された農場かを検証（誤キー/改竄キーで別農場を触らせない）
+    _checkFarm(farmId) {
+      if (!farmId) return '書き込み先のfarm_idが不明（キー不正）'
+      if (Array.isArray(this._ctx.farmIds) && this._ctx.farmIds.length && this._ctx.farmIds.indexOf(farmId) < 0)
+        return '許可されていないfarm_id: ' + farmId
+      return null
+    },
 
     // 同期読みは非対応（DBは非同期）。初期値で描き始め、readAsyncで最新化する。
     readSync() { return { ok: true, found: false, value: undefined } },
@@ -98,6 +107,7 @@
       const table = KEY_TABLE[collection], conv = CONVERTERS[collection]
       const client = getSb()
       if (!table || !conv || !client) return { ok: false, found: false, error: new Error('未対応コレクション: ' + collection) }
+      const bad = this._checkFarm(farmId); if (bad) return { ok: false, found: false, error: new Error(bad) }
       try {
         const { data, error } = await client.from(table).select('*').eq('farm_id', farmId)
         if (error) return { ok: false, found: false, error }
@@ -105,15 +115,36 @@
       } catch (e) { return { ok: false, found: false, error: e } }
     },
 
-    // コレクション全置換（自farm分をdelete→検品済み行をinsert）。マスタなど件数が少ない前提。
-    // 記録が大量になったらCRUD粒度へ（社長領域）。
     async write(key, value) {
       const collection = collectionOf(key), farmId = farmIdOf(key)
       const table = KEY_TABLE[collection], conv = CONVERTERS[collection]
       const client = getSb()
+      const orgId = this._ctx.orgId
       if (!table || !conv || !client) return { ok: false, error: new Error('未対応コレクション: ' + collection) }
+      // 安全ガード: org_id/farm_id が未確定・不許可なら「絶対に何も書かない」（暴発でデータを消さない）
+      if (!orgId) return { ok: false, error: new Error('org_idが未確定のため書き込み中止') }
+      const bad = this._checkFarm(farmId); if (bad) return { ok: false, error: new Error(bad) }
       try {
-        const rows = conv.toRows(value, { orgId: this._ctx.orgId, farmId })
+        const rows = conv.toRows(value, { orgId, farmId })
+        if (conv.conflict) {
+          // ── 安全な差分同期: 先にupsert(既存を消さない)→今回に無い行だけdelete ──
+          // insertが途中失敗しても既存データは消えない（Codex Critical対策）。id保持で参照も崩れない。
+          if (rows.length) {
+            const up = await client.from(table).upsert(rows, { onConflict: conv.conflict })
+            if (up.error) return { ok: false, error: up.error }
+          }
+          const keyCol = conv.conflict.split(',').map(s => s.trim()).filter(c => c !== 'farm_id')[0]
+          if (keyCol) {
+            const keys = rows.map(r => r[keyCol])
+            let dq = client.from(table).delete().eq('farm_id', farmId)
+            if (keys.length) dq = dq.not(keyCol, 'in', '(' + keys.map(k => '"' + String(k).replace(/"/g, '') + '"').join(',') + ')')
+            const del = await dq
+            if (del.error) return { ok: false, error: del.error }
+          }
+          return { ok: true }
+        }
+        // conflictキーが無いコレクション(記録系)は現状フォールバックの全置換。
+        // ※記録系の本番切替はCRUD粒度化とセット(フェーズ4後半)。それまで route しない。
         const del = await client.from(table).delete().eq('farm_id', farmId)
         if (del.error) return { ok: false, error: del.error }
         if (rows.length) { const ins = await client.from(table).insert(rows); if (ins.error) return { ok: false, error: ins.error } }

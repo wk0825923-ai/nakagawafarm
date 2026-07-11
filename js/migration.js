@@ -359,11 +359,34 @@
     'farm_field_performance_comments', 'farm_crop_comments',
   ]
 
-  // 実書き込み（フェーズ4/本番移行で使用）。dryRun=trueなら件数だけ数えてinsertしない。
+  // 対象farmの行が既にDBにあるテーブルを返す（移行の二重実行チェック用）
+  async function findExistingFarmData(sb, plan) {
+    const hit = []
+    for (const table of INSERT_ORDER) {
+      const rows = plan.plans[table]; if (!rows || !rows.length) continue
+      const farmId = rows[0].farm_id
+      try {
+        const { data, error } = await sb.from(table).select('id').eq('farm_id', farmId).limit(1)
+        if (!error && data && data.length) hit.push(table)
+      } catch (e) { /* 読めない時は判定しない */ }
+    }
+    return hit
+  }
+
+  // 実書き込み（フェーズ4/本番移行で使用）。dryRun=件数のみ。
+  // 冪等ガード: 対象farmの行が既にあると既定で中断（再実行の重複挿入を防ぐ）。force:trueで無視。
   async function runMigration(sb, plan, opts) {
     opts = opts || {}
     const dryRun = !!opts.dryRun
-    const result = { inserted: {}, errors: [], dryRun }
+    const result = { inserted: {}, errors: [], dryRun, aborted: false, existing: [] }
+    if (!dryRun && !opts.force) {
+      const existing = await findExistingFarmData(sb, plan)
+      if (existing.length) {
+        result.aborted = true; result.existing = existing
+        result.errors.push({ table: existing.join(','), error: '対象farmに既存データあり。二重挿入防止のため中断（先に空にするか force:true）' })
+        return result
+      }
+    }
     for (const table of INSERT_ORDER) {
       const rows = plan.plans[table]
       if (!rows || rows.length === 0) { result.inserted[table] = 0; continue }
@@ -381,7 +404,7 @@
     return result
   }
 
-  global.FarmMigration = { buildMigrationPlan, runMigration, INSERT_ORDER, _uuid: uuid }
+  global.FarmMigration = { buildMigrationPlan, runMigration, findExistingFarmData, INSERT_ORDER, _uuid: uuid }
 })(typeof window !== 'undefined' ? window : (typeof global !== 'undefined' ? global : this))
 
 if (typeof module !== 'undefined' && module.exports) module.exports = (typeof global !== 'undefined' ? global.FarmMigration : undefined)

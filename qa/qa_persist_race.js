@@ -81,7 +81,8 @@ function makeRuntime() {
 
 // ── モックfarmRepo: readAsyncは手動resolve（遅延を再現）・subscribeはコールバックを外に晒す ──
 // asyncMode=true でDB経路(isAsync→writeガード対象)、false でlocalStorage経路を再現。
-function makeMockRepo(asyncMode) {
+function makeMockRepo(asyncMode, opts) {
+  opts = opts || {}
   const resolvers = [] // readAsync呼び出し順のキュー（農場切替レース再現用に古い読込を後から解決できる）
   let subCb = null
   const writes = []
@@ -90,7 +91,7 @@ function makeMockRepo(asyncMode) {
     isAsync() { return !!asyncMode },
     readSync() { return { ok: true, found: false, value: undefined } },
     readAsync() { return new Promise(r => { resolvers.push(r) }) },
-    write(key, value) { writes.push(value); return Promise.resolve({ ok: true }) },
+    write(key, value) { writes.push(value); return Promise.resolve(opts.writeResult || { ok: true }) },
     subscribe(key, cb) { subCb = cb; return () => { subCb = null } },
     fireRemote(value) { if (subCb) subCb(value, { found: true }) },
     resolveInitialLoad(r) { const f = resolvers.shift(); if (f) f(r) }, // 最も古い未解決readを解決
@@ -225,6 +226,23 @@ const build = (repo, keyBox) => {
       'state=' + JSON.stringify(blockedState) + ' writes=' + blockedWrites + ' toasts=' + toasts.length)
     ok('R8b: 旧農場の値も混入せず、新農場の読込値が反映される',
       state[0] === 'B-db', 'state=' + JSON.stringify(state))
+  }
+
+  // R9: [DB経路] 保存失敗時ロールバック — 楽観更新が画面に残らず、DBの権威状態へ戻る
+  // （Codexレビュー7 High: 保存失敗でも成功したように見えて再読込で消える穴）
+  {
+    const repo = makeMockRepo(true, { writeResult: { ok: false, error: new Error('offline') } })
+    const keyBox = { k: 'farm_x_1' }
+    const { rt } = build(repo, keyBox)
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['db-value'] }) // 初回読込完了
+    await tick()
+    rt.result[1](['失敗する編集'])                    // 楽観更新→write失敗
+    await tick()
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['db-value'] }) // ロールバック用の再読込に応答
+    await tick()
+    const [state] = rt.result
+    ok('R9: DB経路の保存失敗で楽観更新がロールバックされる(権威状態へ復帰)',
+      state[0] === 'db-value', 'state=' + JSON.stringify(state))
   }
 
   const pass = checks.filter(c => c.pass).length

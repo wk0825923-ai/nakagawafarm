@@ -91,7 +91,8 @@ const build = (repo, farmBox) => {
   const rt = makeRuntime()
   const toasts = []
   const box = farmBox || { f: 'farm-1' }
-  const useRecordCollection = new Function('React', 'farmRepo', 'showToast', 'console', 'return ' + fnSrc)(rt.React, repo, m => toasts.push(m), { warn: () => {} })
+  const newUuid = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16) })
+  const useRecordCollection = new Function('React', 'farmRepo', 'showToast', 'console', 'newUuid', 'return ' + fnSrc)(rt.React, repo, m => toasts.push(m), { warn: () => {} }, newUuid)
   rt.mount(() => useRecordCollection('farm_maintenance_records', box.f, []))
   return { rt, toasts, render: () => rt.render() }
 }

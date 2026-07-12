@@ -73,7 +73,7 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
     onAdd({
       // マスタUUID化第3弾(2026-07-12): 数値ID比較(Number)は全域でmasterById/String比較へ統一済みのため
       // UUID発行に切替（複数端末でも衝突しない・DBのuuid列にそのまま入る）。旧数値IDの圃場はlegacy_idで橋渡し。
-      id:           (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8),
+      id:           newUuid(),
       name:         name.trim(),
       area_name:    areaName.trim(),
       crop:         cropName.trim() || selectedCat.name,
@@ -16815,22 +16815,31 @@ function usePersistState(key, initial) {
       return
     }
     dirtyRef.current = true // この瞬間以降、初期ロードでの上書きを禁止
+    // DB経路の保存失敗時ロールバック: DBの権威状態を読み直して画面を一致させる
+    //（楽観更新が画面に残ったまま「保存できたように見えて再読込で消える」のを防ぐ。Codexレビュー7 High対応）
+    const rollbackFromDb = () => {
+      if (!(farmRepo.isAsync && farmRepo.isAsync(key))) return // localStorage経路は編集内容を画面に残す(容量整理後に再保存できる方が親切)
+      Promise.resolve(farmRepo.readAsync(key)).then(r => {
+        if (r && r.ok) setState((r.found && r.value !== undefined) ? r.value : initial)
+      }).catch(() => {})
+    }
     setState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
-      // 楽観的更新: 画面は即反映。永続化は成否を受け取り、失敗時だけ"見える化"する（Codex #04の土台）。
+      // 楽観的更新: 画面は即反映。永続化は成否を受け取り、失敗時は見える化＋ロールバック。
       Promise.resolve(farmRepo.write(key, next)).then(w => {
         if (w && !w.ok) {
           console.warn('[usePersistState] 保存失敗:', key, w.error)
+          rollbackFromDb()
           if (typeof window !== 'undefined' && !window.__storageWarned) {
             window.__storageWarned = true
             // 経路別の案内(Codex Med対応): DB経路の失敗は通信/権限の問題であり「写真を減らす」は誤誘導になる
             const msg = (farmRepo.isAsync && farmRepo.isAsync(key))
-              ? 'サーバーへの保存に失敗しました。通信状態を確認し、ページを再読み込みしてからもう一度お試しください。'
+              ? 'サーバーへの保存に失敗しました。直前の変更は画面から取り消されています。通信状態を確認してもう一度お試しください。'
               : 'データの保存に失敗しました。ブラウザの空き容量が不足している可能性があります。写真を減らすか不要なデータを整理してください。'
             try { showToast(msg, 'error') } catch (_) {}
           }
         }
-      }).catch(e => { console.warn('[usePersistState] 保存失敗:', key, e) })
+      }).catch(e => { console.warn('[usePersistState] 保存失敗:', key, e); rollbackFromDb() })
       return next
     })
   }, [key])
@@ -16901,7 +16910,7 @@ function useRecordCollection(collection, farmId, initial) {
     if (!loadedRef.current) return notLoaded()
     const gen = genRef.current // この操作が属する農場世代（切替後は結果を新農場に作用させない）
     const rec = Object.assign({}, record)
-    if (rec.id == null) rec.id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8)
+    if (rec.id == null) rec.id = newUuid()
     setList(prev => prev.concat([rec])) // 楽観的更新: 画面は即反映
     const res = await Promise.resolve(farmRepo.create(collection, farmId, rec)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {

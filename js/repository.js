@@ -196,7 +196,11 @@
         Object.keys(obj).forEach(fieldKey => {
           ;(Array.isArray(obj[fieldKey]) ? obj[fieldKey] : []).forEach(l => {
             const fieldId = l.field_id != null ? l.field_id : fieldKey
-            if (!isUuid(l.id) || !isUuid(fieldId)) return // レガシーID行は送らない(表示はlocal・migrationで移す)
+            // 旧形式ID行を黙って無視すると「保存成功に見えて次回読込で消える」ため、保存全体を
+            // 明示的に失敗させて移行を促す（fail-closed・Codexレビュー7 High対応。throwは_writeOnceが{ok:false}化）
+            if (!isUuid(l.id) || !isUuid(fieldId)) {
+              throw new Error('旧形式IDのロットが含まれるため保存できません（データ移行(runMigration)を先に実行してください）: lot=' + l.id + ' field=' + fieldId)
+            }
             rows.push({
               id: String(l.id), org_id: ctx.orgId, farm_id: ctx.farmId, field_id: String(fieldId),
               row_range: s(l.row_range), row_count: nv(l.row_count), variety: s(l.variety),
@@ -213,6 +217,7 @@
               seed_supplier: s(l.seed_supplier), seed_origin: s(l.seed_origin),
               seed_purchase_date: d(l.seed_purchase_date), seed_purchase_qty: nv(l.seed_purchase_qty),
               seed_disinfection: s(l.seed_disinfection), seed_gmo: s(l.seed_gmo),
+              source_record_id: l.source_record_id != null ? String(l.source_record_id) : null, // 生成元の定植日報(追跡情報)
               legacy_id: (typeof l.legacy_id === 'number') ? l.legacy_id : null,
             })
           })
@@ -240,6 +245,7 @@
             seed_disinfection: r.seed_disinfection || undefined, seed_gmo: r.seed_gmo || undefined,
           }
           if (r.data_note) lot.data_note = r.data_note
+          if (r.source_record_id != null) lot.source_record_id = r.source_record_id
           if (r.legacy_id != null) lot.legacy_id = Number(r.legacy_id)
           const key = String(r.field_id)
           if (!out[key]) out[key] = []

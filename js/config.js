@@ -14,6 +14,18 @@ function todayYmd(d) {
   return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
 }
 
+// 【共通UUID発行】マスタ/記録IDの発行はすべてこれを使う（Codexレビュー7 Med対応）。
+// crypto.randomUUIDが無い環境(古いWebView等)でも「UUID形式」でフォールバックする。
+// ※Date.now()文字列等のUUID以外の形式はconverterのレガシーガードに弾かれ「追加できたのに
+//   再読込で消える」事故になるため、フォールバックも必ずUUID v4形式を守る。
+function newUuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16)
+  })
+}
+
 // PDF/印刷用HTMLに差し込むユーザー入力(圃場名/作業者名/品種/備考など)のエスケープ。
 // これらは el.innerHTML や window.open+document.write に渡すため、<img onerror=...> 等が
 // そのまま実行される。テンプレートリテラルに埋める前に必ず通す。

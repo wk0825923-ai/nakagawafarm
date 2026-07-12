@@ -423,16 +423,26 @@ const KEY = 'farm_shipment_destinations_' + FARM
     { id: LID, field_id: LFLD, row_range: '1-3', variety: 'シスコ', status: 'growing', seed_date: '2026-05-01', legacy_id: 11 },
     { id: 9001, field_id: 1, row_range: '4-6', variety: 'ラプター', status: 'growing' }, // レガシー行(数値ID)=DBに送らない
   ]
-  const w35 = await farmRepo.write(LKEY, lotsValue)
+  // レガシー行(数値ID)が混在 → 黙殺せず保存全体を失敗させる(fail-closed・Codexレビュー7 High対応)
+  const w35bad = await farmRepo.write(LKEY, lotsValue)
+  const dbAfterBad = global.sb._tables['farm_lots'].filter(r => r.farm_id === FARM)
+  ok('R35a 畝ロット: 旧形式ID行が混在したら保存全体を明示的に失敗(黙って消さない)',
+    w35bad.ok === false && String(w35bad.error && w35bad.error.message).indexOf('旧形式ID') >= 0 && dbAfterBad.length === 0,
+    JSON.stringify({ ok: w35bad.ok, db: dbAfterBad.length }))
+
+  // 純uuidのみなら成功(flatten⇔group往復・source_record_id/legacy_id保持・jsonb配列既定)
+  const lotsClean = {}
+  lotsClean[LFLD] = [{ id: LID, field_id: LFLD, row_range: '1-3', variety: 'シスコ', status: 'growing', seed_date: '2026-05-01', legacy_id: 11, source_record_id: 45123 }]
+  const w35 = await farmRepo.write(LKEY, lotsClean)
   const dbLots = global.sb._tables['farm_lots'].filter(r => r.farm_id === FARM)
   const r35 = await farmRepo.readAsync(LKEY)
   const grp = r35.value[LFLD] || []
-  ok('R35 畝ロット: flatten往復(uuid行のみDBへ・レガシー行はガード)＋group復元＋jsonb配列既定',
+  ok('R35b 畝ロット: flatten往復＋group復元＋source_record_id/legacy_id保持＋jsonb配列既定',
     w35.ok && dbLots.length === 1 && dbLots[0].id === LID && dbLots[0].field_id === LFLD &&
-    Array.isArray(dbLots[0].pretransplant_pesticides) && dbLots[0].data_note === '' &&
+    Array.isArray(dbLots[0].pretransplant_pesticides) && dbLots[0].data_note === '' && dbLots[0].source_record_id === '45123' &&
     r35.ok && grp.length === 1 && grp[0].id === LID && grp[0].variety === 'シスコ' && grp[0].legacy_id === 11 &&
-    grp[0].status === 'growing' && Array.isArray(grp[0].fertilizer_refs),
-    JSON.stringify({ db: dbLots.length, app: grp[0] && { id: grp[0].id, v: grp[0].variety, legacy: grp[0].legacy_id } }))
+    grp[0].source_record_id === '45123' && grp[0].status === 'growing' && Array.isArray(grp[0].fertilizer_refs),
+    JSON.stringify({ db: dbLots.length, app: grp[0] && { id: grp[0].id, src: grp[0].source_record_id, legacy: grp[0].legacy_id } }))
   farmRepo.unroute('farm_lots')
 
   const pass = checks.filter(c => c.pass).length

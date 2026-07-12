@@ -110,7 +110,7 @@
   }
   const onAddLot = (fieldId, lot) => {
     // マスタUUID化第4弾: ロットIDもUUID発行(Date.now()は複数端末で衝突・DBのuuid列に入らない)
-    const entry = { ...lot, id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) }
+    const entry = { ...lot, id: newUuid() }
     setFarmLots(prev => ({ ...prev, [fieldId]: [...(prev[fieldId] || []), entry] }))
     extendRowCount(fieldId, lot.row_range)
   }
@@ -322,7 +322,7 @@
   //   カードの在庫表示に反映されない不具合になる）
   const onAddPesticide = (p) => {
     // マスタUUID化: 新規農薬はUUIDを発行(Date.now()は複数端末で衝突・DBのuuid列に入らない)
-    const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
+    const newId = newUuid()
     setPesticides(prev => [...prev, { ...p, id: newId }])
     setPesticideStock(prev => [...prev, {
       pesticide_id:       newId,
@@ -352,7 +352,7 @@
   // =====================================================
   const onAddFertilizer = (f) => {
     // マスタUUID化: 新規肥料はUUIDを発行(Date.now()は複数端末で衝突・DBのuuid列に入らない)
-    const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
+    const newId = newUuid()
     setFertilizers(prev => [...prev, { ...f, id: newId }])
     setFertilizerStock(prev => [...prev, {
       fertilizer_id:      newId,

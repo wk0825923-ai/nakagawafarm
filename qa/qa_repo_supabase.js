@@ -10,6 +10,7 @@ function makeMockSb() {
     _tables: tables,
     _channels: [],
     _upsertLog: [],
+    _upsertDelays: [],
     from(table) {
       tables[table] = tables[table] || []
       const q = {
@@ -27,12 +28,15 @@ function makeMockSb() {
         upsert(rows, opts) {
           api._upsertLog.push(rows.map(r => Object.assign({}, r))) // 何行送られたかの検証用(R15)
           const cols = (opts && opts.onConflict ? opts.onConflict : 'id').split(',').map(s => s.trim())
-          rows.forEach(nr => {
+          const apply = () => rows.forEach(nr => {
             const idx = tables[table].findIndex(er => cols.every(c => er[c] === nr[c]))
             if (idx >= 0) tables[table][idx] = Object.assign({}, nr) // 既存を更新（消さない）
             else tables[table].push(Object.assign({}, nr))
           })
-          return Promise.resolve({ error: null })
+          // _upsertDelaysに値があると通信遅延を再現（連続write逆転のR17/R18用）
+          const d = api._upsertDelays.length ? api._upsertDelays.shift() : 0
+          if (!d) { apply(); return Promise.resolve({ error: null }) }
+          return new Promise(res => setTimeout(() => { apply(); res({ error: null }) }, d))
         },
         then(resolve) {
           if (this._op === 'delete') {
@@ -201,6 +205,32 @@ const KEY = 'farm_shipment_destinations_' + FARM
   const r16 = await farmRepo.readAsync(KEY)
   const keys16 = r16.value.map(d => d.key).sort()
   ok('R16 スナップショット無しではdeleteしない(yが残る)', keys16.join(',') === 'x,y', JSON.stringify(keys16))
+
+  // ── 連続write直列化＋coalescing(Codex High「連続編集の逆転」対応)の検証 ──
+  const X1 = (label) => [{ key: 'x', label, frequent: false, sort_order: 1 }, { key: 'y', label: '端末Bの追加', frequent: false, sort_order: 2 }]
+
+  // 17) 通信の追い越しがあっても後の編集が最終値になる（1本目が遅く2本目が速い状況）
+  await farmRepo.readAsync(KEY) // スナップショット最新化
+  global.sb._upsertDelays = [40, 0] // 1本目のupsertだけ遅延
+  const p17a = farmRepo.write(KEY, X1('連打1'))
+  const p17b = farmRepo.write(KEY, X1('連打2'))
+  await Promise.all([p17a, p17b])
+  const r17 = await farmRepo.readAsync(KEY)
+  const x17 = r17.value.find(d => d.key === 'x')
+  ok('R17 連続writeは直列化され最後の編集がDBに残る(追い越し逆転なし)',
+    x17 && x17.label === '連打2', JSON.stringify(x17))
+
+  // 18) 実行中の連打は最新値だけ送る（中間値はスキップ・通信も節約）
+  global.sb._upsertLog.length = 0
+  global.sb._upsertDelays = [30]
+  const p18 = Promise.all([farmRepo.write(KEY, X1('連打A')), farmRepo.write(KEY, X1('連打B')), farmRepo.write(KEY, X1('連打C'))])
+  await p18
+  const r18 = await farmRepo.readAsync(KEY)
+  const x18 = r18.value.find(d => d.key === 'x')
+  const sentLabels = global.sb._upsertLog.map(rows => (rows.find(r => r.key === 'x') || {}).label)
+  ok('R18 実行中の連打は最新値だけ送る(中間値Bはスキップ)',
+    x18 && x18.label === '連打C' && sentLabels.length === 2 && sentLabels[0] === '連打A' && sentLabels[1] === '連打C',
+    JSON.stringify({ final: x18 && x18.label, sent: sentLabels }))
   farmRepo.unroute('farm_shipment_destinations')
 
   const pass = checks.filter(c => c.pass).length

@@ -128,7 +128,34 @@
       } catch (e) { return { ok: false, found: false, error: e } }
     },
 
-    async write(key, value) {
+    // ── 連続編集の逆転防止(Codex High対応): キー単位でwriteを直列化し、待機中は最新値だけ送る ──
+    // 「A→B→C」と速く編集した時、通信の追い越しで画面はCなのにDBがBで止まる事故を防ぐ。
+    // 実行中に来た値はキューに1つだけ保持し、さらに新しい値が来たら置き換える(中間値は送らない=coalescing)。
+    _wq: {},
+    write(key, value) {
+      const st = this._wq[key] || (this._wq[key] = { busy: false, next: null })
+      if (st.busy) {
+        if (st.next) { st.next.value = value; return st.next.promise } // より新しい値で置換(結果Promiseは共有)
+        const nx = { value: value, resolve: null, promise: null }
+        nx.promise = new Promise(res => { nx.resolve = res })
+        st.next = nx
+        return nx.promise
+      }
+      st.busy = true
+      return this._pump(key, st, value)
+    },
+    _pump(key, st, value) {
+      const self = this
+      return this._writeOnce(key, value)
+        .catch(e => ({ ok: false, error: e })) // 万一の例外でもキューを詰まらせない
+        .then(res => {
+          const nx = st.next
+          if (nx) { st.next = null; self._pump(key, st, nx.value).then(nx.resolve); return res }
+          st.busy = false
+          return res
+        })
+    },
+    async _writeOnce(key, value) {
       const collection = collectionOf(key), farmId = farmIdOf(key)
       const table = KEY_TABLE[collection], conv = CONVERTERS[collection]
       const client = getSb()

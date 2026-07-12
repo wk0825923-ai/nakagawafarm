@@ -16815,7 +16815,11 @@ function usePersistState(key, initial) {
           console.warn('[usePersistState] 保存失敗:', key, w.error)
           if (typeof window !== 'undefined' && !window.__storageWarned) {
             window.__storageWarned = true
-            try { showToast('データの保存に失敗しました。ブラウザの空き容量が不足している可能性があります。写真を減らすか不要なデータを整理してください。', 'error') } catch (_) {}
+            // 経路別の案内(Codex Med対応): DB経路の失敗は通信/権限の問題であり「写真を減らす」は誤誘導になる
+            const msg = (farmRepo.isAsync && farmRepo.isAsync(key))
+              ? 'サーバーへの保存に失敗しました。通信状態を確認し、ページを再読み込みしてからもう一度お試しください。'
+              : 'データの保存に失敗しました。ブラウザの空き容量が不足している可能性があります。写真を減らすか不要なデータを整理してください。'
+            try { showToast(msg, 'error') } catch (_) {}
           }
         }
       }).catch(e => { console.warn('[usePersistState] 保存失敗:', key, e) })

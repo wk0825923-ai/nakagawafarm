@@ -360,17 +360,20 @@
   ]
 
   // 対象farmの行が既にDBにあるテーブルを返す（移行の二重実行チェック用）
+  // fail-closed: 照会に失敗したテーブルは unknown に入れ、呼び出し側は「安全と確認できない」として中断する
+  //（通信エラーを「既存なし」と扱うと、二重挿入防止ガードが素通りするため。Codex High対応）
   async function findExistingFarmData(sb, plan) {
-    const hit = []
+    const hit = [], unknown = []
     for (const table of INSERT_ORDER) {
       const rows = plan.plans[table]; if (!rows || !rows.length) continue
       const farmId = rows[0].farm_id
       try {
         const { data, error } = await sb.from(table).select('id').eq('farm_id', farmId).limit(1)
-        if (!error && data && data.length) hit.push(table)
-      } catch (e) { /* 読めない時は判定しない */ }
+        if (error) { unknown.push(table); continue }
+        if (data && data.length) hit.push(table)
+      } catch (e) { unknown.push(table) }
     }
-    return hit
+    return { hit, unknown }
   }
 
   // 実書き込み（フェーズ4/本番移行で使用）。dryRun=件数のみ。
@@ -380,10 +383,16 @@
     const dryRun = !!opts.dryRun
     const result = { inserted: {}, errors: [], dryRun, aborted: false, existing: [] }
     if (!dryRun && !opts.force) {
-      const existing = await findExistingFarmData(sb, plan)
-      if (existing.length) {
-        result.aborted = true; result.existing = existing
-        result.errors.push({ table: existing.join(','), error: '対象farmに既存データあり。二重挿入防止のため中断（先に空にするか force:true）' })
+      const chk = await findExistingFarmData(sb, plan)
+      if (chk.unknown.length) {
+        // fail-closed: 1テーブルでも照会できなければ「安全と確認できない」ので移行を始めない
+        result.aborted = true; result.unknown = chk.unknown
+        result.errors.push({ table: chk.unknown.join(','), error: '既存データの有無を確認できないため中断（通信/権限を確認して再実行。強行は force:true だが二重挿入リスクあり）' })
+        return result
+      }
+      if (chk.hit.length) {
+        result.aborted = true; result.existing = chk.hit
+        result.errors.push({ table: chk.hit.join(','), error: '対象farmに既存データあり。二重挿入防止のため中断（先に空にするか force:true）' })
         return result
       }
     }
@@ -392,14 +401,24 @@
       if (!rows || rows.length === 0) { result.inserted[table] = 0; continue }
       if (dryRun) { result.inserted[table] = rows.length; continue }
       // 500件ずつに分割してinsert
-      let ok = 0
+      let ok = 0, failed = null
       for (let i = 0; i < rows.length; i += 500) {
         const chunk = rows.slice(i, i + 500)
         const { error } = await sb.from(table).insert(chunk)
-        if (error) { result.errors.push({ table, error: String(error.message || error) }); break }
+        if (error) { failed = String(error.message || error); break }
         ok += chunk.length
       }
       result.inserted[table] = ok
+      if (failed) {
+        // 最初の失敗で全体を停止（Codex Med対応）。中途半端に先へ進むと、再実行が既存データガードに
+        // 阻まれ、force:true では成功済みテーブルが重複するため。再開位置と復旧方法を結果に残す。
+        result.aborted = true
+        result.failedTable = table
+        result.remaining = INSERT_ORDER.slice(INSERT_ORDER.indexOf(table) + 1).filter(t => (plan.plans[t] || []).length > 0)
+        result.errors.push({ table, error: failed })
+        result.errors.push({ table, error: '移行を中断しました。復旧: このテーブルの対象farm_id行を削除（' + ok + '件挿入済み）→再実行。成功済みテーブルは既存データガードが検知します' })
+        return result
+      }
     }
     return result
   }

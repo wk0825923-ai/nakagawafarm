@@ -145,6 +145,36 @@ const ok = (name, cond, extra) => checks.push({ name, pass: !!cond, extra: extra
       await del(r24id, 1) // 後片付け
       out.p24 = { ok: !s24.error && s24.data.ok === true, orgFixed: savedOrg === orgId, stock: await stockOf(pidA) }
 
+      // ── P25(v6 High): ロット散布+農薬0件 → 拒否 ──
+      const r25 = mkRec(crypto.randomUUID(), [])
+      const s25 = await save(r25, [])
+      const c25 = await sb.from(T).select('id').eq('id', r25.id)
+      out.p25 = { errored: !!s25.error, msg: s25.error && String(s25.error.message).slice(0, 20), recGone: c25.data && c25.data.length === 0 }
+
+      // ── P26(v6 High): 施肥+肥料0件 → 拒否 ──
+      const r26id = crypto.randomUUID()
+      const s26 = await sb.rpc('farm_save_record_with_stock', { p_table: 'farm_top_dressing_records',
+        p_record: { id: r26id, org_id: orgId, farm_id: fid, field_id: null, date: '2026-07-13', row_range: '1-3', fertilizers: [], spray_volume_l: 500, note: 'QA', version: 1 },
+        p_movements: [] })
+      const c26 = await sb.from('farm_top_dressing_records').select('id').eq('id', r26id)
+      out.p26 = { errored: !!s26.error, recGone: c26.data && c26.data.length === 0 }
+
+      // ── P27(v6 High): 日報農薬散布+農薬ID空 → 拒否 ──
+      const r27id = crypto.randomUUID()
+      const s27 = await sb.rpc('farm_save_record_with_stock', { p_table: 'farm_work_records',
+        p_record: { id: r27id, org_id: orgId, farm_id: fid, field_id: null, date: '2026-07-13', work_type: '農薬散布', pesticide_id: null, amount: null, worker: '', note: 'QA', version: 1 },
+        p_movements: [] })
+      const c27 = await sb.from('farm_work_records').select('id').eq('id', r27id)
+      out.p27 = { errored: !!s27.error, recGone: c27.data && c27.data.length === 0 }
+
+      // ── P28(v6 Med): 丸め規則=小数第2位で完全一致(申告-0.506→-0.51≠-0.50で拒否 / -0.504→-0.50で成功) ──
+      const s28 = await save(mkRec(crypto.randomUUID(), [{ pesticide_id: pidA, dilution: 1000 }]), [mv(pidA, -0.506)])
+      const r28ok = crypto.randomUUID()
+      const s28b = await save(mkRec(r28ok, [{ pesticide_id: pidA, dilution: 1000 }]), [mv(pidA, -0.504)])
+      const st28 = await stockOf(pidA)
+      await del(r28ok, 1) // 片付け(在庫復帰)
+      out.p28 = { rejected: !!s28.error, accepted: !s28b.error && s28b.data.ok === true, stockAfter: st28, stockRestored: await stockOf(pidA) }
+
       // ── P20(v3 Med): 同一ID・異なる内容の再送 → 拒否(同一内容ならP2でduplicate成功済み) ──
       const s20 = await save(mkRec(rid2, [{ pesticide_id: pidB, dilution: 1000 }], 800, '内容を変えた再送'), [mv(pidB, -0.8)])
       out.p20 = { errored: !!s20.error, msg: s20.error && String(s20.error.message).slice(0, 20) }
@@ -181,6 +211,10 @@ const ok = (name, cond, extra) => checks.push({ name, pass: !!cond, extra: extra
     ok('P22: 極小期待量に正数movement→負数チェックで拒否(在庫水増し不可)', res.p22.errored && res.p22.stock === 18, JSON.stringify(res.p22))
     ok('P23: 農薬IDあり+希釈0=数量計算不能→入力不正として拒否', res.p23.errored && res.p23.recGone, JSON.stringify(res.p23))
     ok('P24: 偽org_idはDB導出値で上書き保存(所属不整合行を作れない)', res.p24.ok && res.p24.orgFixed && res.p24.stock === 18, JSON.stringify(res.p24))
+    ok('P25: ロット散布+農薬0件→拒否(在庫連動記録は資材必須)', res.p25.errored && res.p25.recGone, JSON.stringify(res.p25))
+    ok('P26: 施肥+肥料0件→拒否', res.p26.errored && res.p26.recGone, JSON.stringify(res.p26))
+    ok('P27: 日報農薬散布+農薬ID空→拒否', res.p27.errored && res.p27.recGone, JSON.stringify(res.p27))
+    ok('P28: 丸め規則=小数2位完全一致(-0.506拒否/-0.504成功→-0.5記帳→復帰18L)', res.p28.rejected && res.p28.accepted && res.p28.stockAfter === 17.5 && res.p28.stockRestored === 18, JSON.stringify(res.p28))
     ok('P21: 最終削除でA=18/B=10へ完全復帰＋QAデータ掃除完了', res.finalStocks.delOk && res.finalStocks.a === 18 && res.finalStocks.b === 10 && res.cleanup === true, JSON.stringify(res.finalStocks))
   } finally {
     await b.close()

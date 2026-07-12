@@ -125,6 +125,26 @@ const ok = (name, cond, extra) => checks.push({ name, pass: !!cond, extra: extra
       const c19 = await sb.from(T).select('id').eq('id', r19.id)
       out.p19 = { errored: !!s19.error, recGone: c19.data && c19.data.length === 0, stockA: await stockOf(pidA) }
 
+      // ── P22(v5 High): 極小期待量(0.005L)に正数(+0.004)→許容差内でも負数チェックで拒否 ──
+      const r22 = mkRec(crypto.randomUUID(), [{ pesticide_id: pidA, dilution: 100000 }]) // 500/100000=0.005L
+      const s22 = await save(r22, [mv(pidA, 0.004)])
+      out.p22 = { errored: !!s22.error, msg: s22.error && String(s22.error.message).slice(0, 20), stock: await stockOf(pidA) }
+
+      // ── P23(v5 High): 農薬IDあり+希釈0=数量計算不能 → movements空でも入力不正として拒否 ──
+      const r23 = mkRec(crypto.randomUUID(), [{ pesticide_id: pidA, dilution: 0 }])
+      const s23 = await save(r23, [])
+      const c23 = await sb.from(T).select('id').eq('id', r23.id)
+      out.p23 = { errored: !!s23.error, msg: s23.error && String(s23.error.message).slice(0, 20), recGone: c23.data && c23.data.length === 0 }
+
+      // ── P24(v5 Med): 偽org_idを渡してもDB導出のorg_idで保存される ──
+      const r24id = crypto.randomUUID()
+      const r24 = Object.assign(mkRec(r24id, [{ pesticide_id: pidA, dilution: 1000 }]), { org_id: crypto.randomUUID() })
+      const s24 = await save(r24, [mv(pidA, -0.5)])
+      const row24 = await sb.from(T).select('org_id').eq('id', r24id)
+      const savedOrg = row24.data && row24.data[0] && row24.data[0].org_id
+      await del(r24id, 1) // 後片付け
+      out.p24 = { ok: !s24.error && s24.data.ok === true, orgFixed: savedOrg === orgId, stock: await stockOf(pidA) }
+
       // ── P20(v3 Med): 同一ID・異なる内容の再送 → 拒否(同一内容ならP2でduplicate成功済み) ──
       const s20 = await save(mkRec(rid2, [{ pesticide_id: pidB, dilution: 1000 }], 800, '内容を変えた再送'), [mv(pidB, -0.8)])
       out.p20 = { errored: !!s20.error, msg: s20.error && String(s20.error.message).slice(0, 20) }
@@ -158,6 +178,9 @@ const ok = (name, cond, extra) => checks.push({ name, pass: !!cond, extra: extra
     ok('P18: 資材は正しいが量だけ改ざん(-0.01)→期待量0.5と不一致で拒否', res.p18.errored && res.p18.stock === 18, JSON.stringify(res.p18))
     ok('P19: 複数資材の一部欠落→不足として拒否(記録も残らない)', res.p19.errored && res.p19.recGone && res.p19.stockA === 18, JSON.stringify(res.p19))
     ok('P20: 同一ID・異なる内容の再送→拒否(更新RPCへ誘導)', res.p20.errored, JSON.stringify(res.p20))
+    ok('P22: 極小期待量に正数movement→負数チェックで拒否(在庫水増し不可)', res.p22.errored && res.p22.stock === 18, JSON.stringify(res.p22))
+    ok('P23: 農薬IDあり+希釈0=数量計算不能→入力不正として拒否', res.p23.errored && res.p23.recGone, JSON.stringify(res.p23))
+    ok('P24: 偽org_idはDB導出値で上書き保存(所属不整合行を作れない)', res.p24.ok && res.p24.orgFixed && res.p24.stock === 18, JSON.stringify(res.p24))
     ok('P21: 最終削除でA=18/B=10へ完全復帰＋QAデータ掃除完了', res.finalStocks.delOk && res.finalStocks.a === 18 && res.finalStocks.b === 10 && res.cleanup === true, JSON.stringify(res.finalStocks))
   } finally {
     await b.close()

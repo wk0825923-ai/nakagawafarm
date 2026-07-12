@@ -375,6 +375,23 @@ const KEY = 'farm_shipment_destinations_' + FARM
     JSON.stringify({ app: p32, db: { dilution: rowP.dilution, stock_l: rowP.stock_l } }))
   farmRepo.unroute('farm_pesticides')
 
+  // 33) 肥料マスタ(マスタUUID化第2弾): 往復・配合肥料(blend_components jsonb)保持・在庫列不干渉
+  farmRepo.route('farm_fertilizers', SR)
+  const FKEY = 'farm_fertilizers_' + FARM
+  const FID = 'dddd4444-0000-0000-0000-000000000001'
+  global.sb._tables['farm_fertilizers'] = [{ id: FID, org_id: ORG, farm_id: FARM, name: '配合セットA', maker: 'JA',
+    weight_per_bag_kg: 20, price_per_bag_yen: 3000, unit_price_yen_per_kg: 150, stock_kg: 300,
+    blend_components: [{ fertilizer_id: 2, bags: 6 }, { fertilizer_id: 3, bags: 1 }], weight_unconfirmed: false, legacy_id: 9 }]
+  const r33 = await farmRepo.readAsync(FKEY)
+  const f33 = r33.value[0]
+  await farmRepo.write(FKEY, [Object.assign({}, f33, { maker: '全農' })]) // maker だけ変更
+  const rowF = global.sb._tables['farm_fertilizers'].find(r => r.id === FID)
+  ok('R33 肥料マスタ: 往復でid/legacy_id/blend_components保持・更新反映・在庫列(stock_kg)不干渉',
+    r33.ok && f33.id === FID && f33.legacy_id === 9 && Array.isArray(f33.blend_components) && f33.blend_components.length === 2 &&
+    rowF.maker === '全農' && rowF.stock_kg === 300 && rowF.legacy_id === 9 && Array.isArray(rowF.blend_components),
+    JSON.stringify({ app: { legacy: f33.legacy_id, blend: f33.blend_components }, db: { maker: rowF.maker, stock_kg: rowF.stock_kg } }))
+  farmRepo.unroute('farm_fertilizers')
+
   const pass = checks.filter(c => c.pass).length
   const summary = { pass, total: checks.length, failed: checks.filter(c => !c.pass) }
   console.log('QAREPO_BEGIN'); console.log(JSON.stringify(summary, null, 1)); console.log('QAREPO_END')

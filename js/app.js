@@ -350,7 +350,8 @@
   // 既存のpesticides系ロジックには触れず、肥料用に完全に独立して追加する。
   // =====================================================
   const onAddFertilizer = (f) => {
-    const newId = Date.now()
+    // マスタUUID化: 新規肥料はUUIDを発行(Date.now()は複数端末で衝突・DBのuuid列に入らない)
+    const newId = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now())
     setFertilizers(prev => [...prev, { ...f, id: newId }])
     setFertilizerStock(prev => [...prev, {
       fertilizer_id:      newId,
@@ -359,10 +360,10 @@
     }])
     celebrateSave('肥料を登録！')
   }
-  const onUpdateFertilizer = (f) => setFertilizers(prev => prev.map(x => x.id === f.id ? f : x))
+  const onUpdateFertilizer = (f) => setFertilizers(prev => prev.map(x => String(x.id) === String(f.id) ? f : x))
   const onDeleteFertilizer = (id) => {
-    setFertilizers(prev => prev.filter(f => f.id !== id))
-    setFertilizerStock(prev => prev.filter(s => s.fertilizer_id !== id))
+    setFertilizers(prev => prev.filter(f => String(f.id) !== String(id)))
+    setFertilizerStock(prev => prev.filter(s => String(s.fertilizer_id) !== String(id)))
   }
 
   // 肥料仕入れ登録: 購入履歴に追記 + 在庫に加算（onAddPurchaseと同パターン）
@@ -370,7 +371,7 @@
     const entry = { ...purchase, id: Date.now() }
     setFertilizerPurchases(prev => [...prev, entry])
     setFertilizerStock(prev => prev.map(s =>
-      s.fertilizer_id === Number(purchase.fertilizer_id)
+      String(s.fertilizer_id) === String(purchase.fertilizer_id)
         ? { ...s, stock_kg: Math.round((s.stock_kg + Number(purchase.amount_kg)) * 100) / 100 }
         : s
     ))
@@ -380,7 +381,7 @@
   // 肥料棚卸し: 在庫量を直接更新（onUpdateStockと同パターン）
   const onUpdateFertilizerStock = (fertilizerId, newStockKg) => {
     setFertilizerStock(prev => prev.map(s =>
-      s.fertilizer_id === fertilizerId
+      String(s.fertilizer_id) === String(fertilizerId)
         ? { ...s, stock_kg: Math.round(newStockKg * 100) / 100 }
         : s
     ))
@@ -390,7 +391,7 @@
   const adjustFertilizerStock = (fertilizerId, deltaKg) => {
     if (!fertilizerId || !deltaKg) return
     setFertilizerStock(prev => prev.map(s =>
-      s.fertilizer_id === Number(fertilizerId)
+      String(s.fertilizer_id) === String(fertilizerId) // UUID/旧数値ID両対応(Number()はUUIDでNaN化するため禁止)
         ? { ...s, stock_kg: Math.round((s.stock_kg - deltaKg) * 100) / 100 }
         : s
     ))

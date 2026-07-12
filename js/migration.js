@@ -111,7 +111,8 @@
       const id = mapId(idMaps.fertilizers, f.id)
       const st = fertStock[String(f.id)] || {}
       put('farm_fertilizers', [Object.assign(base(), {
-        id, name: S(f.name), maker: S(f.maker), weight_per_bag_kg: N(f.weight_per_bag_kg),
+        id, legacy_id: (typeof f.id === 'number' ? f.id : null),
+        name: S(f.name), maker: S(f.maker), weight_per_bag_kg: N(f.weight_per_bag_kg),
         price_per_bag_yen: Iv(f.price_per_bag_yen), unit_price_yen_per_kg: N(f.unit_price_yen_per_kg),
         stock_kg: N(st.stock_kg != null ? st.stock_kg : f.stock_kg) || 0,
         alert_threshold_kg: N(st.alert_threshold_kg != null ? st.alert_threshold_kg : f.alert_threshold_kg) || 0,

@@ -160,6 +160,43 @@
         })
       },
     },
+    // 肥料マスタ(マスタUUID化第2弾): 農薬と同型。在庫列(stock_kg/alert_threshold_kg)はtoRowsに含めない。
+    // blend_components(配合肥料の内訳)はjsonbのまま保持(中のfertilizer_id参照はmasterByIdが新旧両対応)。
+    farm_fertilizers: {
+      conflict: 'id',
+      toRows(value, ctx) {
+        const iv = (v) => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Math.trunc(Number(v))
+        const nv = (v) => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v)
+        return (Array.isArray(value) ? value : []).map(f => ({
+          id: String(f.id), org_id: ctx.orgId, farm_id: ctx.farmId,
+          name: String(f.name == null ? '' : f.name),
+          maker: String(f.maker == null ? '' : f.maker),
+          weight_per_bag_kg: nv(f.weight_per_bag_kg), price_per_bag_yen: iv(f.price_per_bag_yen),
+          unit_price_yen_per_kg: nv(f.unit_price_yen_per_kg),
+          default_dilution: nv(f.default_dilution),
+          crop_dilutions: (f.crop_dilutions && typeof f.crop_dilutions === 'object') ? f.crop_dilutions : null,
+          blend_components: Array.isArray(f.blend_components) ? f.blend_components : null,
+          weight_unconfirmed: !!f.weight_unconfirmed,
+          legacy_id: (typeof f.legacy_id === 'number') ? f.legacy_id : null,
+        }))
+      },
+      fromRows(rows) {
+        return (rows || []).map(r => {
+          const out = {
+            id: r.id, name: r.name || '', maker: r.maker || '',
+            weight_per_bag_kg: r.weight_per_bag_kg != null ? Number(r.weight_per_bag_kg) : null,
+            price_per_bag_yen: r.price_per_bag_yen != null ? Number(r.price_per_bag_yen) : null,
+            unit_price_yen_per_kg: r.unit_price_yen_per_kg != null ? Number(r.unit_price_yen_per_kg) : null,
+            default_dilution: r.default_dilution != null ? Number(r.default_dilution) : null,
+            crop_dilutions: r.crop_dilutions || null,
+            blend_components: r.blend_components || null,
+            weight_unconfirmed: !!r.weight_unconfirmed,
+          }
+          if (r.legacy_id != null) out.legacy_id = Number(r.legacy_id)
+          return out
+        })
+      },
+    },
     // 整備記録(記録系CRUDパイロット): 1行単位のcreate/update/remove専用。write()全置換は禁止。
     // 記録IDはクライアント発行のUUID。旧数値IDは移行時にlegacy_idへ。versionは楽観ロック用。
     farm_maintenance_records: {
@@ -478,7 +515,7 @@
   //   ?dbdest=1 で退避を解除。node(QAハーネス)ではrouteしない=テストが自分で管理する。
   //   localhost(ブラウザQAハーネス環境)は既定OFF: 約45本のハーネスがlocalStorage直注入の従来挙動を
   //   前提にしているため。localhostでDB経路を試す時だけ ?dbdest=1 を付ける。DB経路の検証はqa_dbdest_live担当。
-  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides']
+  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers']
   try {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       const q = new URLSearchParams(window.location.search).get('dbdest')

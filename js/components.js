@@ -1627,11 +1627,11 @@ function PesticideStockWidget({ pesticides, pesticideStock, onNavigate }) {
 // =====================================================
 function FertilizerStockWidget({ fertilizers, fertilizerStock, onNavigate, _inGrid }) {
   const stockOf  = (f) => {
-    const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
+    const s = fertilizerStock.find(s => String(s.fertilizer_id) === String(f.id))
     return ((s && s.stock_kg != null) ? s.stock_kg : f.stock_kg) ?? 0
   }
   const threshOf = (f) => {
-    const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
+    const s = fertilizerStock.find(s => String(s.fertilizer_id) === String(f.id))
     return ((s && s.alert_threshold_kg != null) ? s.alert_threshold_kg : f.alert_threshold_kg) ?? 0
   }
 
@@ -6701,7 +6701,7 @@ function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, sta
 
   const handleFertilizerChange = (idx, id) => {
     const fid = Number(id)
-    const fert = fertilizers.find(f => f.id === fid)
+    const fert = masterById(fertilizers, fid)
     // 【肥料 希釈倍率 案③】肥料マスタに登録があれば、品目(作物)に応じた倍率を自動セット（編集は常に可能）
     const suggested = getSuggestedFertilizerDilution(fert, item)
     updateItem(idx, {
@@ -6835,7 +6835,7 @@ function TopDressingRecordForm({ field, fertilizers, lots, onSave, onCancel, sta
     React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'8px', marginBottom:'4px' } },
       ...items.map((it, idx) => {
         // 【肥料 希釈倍率 案③】選択中の肥料に登録された倍率があるかどうかをヒント表示
-        const selectedFert  = fertilizers.find(f => f.id === it.fertilizer_id)
+        const selectedFert  = masterById(fertilizers, it.fertilizer_id)
         const suggestedDilu = getSuggestedFertilizerDilution(selectedFert, item)
         const isAutoFilled   = suggestedDilu != null && Number(it.dilution) === Number(suggestedDilu)
         return React.createElement('div', {
@@ -6990,7 +6990,7 @@ function TopDressingRecordList({ records, fertilizers, onDelete, field, staff })
           ),
           React.createElement('div', { style:{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'6px' } },
             ...(r.fertilizers || []).map((f, i) => {
-              const fert = fertilizers.find(x => x.id === f.fertilizer_id)
+              const fert = masterById(fertilizers, f.fertilizer_id)
               const detail = Number(f.amount_kg) > 0
                 ? f.amount_kg + 'kg'
                 : Number(f.dilution) > 0 ? f.dilution + '倍' : '—'
@@ -7066,7 +7066,7 @@ function TopDressingRecordList({ records, fertilizers, onDelete, field, staff })
             React.createElement('span', { style:{ color:'#6B7280', flexShrink:0 } }, '使用肥料'),
             React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'4px', alignItems:'flex-end' } },
               ...(selectedRecord.fertilizers || []).map((f, i) => {
-                const fert = fertilizers.find(x => x.id === f.fertilizer_id)
+                const fert = masterById(fertilizers, f.fertilizer_id)
                 const detail = Number(f.amount_kg) > 0
                   ? f.amount_kg + 'kg'
                   : Number(f.dilution) > 0 ? f.dilution + '倍' : '—'
@@ -9155,7 +9155,7 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
 
   // マスタ名の逆引き
   const pestName = (id) => (masterById(pesticides, id) || {}).name || '農薬'
-  const fertName = (id) => (fertilizers || []).find(p => p.id === Number(id))?.name || '肥料'
+  const fertName = (id) => (masterById(fertilizers, id) || {}).name || '肥料'
 
   // ── 資材原価の単価ソース（既存「圃場実績・評価」原価タブと同一の単価定義で揃える） ──
   // 農薬: マスタに単価が無いため pesticidePurchases の購入実績から平均単価(円/L)を算出
@@ -9167,7 +9167,7 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
   })
   const priceOfPesticide  = (id) => { const a = pestAvg[id]; return (a && a.amount > 0) ? a.price / a.amount : null }
   // 肥料: マスタの unit_price_yen_per_kg（null=価格未確定）
-  const priceOfFertilizer = (id) => { const f = (fertilizers || []).find(x => x.id === id); return (f && f.unit_price_yen_per_kg != null) ? f.unit_price_yen_per_kg : null }
+  const priceOfFertilizer = (id) => { const f = masterById(fertilizers, id); return (f && f.unit_price_yen_per_kg != null) ? f.unit_price_yen_per_kg : null }
 
   // 農薬の原液使用量(L) = 散布液量(L) ÷ 希釈倍率（在庫減算ロジックと同一の消費モデル）。
   // 希釈倍率が無い記録は消費量を確定できないため0扱い。
@@ -9919,7 +9919,7 @@ function FieldPerformancePage({ fields, harvestRecords, fieldPerformance, perfor
   }
   // 肥料: マスタの unit_price_yen_per_kg をそのまま使用（null=価格未確定）
   const priceOfFertilizer = (id) => {
-    const f = (fertilizers || []).find(x => x.id === id)
+    const f = masterById(fertilizers, id)
     return (f && f.unit_price_yen_per_kg != null) ? f.unit_price_yen_per_kg : null
   }
 
@@ -15212,8 +15212,8 @@ function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchase
   const [detailModalId, setDetailModalId] = React.useState(null)
   const [activeTab, setActiveTab] = React.useState('list')
 
-  const stockOf  = (f) => { const s = fertilizerStock.find(s => s.fertilizer_id === f.id); return ((s && s.stock_kg != null) ? s.stock_kg : f.stock_kg) ?? 0 }
-  const threshOf = (f) => { const s = fertilizerStock.find(s => s.fertilizer_id === f.id); return ((s && s.alert_threshold_kg != null) ? s.alert_threshold_kg : f.alert_threshold_kg) ?? 0 }
+  const stockOf  = (f) => { const s = fertilizerStock.find(s => String(s.fertilizer_id) === String(f.id)); return ((s && s.stock_kg != null) ? s.stock_kg : f.stock_kg) ?? 0 }
+  const threshOf = (f) => { const s = fertilizerStock.find(s => String(s.fertilizer_id) === String(f.id)); return ((s && s.alert_threshold_kg != null) ? s.alert_threshold_kg : f.alert_threshold_kg) ?? 0 }
   const isAlert  = (f) => stockOf(f) <= threshOf(f)
 
   // ── カラーパレット（農薬マスタと共通トーン） ──
@@ -15328,7 +15328,7 @@ function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchase
                   React.createElement('div', { style:{ fontSize:'10px', color:C.muted, marginTop:'2px' } },
                     (f.blend_components && f.blend_components.length > 0)
                       ? '配合: ' + f.blend_components.map(c => {
-                          const cf = fertilizers.find(x => x.id === c.fertilizer_id)
+                          const cf = masterById(fertilizers, c.fertilizer_id)
                           return (cf ? cf.name : '肥料#' + c.fertilizer_id) + '×' + c.bags
                         }).join(' + ')
                       : (f.maker || '—')
@@ -15421,7 +15421,7 @@ function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchase
 
     // ── 肥料詳細モーダル（農薬モーダルと同等レベル：タブ + 在庫バー） ──
     (() => {
-      const detailFertilizer = detailModalId !== null ? fertilizers.find(f => f.id === detailModalId) : null
+      const detailFertilizer = masterById(fertilizers, detailModalId)
       if (!detailFertilizer) return null
       const stock  = stockOf(detailFertilizer)
       const thresh = threshOf(detailFertilizer)
@@ -15538,7 +15538,7 @@ function FertilizerAddModal({ C, fertilizers, onClose, onSave }) {
     if (!isBlend || blendComponents.length === 0) return null
     let kg = 0, yen = 0, priceOk = true
     blendComponents.forEach(c => {
-      const f = (fertilizers || []).find(x => x.id === c.fertilizer_id); if (!f) { priceOk = false; return }
+      const f = masterById(fertilizers, c.fertilizer_id); if (!f) { priceOk = false; return }
       kg  += (Number(f.weight_per_bag_kg) || 0) * c.bags
       if (Number(f.price_per_bag_yen) > 0) yen += Number(f.price_per_bag_yen) * c.bags; else priceOk = false
     })
@@ -15699,7 +15699,7 @@ function FertilizerDetailModal({ f, stock, thresh, alert, ratio, C, onClose, onU
   const [deleteConfirm, setDeleteConfirm] = React.useState(false)
 
   // 編集フォーム — f の現在値で初期化
-  const stockEntry = (fertilizerStock || []).find(s => s.fertilizer_id === f.id)
+  const stockEntry = (fertilizerStock || []).find(s => String(s.fertilizer_id) === String(f.id))
   const [editForm, setEditForm] = React.useState({
     name:                  f.name,
     maker:                 f.maker || '',
@@ -15740,7 +15740,7 @@ function FertilizerDetailModal({ f, stock, thresh, alert, ratio, C, onClose, onU
     setTimeout(() => { setEditSaved(false); setModalTab('detail') }, 900)
   }
 
-  const myPurchases = (fertilizerPurchases || []).filter(p => p.fertilizer_id === f.id).sort((a,b) => a.date < b.date ? 1 : -1)
+  const myPurchases = (fertilizerPurchases || []).filter(p => String(p.fertilizer_id) === String(f.id)).sort((a,b) => a.date < b.date ? 1 : -1)
 
   const handlePurchaseSave = () => {
     if (!purchaseForm.amount_kg) return
@@ -15972,7 +15972,7 @@ function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateS
   const [edits, setEdits] = React.useState({})  // { [fertilizer_id]: '入力中の新在庫値(kg)' }
 
   const stockOf = (f) => {
-    const s = fertilizerStock.find(s => s.fertilizer_id === f.id)
+    const s = fertilizerStock.find(s => String(s.fertilizer_id) === String(f.id))
     return ((s && s.stock_kg != null) ? s.stock_kg : f.stock_kg) ?? 0
   }
 
@@ -16058,7 +16058,7 @@ function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateS
 
 // ── Step3-2: 肥料 仕入れ履歴パネル ──
 function FertilizerPurchaseHistoryPanel({ fertilizers, fertilizerPurchases }) {
-  const nameOf = (id) => (fertilizers.find(f => f.id === Number(id)) || {}).name || '（不明）'
+  const nameOf = (id) => (masterById(fertilizers, id) || {}).name || '（不明）'
   const sorted = [...fertilizerPurchases].sort((a, b) => (a.date < b.date ? 1 : -1))
 
   if (sorted.length === 0) {
@@ -16105,7 +16105,7 @@ function FertilizerUsageHistoryPanel({ fertilizers, topDressingRecords, fields }
   // topDressingRecords は1レコードに複数肥料を含むため、選択中の肥料分だけ展開する
   const usageRecords = (topDressingRecords || [])
     .flatMap(r => (r.fertilizers || [])
-      .filter(fe => fe.fertilizer_id === selectedId)
+      .filter(fe => String(fe.fertilizer_id) === String(selectedId))
       .map(fe => ({
         id:       r.id + '-' + fe.fertilizer_id,
         date:     r.date,
@@ -16135,7 +16135,7 @@ function FertilizerUsageHistoryPanel({ fertilizers, topDressingRecords, fields }
     React.createElement('div', { style:{ position:'relative', marginBottom:'20px' } },
       React.createElement('div', { style:{ display:'flex', gap:'8px', overflowX:'auto', paddingBottom:'4px' } },
         ...fertilizers.map(f => {
-          const isActiveChip = selectedId === f.id
+          const isActiveChip = String(selectedId) === String(f.id)
           return React.createElement('button', {
             key: f.id,
             onClick: () => setSelectedId(f.id),

@@ -73,9 +73,9 @@ const login = async (page) => {
       'count=' + (after && after.value ? after.value.length : 'x') + ' keys=' + JSON.stringify((after.value || []).map(d => d.key)))
 
     // ── 横展開テーブル: gap_documents / monthly_temps の本番往復（テストデータは自分で消す） ──
-    const routesAll = await A.evaluate(() => ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers']
+    const routesAll = await A.evaluate(() => ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers', 'farm_fields_v2']
       .map(c => (farmRepo.routes[c] || {}).kind || 'none'))
-    ok('C1: 7コレクションともDB経路にroute', routesAll.every(k => k === 'supabase'), routesAll.join(','))
+    ok('C1: 8コレクションともDB経路にroute', routesAll.every(k => k === 'supabase'), routesAll.join(','))
 
     const gRes = await A.evaluate(async () => {
       const k = 'farm_gap_documents_' + CONFIG.CURRENT_FARM_ID
@@ -163,6 +163,27 @@ const login = async (page) => {
         w2: w2.ok, gone: fin.ok && !fin.value.some(x => String(x.id) === id) }
     })
     ok('C7: 肥料マスタの本番往復(uuid+legacy_id+配合jsonb保持)', fRes.w && fRes.found && fRes.legacy && fRes.blend && fRes.w2 && fRes.gone, JSON.stringify(fRes))
+
+    // ── 圃場マスタ(マスタUUID化第3弾): boundary/legacy_id/crop_categoryキー名変換の本番往復（自動削除） ──
+    const flRes = await A.evaluate(async () => {
+      const k = 'farm_fields_v2_' + CONFIG.CURRENT_FARM_ID
+      const before = await farmRepo.readAsync(k)
+      const id = (crypto.randomUUID ? crypto.randomUUID() : 'qa-' + Date.now())
+      const test = { id, name: 'QA検証圃場(自動削除)', field_no: 'QA-1', crop: 'レタス', crop_category: 'leaf_veg',
+        area_are: 10, status: '栽培中', color: '#0D9972', row_count: 6, gap_target: true,
+        boundary: [[35.4, 139.9], [35.41, 139.91]], legacy_id: 990003 }
+      const w = await farmRepo.write(k, (before.value || []).concat([test]))
+      const mid = await farmRepo.readAsync(k)
+      const rec = mid.ok ? mid.value.find(x => String(x.id) === id) : null
+      const w2 = await farmRepo.write(k, mid.value.filter(x => String(x.id) !== id))
+      const fin = await farmRepo.readAsync(k)
+      return { w: w.ok, err: w.error ? String(w.error.message || w.error) : null, found: !!rec,
+        cat: rec ? rec.crop_category === 'leaf_veg' : false, legacy: rec ? rec.legacy_id === 990003 : false,
+        boundary: rec ? (Array.isArray(rec.boundary) && rec.boundary.length === 2) : false,
+        w2: w2.ok, gone: fin.ok && !fin.value.some(x => String(x.id) === id) }
+    })
+    ok('C8: 圃場マスタの本番往復(crop_category変換+boundary+legacy_id保持)',
+      flRes.w && flRes.found && flRes.cat && flRes.legacy && flRes.boundary && flRes.w2 && flRes.gone, JSON.stringify(flRes))
   } finally {
     // 途中で例外終了してもテスト行を残さない（成功時は各検査内で消えているので実質no-op）
     try {

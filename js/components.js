@@ -16546,10 +16546,12 @@ function MaintenanceLogPage({ records, staff, onSave, onDelete }) {
   const [deleteTarget, setDeleteTarget] = React.useState(null)
   const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const valid = form.machine_name.trim() !== ''
-  const submit = () => {
+  const submit = async () => {
     if (!valid) { showToast('機械名を入力してください', 'warn'); return }
     // idは付けない: useRecordCollection側がUUIDを発行する(Date.now()は複数端末で衝突し得るため廃止)
-    onSave({ ...form, machine_name: form.machine_name.trim(), machine_no: form.machine_no.trim(), worker: form.worker.trim(), note: form.note.trim() })
+    // 保存が失敗したら入力内容を残す(再入力の手間をなくす)。成功した時だけフォームを空に戻す
+    const res = await Promise.resolve(onSave({ ...form, machine_name: form.machine_name.trim(), machine_no: form.machine_no.trim(), worker: form.worker.trim(), note: form.note.trim() })).catch(() => null)
+    if (res && res.ok === false) return
     setForm(blank)
   }
   const rows = [...(records || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)))
@@ -16658,10 +16660,12 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
     setForm(f => ({ ...f, lot_code: code, harvest_date: (rec && rec.date) ? rec.date : f.harvest_date }))
   }
   const valid = form.variety && form.dest && Number(form.cases) > 0
-  const submit = () => {
+  const submit = async () => {
     if (!valid) { showToast('品目・出荷先・数量を入力してください', 'warn'); return }
     // idは付けない: useRecordCollection側がUUIDを発行する
-    onSave({ ...form, cases: Number(form.cases), note: form.note.trim() })
+    // 保存が失敗したら入力内容を残す。成功した時だけフォームを次の入力用に戻す
+    const res = await Promise.resolve(onSave({ ...form, cases: Number(form.cases), note: form.note.trim() })).catch(() => null)
+    if (res && res.ok === false) return
     setForm({ ...blank, variety: form.variety, dest: form.dest })
   }
   const rows = [...(shipmentRecords || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)))
@@ -16853,15 +16857,27 @@ function useRecordCollection(collection, farmId, initial) {
   const listRef = React.useRef(list)
   React.useEffect(() => { listRef.current = list }, [list])
   const loadedRef = React.useRef(!(farmRepo.isAsync && farmRepo.isAsync(key)))
+  // 世代トークン: 農場切替(key変更)ごとに+1。旧農場向けの非同期結果(初期読込/CRUD/リアルタイム)は
+  // 世代が違ったら一切stateへ作用させない（Codexレビュー4 High1対応）。
+  const genRef = React.useRef(0)
   React.useEffect(() => {
-    let alive = true
+    const gen = ++genRef.current
     loadedRef.current = !(farmRepo.isAsync && farmRepo.isAsync(key))
+    // 農場切替の瞬間に前農場の一覧を必ずリセット（DB経路は空から読込・localStorageは同期読み）
+    const rs = farmRepo.readSync(key)
+    setList((rs.ok && rs.found && Array.isArray(rs.value)) ? rs.value : (initial || []))
+    // Realtime受信フラグ: 受信後は「それより前に開始した初期読込」で巻き戻さない（High2対応・remoteRef同型）
+    let gotRows = false
     Promise.resolve(farmRepo.readAsync ? farmRepo.readAsync(key) : null).then(r => {
-      if (!alive || !r || !r.ok) return
+      if (genRef.current !== gen || !r || !r.ok) return
       loadedRef.current = true
-      if (r.found && Array.isArray(r.value)) setList(r.value)
+      if (gotRows) return
+      // found:false(新農場のDBが0件)でも必ず置換する＝前農場の表示を残さない（High1対応）
+      setList((r.found && Array.isArray(r.value)) ? r.value : [])
     }).catch(() => {})
     const unsub = farmRepo.subscribeRows ? farmRepo.subscribeRows(collection, farmId, (evt) => {
+      if (genRef.current !== gen) return
+      gotRows = true
       loadedRef.current = true
       setList(prev => {
         if (evt.type === 'replace') return Array.isArray(evt.list) ? evt.list : prev
@@ -16871,7 +16887,7 @@ function useRecordCollection(collection, farmId, initial) {
         return prev
       })
     }) : function () {}
-    return () => { alive = false; unsub() }
+    return () => { unsub() }
   }, [key])
   const reload = React.useCallback(async () => {
     const r = await Promise.resolve(farmRepo.readAsync(key)).catch(() => null)
@@ -16881,12 +16897,13 @@ function useRecordCollection(collection, farmId, initial) {
   const conflictRecover = () => { try { showToast('別の端末で更新されています。最新の状態を読み込みました。', 'warn') } catch (_) {} ; reload() }
   const add = React.useCallback(async (record) => {
     if (!loadedRef.current) return notLoaded()
+    const gen = genRef.current // この操作が属する農場世代（切替後は結果を新農場に作用させない）
     const rec = Object.assign({}, record)
     if (rec.id == null) rec.id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8)
     setList(prev => prev.concat([rec])) // 楽観的更新: 画面は即反映
     const res = await Promise.resolve(farmRepo.create(collection, farmId, rec)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {
-      setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック
+      if (genRef.current === gen) setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック
       console.warn('[useRecordCollection] 追加失敗:', collection, res && res.error)
       try { showToast('保存に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
     }
@@ -16894,15 +16911,16 @@ function useRecordCollection(collection, farmId, initial) {
   }, [collection, farmId])
   const updateById = React.useCallback(async (id, patch) => {
     if (!loadedRef.current) return notLoaded()
+    const gen = genRef.current
     const cur = listRef.current.find(x => String(x.id) === String(id))
     if (!cur) return { ok: false }
     const expected = cur.version || 1
     setList(prev => prev.map(x => String(x.id) === String(id) ? Object.assign({}, x, patch, { version: expected + 1 }) : x))
     const res = await Promise.resolve(farmRepo.update(collection, farmId, id, patch, expected)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {
-      if (res && res.conflict) { conflictRecover() }
+      if (res && res.conflict) { if (genRef.current === gen) conflictRecover() }
       else {
-        setList(prev => prev.map(x => String(x.id) === String(id) ? cur : x)) // ロールバック
+        if (genRef.current === gen) setList(prev => prev.map(x => String(x.id) === String(id) ? cur : x)) // ロールバック
         try { showToast('保存に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
       }
     }
@@ -16910,14 +16928,15 @@ function useRecordCollection(collection, farmId, initial) {
   }, [collection, farmId])
   const removeById = React.useCallback(async (id) => {
     if (!loadedRef.current) return notLoaded()
+    const gen = genRef.current
     const cur = listRef.current.find(x => String(x.id) === String(id))
     if (!cur) return { ok: true }
     setList(prev => prev.filter(x => String(x.id) !== String(id)))
     const res = await Promise.resolve(farmRepo.remove(collection, farmId, id, cur.version || 1)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {
-      if (res && res.conflict) { conflictRecover() }
+      if (res && res.conflict) { if (genRef.current === gen) conflictRecover() }
       else {
-        setList(prev => prev.some(x => String(x.id) === String(id)) ? prev : prev.concat([cur])) // ロールバック(復元)
+        if (genRef.current === gen) setList(prev => prev.some(x => String(x.id) === String(id)) ? prev : prev.concat([cur])) // ロールバック(復元)
         try { showToast('削除に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
       }
     }

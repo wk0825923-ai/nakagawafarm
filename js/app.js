@@ -173,9 +173,9 @@
   // 【記録系CRUD第2弾】出荷記録も1行単位CRUD。祝福は保存成功後だけ。
   const shipment = useRecordCollection('farm_shipment_records', farmKey, [])
   const shipmentRecords = shipment.list
-  const onAddMaintenance    = async (r) => { const res = await maintenance.add(r); if (res && res.ok) celebrateSave('整備を記録！') }
+  const onAddMaintenance    = async (r) => { const res = await maintenance.add(r); if (res && res.ok) celebrateSave('整備を記録！'); return res }
   const onDeleteMaintenance = (id) => { maintenance.removeById(id) }
-  const onAddShipment       = async (r) => { const res = await shipment.add(r); if (res && res.ok) celebrateSave('出荷を記録！') }
+  const onAddShipment       = async (r) => { const res = await shipment.add(r); if (res && res.ok) celebrateSave('出荷を記録！'); return res }
   const onDeleteShipment    = (id) => { shipment.removeById(id) }
   // モジュールレベル参照を同期 — グローバル関数 getCropCategory / getHarvestGrades が最新を参照できる
   _CROP_CATEGORIES = cropCategories

@@ -27,6 +27,8 @@ function makeMockSb() {
         },
         limit(n) { this._limit = n; return this },
         insert(rows) {
+          // 偽23505の再現(PK以外のunique制約違反。R31用): 行は存在しないのに23505が返る状況
+          if (api._forceInsert23505) { api._forceInsert23505 = false; return Promise.resolve({ error: { code: '23505', message: 'duplicate key value violates unique constraint "other_uniq"' } }) }
           // PK重複は23505(実DBのunique violation)を再現 → 冪等createの検証用
           const dup = rows.some(nr => nr.id != null && tables[table].some(er => String(er.id) === String(nr.id)))
           if (dup) return Promise.resolve({ error: { code: '23505', message: 'duplicate key value' } })
@@ -342,6 +344,13 @@ const KEY = 'farm_shipment_destinations_' + FARM
   const u30 = await farmRepo.update(SC, FARM, SREC.id, { cases: 15 }, 1)
   const r30b = await farmRepo.readAsync(SC + '_' + FARM)
   const d30 = await farmRepo.remove(SC, FARM, SREC.id, 2)
+  // 31) 偽23505(PK以外のunique違反): 同idの行が実在しない23505は冪等成功にせず失敗を返す
+  global.sb._forceInsert23505 = true
+  const c31 = await farmRepo.create(SC, FARM, Object.assign({}, SREC, { id: 'bbbb2222-0000-0000-0000-000000000099' }))
+  ok('R31 行が実在しない23505は冪等成功にしない(本当の不整合を隠さない)',
+    c31.ok === false && global.sb._tables[SC].filter(r => r.farm_id === FARM && r.id === 'bbbb2222-0000-0000-0000-000000000099').length === 0,
+    JSON.stringify({ ok: c31.ok }))
+
   ok('R30 出荷記録CRUD: 往復(cases数値/lot_code/日付保持)＋version更新＋削除',
     c30.ok && got30 && got30.cases === 12 && got30.lot_code === '(45)07100106' && got30.harvest_date === '2026-07-10' &&
     u30.ok && r30b.value[0].cases === 15 && r30b.value[0].version === 2 && d30.ok &&

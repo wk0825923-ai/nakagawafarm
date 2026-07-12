@@ -334,8 +334,13 @@
         const row = g.conv.toRow(record, { orgId: g.orgId, farmId })
         const ins = await g.client.from(g.table).insert([row])
         if (ins.error) {
-          // 冪等: 同じidの再送(通信リトライ等)は二重登録せず成功扱い
-          if (String(ins.error.code) === '23505') return { ok: true, duplicate: true, record: g.conv.fromRow(row) }
+          // 冪等: 同じidの再送(通信リトライ等)は二重登録せず成功扱い。
+          // ただし23505を無条件に信じない: 同idの行が本当に存在する時だけ冪等成功
+          // (将来別のunique制約が増えた時、本当の不整合を成功扱いしないため。Codexレビュー4 Med対応)
+          if (String(ins.error.code) === '23505') {
+            const chk = await g.client.from(g.table).select('id').eq('farm_id', farmId).eq('id', String(row.id)).limit(1)
+            if (!chk.error && chk.data && chk.data.length) return { ok: true, duplicate: true, record: g.conv.fromRow(row) }
+          }
           return { ok: false, error: ins.error }
         }
         return { ok: true, record: g.conv.fromRow(row) }

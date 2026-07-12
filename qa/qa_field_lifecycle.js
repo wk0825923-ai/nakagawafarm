@@ -49,11 +49,13 @@ const expand=(page)=>page.evaluate(()=>{const b=[...document.querySelectorAll('b
     return { abc: ok('abc'), inf: ok('1e999'), neg: ok('-5'), valid: ok('12.5'), zero: ok('0') }
   })
 
-  // #8 id数値性: 連続で2件 onAdd 相当のid生成をブラウザで再現し、数値かつ非衝突を確認
+  // #8 id生成(2026-07-12 マスタUUID化第3弾で仕様変更): AddFieldModalと同じUUID発行で、
+  // uuid形式かつ連続追加でも衝突しないことを確認（数値比較は全域masterById/String統一済みのため数値維持は不要に）
   R.ids = await page.evaluate(()=>{
-    const gen=()=>Date.now()*1000+Math.floor(Math.random()*1000)
+    const gen=()=>(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(36).slice(2,8)
     const a=gen(), b=gen()
-    return { aNum: typeof a==='number' && Number.isFinite(a), bNum: typeof b==='number', distinct: a!==b, sample:[a,b] }
+    const isU=(v)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+    return { aNum: isU(a), bNum: isU(b), distinct: a!==b, sample:[a,b] }
   })
 
   // #6 削除警告: 記録を持つ圃場を作り、削除確認に警告文が出るか。

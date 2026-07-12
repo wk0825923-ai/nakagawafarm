@@ -103,7 +103,7 @@
     if (rows.size === 0) return
     const maxRow = Math.max(...rows)
     setFields(prev => prev.map(f =>
-      f.id === Number(fieldId) && (!f.row_count || f.row_count < maxRow)
+      String(f.id) === String(fieldId) && (!f.row_count || f.row_count < maxRow)
         ? { ...f, row_count: maxRow }
         : f
     ))
@@ -292,14 +292,14 @@
   const onAddCropCycle = (cycle) => {
     setCropCycles(prev => {
       const closed = prev.map(c =>
-        c.field_id === Number(cycle.field_id) && c.status === 'active'
+        String(c.field_id) === String(cycle.field_id) && c.status === 'active'
           ? { ...c, status:'completed' }
           : c
       )
       return [...closed, {
         ...cycle,
         id: Date.now(),
-        field_id: Number(cycle.field_id),
+        field_id: String(cycle.field_id),
         start_month: Number(cycle.start_month),
         end_month: Number(cycle.end_month),
         status: cycle.status || 'active',
@@ -535,9 +535,9 @@
   let mainContent
   if (page.startsWith('field:')) {
     const parts   = page.split(':')
-    const fieldId = Number(parts[1])
+    const fieldId = parts[1]
     const sub     = parts[2] || 'dashboard'
-    const field   = fields.find(f => f.id === fieldId)
+    const field   = masterById(fields, fieldId)
     mainContent = field
       ? React.createElement(FieldDetailPage, {
           field, fields, records, pesticides,
@@ -561,7 +561,7 @@
           // 【実装手順書 C】担当者連携
           staff,
           // 圃場情報(所在地など)の更新。既存圃場に後から住所を入れられるように。
-          onUpdateField: patch => setFields(p => p.map(f => f.id === field.id ? { ...f, ...patch } : f)),
+          onUpdateField: patch => setFields(p => p.map(f => String(f.id) === String(field.id) ? { ...f, ...patch } : f)),
           // 作物別詳細(温度・積算温度など)の保存。従来どこからも渡されず保存が無効だったため配線。
           onUpdateFieldCropDetails: (id, details) => setFields(p => p.map(f => f.id === id ? { ...f, crop_specific_details: details } : f)),
           sub

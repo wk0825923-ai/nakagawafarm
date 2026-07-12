@@ -392,6 +392,26 @@ const KEY = 'farm_shipment_destinations_' + FARM
     JSON.stringify({ app: { legacy: f33.legacy_id, blend: f33.blend_components }, db: { maker: rowF.maker, stock_kg: rowF.stock_kg } }))
   farmRepo.unroute('farm_fertilizers')
 
+  // 34) 圃場マスタ(マスタUUID化第3弾): 往復・crop_categoryキー名変換・boundary/legacy_id保持・not null jsonb
+  farmRepo.route('farm_fields_v2', SR)
+  const FLKEY = 'farm_fields_v2_' + FARM
+  const FLID = 'eeee5555-0000-0000-0000-000000000001'
+  global.sb._tables['farm_fields'] = [{ id: FLID, org_id: ORG, farm_id: FARM, name: '第1圃場', field_no: '1',
+    area_are: 60, crop: 'レタス', crop_category_key: 'leaf_veg', lat: 35.4, lng: 139.9, status: '栽培中', color: '#0D9972',
+    row_count: 41, crop_specific_details: {}, rice_stage_dates: {}, area_name: '上望陀', address: '木更津市', emaff_no: '1234567890123',
+    gap_target: true, boundary: [[35.4, 139.9], [35.41, 139.91]], legacy_id: 1 }]
+  const r34 = await farmRepo.readAsync(FLKEY)
+  const fl = r34.value[0]
+  await farmRepo.write(FLKEY, [Object.assign({}, fl, { row_count: 45 })]) // 畝数だけ変更
+  const rowFl = global.sb._tables['farm_fields'].find(r => r.id === FLID)
+  ok('R34 圃場マスタ: 往復(crop_category変換/boundary/legacy_id保持)＋更新反映＋jsonb not null適合',
+    r34.ok && fl.id === FLID && fl.crop_category === 'leaf_veg' && fl.legacy_id === 1 &&
+    Array.isArray(fl.boundary) && fl.boundary.length === 2 && fl.gap_target === true &&
+    rowFl.row_count === 45 && rowFl.crop_category_key === 'leaf_veg' && rowFl.legacy_id === 1 &&
+    rowFl.crop_specific_details != null && Array.isArray(rowFl.boundary),
+    JSON.stringify({ app: { cat: fl.crop_category, legacy: fl.legacy_id, b: fl.boundary && fl.boundary.length }, db: { rc: rowFl.row_count, cat: rowFl.crop_category_key } }))
+  farmRepo.unroute('farm_fields_v2')
+
   const pass = checks.filter(c => c.pass).length
   const summary = { pass, total: checks.length, failed: checks.filter(c => !c.pass) }
   console.log('QAREPO_BEGIN'); console.log(JSON.stringify(summary, null, 1)); console.log('QAREPO_END')

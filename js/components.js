@@ -71,9 +71,9 @@ function AddFieldModal({ onClose, onAdd, initialLatLng, cropCategories: cats }) 
       return
     }
     onAdd({
-      // id衝突耐性: Date.now()はms解像度で連続追加時に衝突しうる。時刻*1000+乱数で衝突を避ける。
-      // ※ field.id === Number(fieldId) の数値比較が各所にあるため、id は必ず「数値」を維持する（UUID化は不可・番人監査 BUG#8）
-      id:           Date.now() * 1000 + Math.floor(Math.random() * 1000),
+      // マスタUUID化第3弾(2026-07-12): 数値ID比較(Number)は全域でmasterById/String比較へ統一済みのため
+      // UUID発行に切替（複数端末でも衝突しない・DBのuuid列にそのまま入る）。旧数値IDの圃場はlegacy_idで橋渡し。
+      id:           (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8),
       name:         name.trim(),
       area_name:    areaName.trim(),
       crop:         cropName.trim() || selectedCat.name,
@@ -236,7 +236,7 @@ function StaffQuickView(props) {
   const [detailRecord, setDetailRecord] = React.useState(null)  // 基本日報 → RecordDetailModal(編集/削除)
   const [deleteTarget, setDeleteTarget] = React.useState(null)  // リッチ記録 → 削除確認 {kind,id,label}
   const [showRecent, setShowRecent] = React.useState(false)     // 【#B】直近の記録（過去）の折りたたみ（既定は閉じる）
-  const fieldName = (id) => { const f = (fields || []).find(x => x.id === id); return f ? f.name : '圃場不明' }
+  const fieldName = (id) => { const f = masterById(fields, id); return f ? f.name : '圃場不明' }
 
   // 今日入力ぶんを4種横断で1リストに（スタッフが「ちゃんと届いた」実感＋間違いを直せる導線）
   const todayItems = []
@@ -416,7 +416,7 @@ function Sidebar({ current, onChange, fields, onAddField, onDeleteField, current
   const parseFieldPage = (p) => {
     if (!p.startsWith('field:')) return { fieldId: null, sub: null }
     const parts = p.split(':')
-    return { fieldId: Number(parts[1]), sub: parts[2] || 'dashboard' }
+    return { fieldId: parts[1], sub: parts[2] || 'dashboard' }
   }
   const { fieldId: curFieldId, sub: curSub } = parseFieldPage(current)
 
@@ -1844,7 +1844,7 @@ function CropSuggestionCard({ fields, cropPlans }) {
         )
       : React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:'6px' } },
           ...candidates.map(c => {
-            const field = fields.find(f => f.id === c.field_id)
+            const field = masterById(fields, c.field_id)
             return React.createElement('div', {
               key: c.id,
               style:{ display:'flex', alignItems:'center', gap:'8px', background:'#FFFFFF', borderRadius:'6px', padding:'8px 10px', fontSize:'12px' }
@@ -1864,7 +1864,7 @@ function CropSuggestionCard({ fields, cropPlans }) {
 
 // 圃場サマリーカード
 function FieldCard({ field, records }) {
-  const fieldRecords = records.filter(r => r.field_id === field.id)
+  const fieldRecords = records.filter(r => String(r.field_id) === String(field.id))
   const lastRecord   = fieldRecords.length > 0 ? fieldRecords[fieldRecords.length - 1] : null
   const statusClass  = field.status === '栽培中' ? 'badge-green' : field.status === '休閑' ? 'badge-gray' : field.status === '収穫期' ? 'badge-amber' : 'badge-blue'
   // 【実装手順書 Step0】正式名称に加えて、紙日報での元表記（あれば）を併記する
@@ -1910,7 +1910,7 @@ function FieldCard({ field, records }) {
 // FieldCard より情報を絞ってサイズを小さくしたバージョン
 // =====================================================
 function FieldCardCompact({ field, records }) {
-  const fieldRecords = records.filter(r => r.field_id === field.id)
+  const fieldRecords = records.filter(r => String(r.field_id) === String(field.id))
   const lastRecord   = fieldRecords.length > 0 ? fieldRecords[fieldRecords.length - 1] : null
   const statusColor  = field.status === '栽培中' ? '#0A6B52' : field.status === '収穫期' ? '#B45309' : '#6B7280'
   const statusBg     = field.status === '栽培中' ? '#ECFDF5' : field.status === '収穫期' ? '#FFFBEB' : '#F1F5F9'
@@ -2066,7 +2066,7 @@ function FieldSummaryTabPanel({ fields, records }) {
 
 // 記録ログ行
 function RecordLogRow({ record, fields }) {
-  const field = fields.find(f => f.id === record.field_id)
+  const field = masterById(fields, record.field_id)
   const cfg = WORK_ICON_MAP[record.work_type] || WORK_ICON_MAP['その他']
   return React.createElement('div', {
     style:{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 0', borderBottom:'1px solid #F1F5F9' }
@@ -2114,7 +2114,7 @@ function RecentRecordsPanel({ records, fields, onSelectRecord, embedded, selecte
 
   // 1行の描画（本日／過去で共用）
   const renderRow = (it, isLast) => {
-    const field = fields.find(f => f.id === it.field_id)
+    const field = masterById(fields, it.field_id)
     const cfg = WORK_ICON_MAP[it.work_type] || WORK_ICON_MAP['その他']
     const isSel = selectedId != null && it.kind === 'daily' && it.id === selectedId
     return React.createElement('div', {
@@ -2361,7 +2361,7 @@ function TodayTaskList({ tasks, fields, staff, onToggle, onAdd, onOpenRecord }) 
     // タスク一覧
     React.createElement('div', { style:{ padding:'8px 0' } },
       sorted.map((task, idx) => {
-        const field    = fields.find(f => f.id === task.field_id)
+        const field    = masterById(fields, task.field_id)
         const prio     = TASK_PRIORITY_MAP[task.priority] || TASK_PRIORITY_MAP.medium
         const cfg      = WORK_ICON_MAP[task.work_type] || WORK_ICON_MAP['その他']
         const isLast   = idx === sorted.length - 1
@@ -2745,7 +2745,7 @@ function Dashboard({ fields, records, staff, gap, todayTasks, onToggleTodayTask,
           React.createElement('div', null,
             React.createElement('div', { style:{ fontSize:'15px', fontWeight:700, color:'#111827' } }, '日報入力'),
             React.createElement('div', { style:{ fontSize:'12px', color:'#64748B', marginTop:'2px' } },
-              activeTask.work_type + ' — ' + (fields.find(f=>f.id===activeTask.field_id)?.name || '') + '　' + activeTask.time + '〜'
+              activeTask.work_type + ' — ' + (masterById(fields, activeTask.field_id)?.name || '') + '　' + activeTask.time + '〜'
             )
           ),
           React.createElement('button', {
@@ -2754,7 +2754,7 @@ function Dashboard({ fields, records, staff, gap, todayTasks, onToggleTodayTask,
           }, '✕')
         ),
         React.createElement(RecordForm, {
-          fields: fields.filter(f => f.id === activeTask.field_id),
+          fields: fields.filter(f => String(f.id) === String(activeTask.field_id)),
           pesticides: pesticides || [],
           records: records || [],
           lotSprayRecords: lotSprayRecords || [],
@@ -3280,7 +3280,7 @@ function RecordStep1({ form, fields, up, onNext, isFieldPreset, recentFieldIds, 
           )
         )
       : (() => {
-          const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids : (form.field_id ? [Number(form.field_id)] : [])
+          const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids : (form.field_id ? [form.field_id] : [])
           const q = fieldQuery.trim().toLowerCase()
           const base = q
             ? fields.filter(f => (f.name||'').toLowerCase().includes(q) || String(f.field_no||'').toLowerCase().includes(q) || (f.crop||'').toLowerCase().includes(q))
@@ -3810,7 +3810,7 @@ function RecordStep4({ form, dilution, selField, selP, isOver, onPrev, onSave, s
       React.createElement('div', { style:{ display:'flex', gap:'8px' } },
         React.createElement('button', {
           className:'btn btn-ghost',
-          onClick: () => printSingleSprayRecord({ ...form, id: form.id || Date.now(), dilution, field_id: Number(form.field_id), pesticide_id: selP.id }, [selField], [selP]),
+          onClick: () => printSingleSprayRecord({ ...form, id: form.id || Date.now(), dilution, field_id: String(form.field_id), pesticide_id: selP.id }, [selField], [selP]),
           style:{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', padding:'6px 14px' }
         },
           React.createElement('i', { className:'ti ti-printer', 'aria-hidden':'true' }),
@@ -3818,7 +3818,7 @@ function RecordStep4({ form, dilution, selField, selP, isOver, onPrev, onSave, s
         ),
         React.createElement('button', {
           className:'btn btn-ghost',
-          onClick: () => exportSingleSprayRecordPDF({ ...form, id: form.id || Date.now(), dilution, field_id: Number(form.field_id), pesticide_id: selP.id }, [selField], [selP]),
+          onClick: () => exportSingleSprayRecordPDF({ ...form, id: form.id || Date.now(), dilution, field_id: String(form.field_id), pesticide_id: selP.id }, [selField], [selP]),
           style:{ display:'flex', alignItems:'center', gap:'6px', fontSize:'12px', padding:'6px 14px' }
         },
           React.createElement('i', { className:'ti ti-file-download', 'aria-hidden':'true' }),
@@ -3843,13 +3843,13 @@ function RecordDetailModal({ record, fields, pesticides, onClose, onUpdate, onDe
   const [isEditing, setIsEditing] = React.useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false)
   const [form, setForm] = React.useState({ ...record })
-  const f = fields.find(x => x.id === record.field_id)
+  const f = masterById(fields, record.field_id)
   const p = masterById(pesticides, record.pesticide_id)
   const cfg = WORK_ICON_MAP[record.work_type] || WORK_ICON_MAP['その他']
   const uf = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
 
   const handleUpdate = () => {
-    if (onUpdate) onUpdate({ ...form, field_id: Number(form.field_id) })
+    if (onUpdate) onUpdate({ ...form, field_id: String(form.field_id) })
     setIsEditing(false)
     onClose()
   }
@@ -4151,7 +4151,7 @@ function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycl
   // UX-04: フィルタリングロジック
   const filtered = React.useMemo(() => {
     return [...records].reverse().filter(r => {
-      const f = fields.find(x => x.id === r.field_id)
+      const f = masterById(fields, r.field_id)
       // キーワード検索（圃場名・圃場番号・元表記・作業種・作業者・備考）
       // 【実装手順書 Step0】「9s」「3n」のような紙日報の元表記でも検索できるようにする
       if (query.trim()) {
@@ -4339,7 +4339,7 @@ function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycl
             ),
             React.createElement('tbody', null,
               ...filtered.map(r => {
-                const f = fields.find(x => x.id === r.field_id)
+                const f = masterById(fields, r.field_id)
                 const cfg = WORK_ICON_MAP[r.work_type] || WORK_ICON_MAP['その他']
                 // キーワードハイライト用ヘルパー
                 const hl = (text) => {
@@ -4651,7 +4651,7 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   const suggestedWeather = weatherByDate[todayYmd()] || latestWeather || '晴'
   const [form, setForm]         = React.useState({
     date: todayYmd(),
-    field_id: initFieldId, field_ids: initFieldId ? [Number(initFieldId)] : [], work_type: '', pesticide_id: '',
+    field_id: initFieldId, field_ids: initFieldId ? [initFieldId] : [], work_type: '', pesticide_id: '',
     amount: '', weather: suggestedWeather, worker: savedWorker, note: '', checks: {},
     start_time: '08:00', end_time: '17:00', break_minutes: 60,
     spray_method: '',       // 使用方法（散布・株元散布・土壌混和・灌注）
@@ -4730,7 +4730,7 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
 
   const selP    = masterById(pesticides, form.pesticide_id)
   const isOver  = isPesticideOverLimit(records, form.field_id, selP, lotSprayRecords || [])
-  const selField = fields.find(f => f.id === Number(form.field_id))
+  const selField = masterById(fields, form.field_id)
 
   // C04-1: onUpdate を useCallback でメモ化
   const handlePesticideUpdate = React.useCallback(({ pesticide_id, dilution: d, amount: a, spray_liquid_L: v }) => {
@@ -4764,8 +4764,8 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
     // 【複数圃場同時記録】農薬散布は圃場ごとに使用回数・希釈が異なるため主圃場のみ。
     // それ以外の作業は選択圃場ぶんの単一field_id記録へ展開（読み取り側は既存のまま）。
     const isPesticide = form.work_type === '農薬散布'
-    const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids.map(Number) : [Number(form.field_id)]
-    const targetIds   = isPesticide ? [Number(form.field_id)] : selectedIds
+    const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids.slice() : [form.field_id]
+    const targetIds   = isPesticide ? [form.field_id] : selectedIds
     const { field_ids, ...base } = form
     targetIds.forEach((fid, i) => {
       onSave({
@@ -4924,7 +4924,7 @@ function RowDetailPanel({ field, row, records, pesticides, onClose }) {
   const lot = row
   const cfg = ROW_STATUS_CONFIG[lot.status]
   // 参考表示: 圃場の記録から代表的な日報・農薬履歴を表示（厳密な畝紐付けは行わない）
-  const fieldRecords     = records.filter(r => r.field_id === field.id)
+  const fieldRecords     = records.filter(r => String(r.field_id) === String(field.id))
   const pesticideRecords = fieldRecords.filter(r => r.work_type === '農薬散布')
 
   const InfoRow = ({ label, value }) =>
@@ -5830,7 +5830,7 @@ function FieldDashboardSection({ field, fieldRecords, fieldRows, pesticides, lot
   const activeLots     = lots.filter(l => l.status === 'growing' || l.status === 'ready')
   const harvestedLots  = lots.filter(l => l.status === 'harvested')
   // 【Step6】このロットの圃場に紐づくlotSprayRecordsだけを渡し、畝単位で精密に判定する
-  const fieldLotSprayRecords = (lotSprayRecords || []).filter(r => r.field_id === field.id)
+  const fieldLotSprayRecords = (lotSprayRecords || []).filter(r => String(r.field_id) === String(field.id))
   const lotRisks       = calcLotHarvestRisk(fieldRecords, lots, pesticides || [], fieldLotSprayRecords)
 
   // 【Step3】畝マップでクリックされたロットのID（nullで未選択）
@@ -6127,7 +6127,7 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff, 
   // 【P6 次回防除リマインド】この圃場で各農薬を前回撒いた日→経過日数を出し、撒き過ぎ/間隔の判断を助ける。
   const lastSprayFor = (pid) => {
     if (!pid) return null
-    const hits = (pastSprays || []).filter(r => r.field_id === field.id && (r.pesticides || []).some(p => String(p.pesticide_id) === String(pid)) && r.date)
+    const hits = (pastSprays || []).filter(r => String(r.field_id) === String(field.id) && (r.pesticides || []).some(p => String(p.pesticide_id) === String(pid)) && r.date)
     if (!hits.length) return null
     hits.sort((a, b) => String(b.date).localeCompare(String(a.date)))
     const last = hits[0].date
@@ -6594,7 +6594,7 @@ function LotSprayRecordList({ records, pesticides, onDelete, field, staff }) {
 // ─────────────────────────────────────────────────────
 function LotSprayRecordSection({ field, lotSprayRecords, pesticides, onSave, onDelete, staff, lots: lotsProp }) {
   const [showAddModal, setShowAddModal] = React.useState(false)
-  const fieldSprayRecords = lotSprayRecords.filter(r => r.field_id === field.id)
+  const fieldSprayRecords = lotSprayRecords.filter(r => String(r.field_id) === String(field.id))
   const lots = lotsProp || []
 
   return React.createElement('div', null,
@@ -7132,7 +7132,7 @@ function TopDressingRecordList({ records, fertilizers, onDelete, field, staff })
 // ─────────────────────────────────────────────────────
 function TopDressingRecordSection({ field, topDressingRecords, fertilizers, onSave, onDelete, staff, lots: lotsProp }) {
   const [showAddModal, setShowAddModal] = React.useState(false)
-  const fieldRecords = (topDressingRecords || []).filter(r => r.field_id === field.id)
+  const fieldRecords = (topDressingRecords || []).filter(r => String(r.field_id) === String(field.id))
   const lots = lotsProp || []
 
   return React.createElement('div', null,
@@ -7334,7 +7334,7 @@ function HarvestRecordForm({ field, lots, destinations, harvestRecords, onSave, 
   // 編集中の入力値が変わるたびにリアルタイム判定し、バッジで通知する。
   const isDuplicateLotCode = (code) => {
     if (!code) return false
-    return (harvestRecords || []).some(r => r.field_id === field.id && r.lot_code === code)
+    return (harvestRecords || []).some(r => String(r.field_id) === String(field.id) && r.lot_code === code)
   }
 
   // 畝マップでクリック選択 → row_rangeへ反映 → lot_codeも自動更新（手動編集していない場合）
@@ -7943,7 +7943,7 @@ function HarvestRecordList({ records, onDelete, field, staff }) {
 function HarvestRecordSection({ field, harvestRecords, lots, onSave, onDelete, destinations, onChangeDestinations, staff }) {
   const [showAddModal, setShowAddModal] = React.useState(false)
   const [showDestModal, setShowDestModal] = React.useState(false)
-  const fieldHarvestRecords = harvestRecords.filter(r => r.field_id === field.id)
+  const fieldHarvestRecords = harvestRecords.filter(r => String(r.field_id) === String(field.id))
 
   // 合計集計
   const totalCases  = fieldHarvestRecords.reduce((acc, r) => acc + (Number(r.total_cases) || 0), 0)
@@ -8220,7 +8220,7 @@ function FieldDetailPage({ field, fields, records, pesticides, onSaveRecord, onU
   // 【畝ロット管理】動的ロット + CRUD（旧・静的LOTSの置き換え）
   lots, onAddLot, onUpdateLot, onDeleteLot,
   onUpdateField }) {
-  const fieldRecords = records.filter(r => r.field_id === field.id)
+  const fieldRecords = records.filter(r => String(r.field_id) === String(field.id))
   // 所在地(住所)・eMAFF農地番号のインライン編集。既存圃場に後から入れられるように。
   const [addrEditing, setAddrEditing]   = React.useState(false)
   const [addrDraft, setAddrDraft]       = React.useState('')
@@ -8571,7 +8571,7 @@ function CropCycleHistorySection({ field, cropCycles, onAdd, onUpdate, onDelete,
 // 圃場ごとの収穫集計・反収・前年比を表示するシンプルなサマリー
 function FieldEvalTab({ field, fieldRecords, harvestRecords }) {
   const totalCases = harvestRecords
-    .filter(r => r.field_id === field.id)
+    .filter(r => String(r.field_id) === String(field.id))
     .reduce((sum, r) => {
       const cases = Object.values(r.cases || {}).reduce((s, v) => s + Number(v || 0), 0)
       return sum + cases
@@ -8603,7 +8603,7 @@ function FieldEvalTab({ field, fieldRecords, harvestRecords }) {
     // 収穫記録一覧（簡易）
     React.createElement('div', { className:'card' },
       React.createElement('div', { className:'section-title', style:{ marginBottom:'12px' } }, '収穫記録サマリー'),
-      harvestRecords.filter(r => r.field_id === field.id).length === 0
+      harvestRecords.filter(r => String(r.field_id) === String(field.id)).length === 0
         ? React.createElement('div', { style:{ color:'#94A3B8', fontSize:'13px', padding:'16px 0', textAlign:'center' } },
             'この圃場の収穫記録はまだありません'
           )
@@ -8616,7 +8616,7 @@ function FieldEvalTab({ field, fieldRecords, harvestRecords }) {
               )
             ),
             React.createElement('tbody', null,
-              harvestRecords.filter(r => r.field_id === field.id).map((r, i) => {
+              harvestRecords.filter(r => String(r.field_id) === String(field.id)).map((r, i) => {
                 const total = Object.values(r.cases || {}).reduce((s, v) => s + Number(v || 0), 0)
                 return React.createElement('tr', { key:r.id || i, style:{ borderBottom:'1px solid #F3F4F6' } },
                   React.createElement('td', { style:{ padding:'10px 12px', color:'#374151' } }, r.date || '—'),
@@ -8874,7 +8874,7 @@ function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCy
     setDrawFieldId(null); drawPointsRef.current=[]; setDrawTick(t=>t+1)
   }
   const cancelBoundary = () => { setDrawFieldId(null); drawPointsRef.current=[]; setDrawTick(t=>t+1) }
-  const startBoundary = (fid) => { const f=fields.find(x=>x.id===fid); drawPointsRef.current=(f&&Array.isArray(f.boundary)?f.boundary.slice():[]); setDrawFieldId(fid); setDrawTick(t=>t+1); if(mapInstanceRef.current) mapInstanceRef.current.closePopup() }
+  const startBoundary = (fid) => { const f=masterById(fields, fid); drawPointsRef.current=(f&&Array.isArray(f.boundary)?f.boundary.slice():[]); setDrawFieldId(fid); setDrawTick(t=>t+1); if(mapInstanceRef.current) mapInstanceRef.current.closePopup() }
   // 描画中の操作バー（画面下部）
   const drawBarEl = drawFieldId!=null && React.createElement('div',{ style:{ position:'fixed', left:'50%', bottom:'24px', transform:'translateX(-50%)', zIndex:1200, background:'#fff', border:'1px solid #DDE8DE', borderRadius:12, boxShadow:'0 8px 28px rgba(0,0,0,.18)', padding:'10px 14px', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', maxWidth:'92vw' } },
     React.createElement('span',{ style:{ fontSize:13, fontWeight:700, color:'#1D4ED8' } }, '✏️ 輪郭を描く'),
@@ -9003,8 +9003,8 @@ function FieldList({ fields, onAdd, onDelete, onUpdateField, mode='full', cropCy
   const refCount = deleteTarget ? (() => {
     const fid = deleteTarget.id
     const lotN   = (farmLots && farmLots[fid]) ? farmLots[fid].length : 0
-    const sprayN = (lotSprayRecords || []).filter(r => r.field_id === fid).length
-    const harvN  = (harvestRecords  || []).filter(r => r.field_id === fid).length
+    const sprayN = (lotSprayRecords || []).filter(r => String(r.field_id) === String(fid)).length
+    const harvN  = (harvestRecords  || []).filter(r => String(r.field_id) === String(fid)).length
     return lotN + sprayN + harvN
   })() : 0
   const deleteModalEl = deleteTarget && React.createElement(ConfirmDeleteModal, {
@@ -9194,7 +9194,7 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
   const assignRecord = (rec, kind) => {
     const set = parseRowRange(rec.row_range)
     if (set.size === 0) return
-    const cands = allLots.filter(l => l.fieldId === rec.field_id && (() => { const ls = parseRowRange(l.row_range); for (const n of set) if (ls.has(n)) return true; return false })())
+    const cands = allLots.filter(l => String(l.fieldId) === String(rec.field_id) && (() => { const ls = parseRowRange(l.row_range); for (const n of set) if (ls.has(n)) return true; return false })())
     if (cands.length === 0) return
     let chosen = rec.variety ? cands.find(l => l.variety === rec.variety) : null
     if (!chosen && rec.date) chosen = cands.filter(l => l.transplant_date && String(l.transplant_date) <= String(rec.date)).sort((a, b) => String(b.transplant_date).localeCompare(String(a.transplant_date)))[0]
@@ -9251,7 +9251,7 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
 
   const visible = enriched
     .filter(e => season === 'all' || e.season === season)
-    .filter(e => fieldFilter === 'all' || e.fieldId === Number(fieldFilter))
+    .filter(e => fieldFilter === 'all' || String(e.fieldId) === String(fieldFilter))
 
   // サマリー集計
   const sumCases = visible.reduce((a, e) => a + e.totalCases, 0)
@@ -9344,7 +9344,7 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
     React.createElement('select', { style:selectStyle, value:fieldFilter, onChange:e => setFieldFilter(e.target.value) },
       React.createElement('option', { value:'all' }, '全圃場'),
       ...usedFieldIds.map(id => {
-        const f = fields.find(x => x.id === id)
+        const f = masterById(fields, id)
         return React.createElement('option', { key:id, value:id }, fieldLabel(f))
       }),
     ),
@@ -9397,7 +9397,7 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
 
   // ── 選択された圃場の明細テーブル（タップで表示） ──
   const renderFieldTable = (fid) => {
-    const f = fields.find(x => x.id === fid)
+    const f = masterById(fields, fid)
     const list = (groups[fid] || []).slice().sort((a, b) => String(a.lot.transplant_date || '').localeCompare(String(b.lot.transplant_date || '')))
     const grpCases = list.reduce((a, e) => a + e.totalCases, 0)
     const grpCost  = list.reduce((a, e) => a + e.totalCost, 0)
@@ -9466,7 +9466,7 @@ function FieldSummaryPage({ fields, farmLots, lotSprayRecords, topDressingRecord
   }
   const fieldGrid = React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(230px, 1fr))', gap:12 } },
     ...groupIds.map(fid => {
-      const f = fields.find(x => x.id === fid)
+      const f = masterById(fields, fid)
       const st = groupStat(fid)
       const sel = selectedFid === fid
       return React.createElement('button', {
@@ -9750,7 +9750,7 @@ function FieldPerformancePage({ fields, harvestRecords, fieldPerformance, perfor
   ])
 
   const rows = [...fieldIds].map(fid => {
-    const field   = fields.find(f => f.id === fid)
+    const field   = masterById(fields, fid)
     const comp    = (computedBySeason[season] || {})[fid]
     const stat    = staticPerfByField[fid]
     const prev    = prevPerfByField[fid]
@@ -9869,7 +9869,7 @@ function FieldPerformancePage({ fields, harvestRecords, fieldPerformance, perfor
     const parts = seasonStr.split('-').map(Number)
     if (parts.length < 2 || isNaN(parts[0])) return null
     const [y1, y2] = parts
-    const matches = cropCycles.filter(c => c.field_id === fieldId && (c.year === y1 || c.year === y2))
+    const matches = cropCycles.filter(c => String(c.field_id) === String(fieldId) && (c.year === y1 || c.year === y2))
     if (!matches.length) return null
     return matches.reduce((a, b) => b.id > a.id ? b : a).crop || null
   }
@@ -11248,7 +11248,7 @@ function GapExport({ gap, records, fields, pesticides, ctx }) {
             ),
             React.createElement('tbody',null,
               ...records.filter(r=>r.work_type==='農薬散布').slice(0,3).map((r,i)=>{
-                const field=fields.find(f=>f.id===r.field_id)
+                const field=masterById(fields, r.field_id)
                 const pest=masterById(pesticides, r.pesticide_id)
                 return React.createElement('tr',{key:r.id,style:{background:i%2===1?'#f4faf8':'#fff'}},
                   ...[i+1,r.date,field?field.name:'—',field?field.crop:'—',pest?pest.name:'—',pest?pest.reg_no:'—',r.dilution?r.dilution+'倍':'—',r.amount||'—',r.weather||'—',r.worker||'—',pest?pest.preharvest_days+'日':'—'].map((v,j)=>
@@ -13796,7 +13796,7 @@ async function exportCropPlanPDF(plans, fields) {
   const today = new Date().toLocaleDateString('ja-JP', { year:'numeric', month:'long', day:'numeric' })
 
   const rows = fields.map(f => {
-    const fPlans = plans.filter(p => p.field_id === f.id)
+    const fPlans = plans.filter(p => String(p.field_id) === String(f.id))
     return { field: f, plans: fPlans }
   })
 
@@ -13879,7 +13879,7 @@ function CropPlan({ fields, plans, records, pesticides, onAdd, onDelete }) {
     const result = []
     plans.forEach(plan => {
       records
-        .filter(r => r.field_id === plan.field_id && r.work_type === '農薬散布' && r.pesticide_id)
+        .filter(r => String(r.field_id) === String(plan.field_id) && r.work_type === '農薬散布' && r.pesticide_id)
         .forEach(r => {
           const pest = masterById(pesticides, r.pesticide_id)
           if (!pest) return
@@ -13889,7 +13889,7 @@ function CropPlan({ fields, plans, records, pesticides, onAdd, onDelete }) {
           if (diffDays >= 0 && diffDays < pest.preharvest_days) {
             result.push({
               planId: plan.id, recordId: r.id,
-              fieldName: fields.find(f=>f.id===plan.field_id)?.name || '?',
+              fieldName: masterById(fields, plan.field_id)?.name || '?',
               crop: plan.crop, pestName: pest.name,
               sprayDate: r.date, preharvest: pest.preharvest_days, diffDays
             })
@@ -13910,7 +13910,7 @@ function CropPlan({ fields, plans, records, pesticides, onAdd, onDelete }) {
     const crop = form.crop
     onAdd({
       ...form, id: Date.now(),
-      field_id: Number(form.field_id),
+      field_id: String(form.field_id),
       start_month: Number(form.start_month),
       end_month: Number(form.end_month),
       color: CROP_COLORS[crop] || '#94A3B8'
@@ -14055,12 +14055,12 @@ function CropPlan({ fields, plans, records, pesticides, onAdd, onDelete }) {
       // 圃場ごとの行（UX-09: 計画 vs 実績バーを重ねて表示）
       React.createElement('div', { style:{display:'flex',flexDirection:'column',gap:'6px'} },
         ...fields.map(field => {
-          const fieldPlans = plans.filter(p => p.field_id === field.id)
+          const fieldPlans = plans.filter(p => String(p.field_id) === String(field.id))
           
           // UX-09: 実績バーの計算関数
           const getActualCoverage = () => {
             // この圃場の作付期間内での実績（作業記録）を集計
-            const fieldRecords = records.filter(r => r.field_id === field.id)
+            const fieldRecords = records.filter(r => String(r.field_id) === String(field.id))
             if (fieldRecords.length === 0) return []
             
             // 月ごとに実績があるかを判定（1月=1, 2月=2, ..., 12月=12）
@@ -14217,7 +14217,7 @@ function CropPlan({ fields, plans, records, pesticides, onAdd, onDelete }) {
               ),
               React.createElement('tbody', null,
                 ...plans.map(plan => {
-                  const field = fields.find(f => f.id === plan.field_id)
+                  const field = masterById(fields, plan.field_id)
                   const hasViol = violations.some(v => v.planId === plan.id)
                   return React.createElement('tr', { key:plan.id },
                     React.createElement('td', null,
@@ -16100,7 +16100,7 @@ function FertilizerUsageHistoryPanel({ fertilizers, topDressingRecords, fields }
   )
 
   const fieldNameOf = (id) => {
-    const f = (fields || []).find(x => x.id === id)
+    const f = masterById(fields, id)
     return f ? (f.name || f.field_no_raw || ('圃場#' + id)) : ('圃場#' + id)
   }
 
@@ -16651,7 +16651,7 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
   const [deleteTarget, setDeleteTarget] = React.useState(null)
   const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
   // 選択中の品目の収穫ロット候補（新しい順）。実運用の出荷記録表は収穫ロット単位でトレースするため（GGAP トレーサビリティ）
-  const fieldNameOf = (id) => { const f = (fields || []).find(x => x.id === id); return f ? f.name : '' }
+  const fieldNameOf = (id) => { const f = masterById(fields, id); return f ? f.name : '' }
   const lotOptions = (harvestRecords || [])
     .filter(r => r.variety === form.variety && r.lot_code)
     .sort((a, b) => String(b.date).localeCompare(String(a.date)))

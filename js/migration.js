@@ -65,7 +65,9 @@
     arrOf(get('farm_fields_v2')).forEach(f => {
       const id = mapId(idMaps.fields, f.id)
       put('farm_fields', [Object.assign(base(), {
-        id, name: S(f.name), field_no: f.field_no != null ? S(f.field_no) : null,
+        id, legacy_id: (typeof f.id === 'number' ? f.id : null),
+        boundary: Array.isArray(f.boundary) ? f.boundary : null,
+        name: S(f.name), field_no: f.field_no != null ? S(f.field_no) : null,
         area_are: N(f.area_are), crop: f.crop != null ? S(f.crop) : null,
         crop_category_key: S(f.crop_category || 'leaf_veg'),
         lat: N(f.lat), lng: N(f.lng), status: S(f.status || '栽培中'), color: S(f.color || '#0D9972'),

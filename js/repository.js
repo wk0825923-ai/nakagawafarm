@@ -130,6 +130,54 @@
         return out
       },
     },
+    // 圃場マスタ(マスタUUID化第3弾・最重要参照マスタ): id保持upsert。
+    // アプリはcrop_category、DBはcrop_category_key(キー名が違う)。boundary(地図ポリゴン)はjsonbで保持。
+    // crop_specific_details/rice_stage_datesはDB not null既定'{}'のためnullを送らない(肥料crop_dilutionsの教訓)。
+    farm_fields_v2: {
+      conflict: 'id',
+      toRows(value, ctx) {
+        const iv = (v) => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Math.trunc(Number(v))
+        const nv = (v) => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v)
+        const ob = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}
+        return (Array.isArray(value) ? value : []).map(f => ({
+          id: String(f.id), org_id: ctx.orgId, farm_id: ctx.farmId,
+          name: String(f.name == null ? '' : f.name),
+          field_no: f.field_no != null ? String(f.field_no) : null,
+          area_are: nv(f.area_are),
+          crop: f.crop != null ? String(f.crop) : null,
+          crop_category_key: String(f.crop_category || 'leaf_veg'),
+          lat: nv(f.lat), lng: nv(f.lng),
+          status: String(f.status || '栽培中'), color: String(f.color || '#0D9972'),
+          row_count: iv(f.row_count),
+          crop_specific_details: ob(f.crop_specific_details),
+          rice_stage_dates: ob(f.rice_stage_dates),
+          area_name: f.area_name != null ? String(f.area_name) : null,
+          address: f.address != null ? String(f.address) : null,
+          emaff_no: f.emaff_no != null ? String(f.emaff_no) : null,
+          gap_target: f.gap_target !== false,
+          boundary: Array.isArray(f.boundary) ? f.boundary : null,
+          legacy_id: (typeof f.legacy_id === 'number') ? f.legacy_id : null,
+        }))
+      },
+      fromRows(rows) {
+        return (rows || []).map(r => {
+          const out = {
+            id: r.id, name: r.name || '', field_no: r.field_no != null ? r.field_no : undefined,
+            area_are: r.area_are != null ? Number(r.area_are) : null,
+            crop: r.crop || '', crop_category: r.crop_category_key || 'leaf_veg',
+            lat: r.lat != null ? Number(r.lat) : undefined, lng: r.lng != null ? Number(r.lng) : undefined,
+            status: r.status || '栽培中', color: r.color || '#0D9972',
+            row_count: r.row_count != null ? Number(r.row_count) : undefined,
+            crop_specific_details: r.crop_specific_details || {}, rice_stage_dates: r.rice_stage_dates || {},
+            area_name: r.area_name || '', address: r.address || '', emaff_no: r.emaff_no || '',
+            gap_target: r.gap_target !== false,
+          }
+          if (Array.isArray(r.boundary)) out.boundary = r.boundary
+          if (r.legacy_id != null) out.legacy_id = Number(r.legacy_id) // masterByIdの旧数値ID解決に使う
+          return out
+        })
+      },
+    },
     // 農薬マスタ(マスタUUID化第1弾): id(uuid)をそのまま衝突キーにした行単位差分同期。
     // 在庫列(stock_l/alert_threshold_l)はtoRowsに含めない＝DB側の残高を上書きしない(在庫は在庫RPCフェーズで統合)。
     farm_pesticides: {
@@ -516,7 +564,7 @@
   //   ?dbdest=1 で退避を解除。node(QAハーネス)ではrouteしない=テストが自分で管理する。
   //   localhost(ブラウザQAハーネス環境)は既定OFF: 約45本のハーネスがlocalStorage直注入の従来挙動を
   //   前提にしているため。localhostでDB経路を試す時だけ ?dbdest=1 を付ける。DB経路の検証はqa_dbdest_live担当。
-  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers']
+  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers', 'farm_fields_v2']
   try {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       const q = new URLSearchParams(window.location.search).get('dbdest')

@@ -191,7 +191,7 @@ function getFieldRawLabels(field, overrides) {
   })
   if (overrides) {
     Object.entries(overrides).forEach(([raw, fid]) => {
-      if (Number(fid) === field.id) raws.add(raw)
+      if (String(fid) === String(field.id)) raws.add(raw) // UUID/数値ID両対応
     })
   }
   return [...raws]
@@ -226,7 +226,7 @@ function isUnregisteredFieldQuery(fields, query, overrides) {
 // =====================================================
 function FieldSearchSelect({ fields, value, onChange, placeholder }) {
   const [overrides, registerOverride] = useFieldNoOverrides()
-  const selectedField = fields.find(f => String(f.id) === String(value))
+  const selectedField = masterById(fields, value)
   const [open, setOpen]     = React.useState(false)
   const [query, setQuery]   = React.useState('')
   const [registerTarget, setRegisterTarget] = React.useState('')
@@ -1063,7 +1063,7 @@ function runFarmIntegrityChecks(ctx) {
   // 記録とマスタでIDの型（数値/文字列）が混在してもチェックを見逃さないよう文字列比較で突合する
   // （フォーム入力・localStorage・将来のDB移行でどちらの型も入りうるため）
   const sameId = (a, b) => a != null && b != null && String(a) === String(b)
-  const fname  = (id) => { const f = fields.find(x => sameId(x.id, id)); return f ? f.name : (id != null && id !== '' ? ('圃場#' + id) : '圃場不明') }
+  const fname  = (id) => { const f = masterById(fields, id); return f ? f.name : (id != null && id !== '' ? ('圃場#' + id) : '圃場不明') }
   const pById  = (id) => masterById(pesticides, id) // 旧数値ID記録→UUID化済みマスタ(legacy_id)も引ける
   const days   = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000)
   const yearOf = (d) => (d || '').slice(0, 4)
@@ -1095,11 +1095,11 @@ function runFarmIntegrityChecks(ctx) {
       const p = pById(pid); if (!p || !p.max_times) return
       if (evs.length > p.max_times) push({
         severity: 'high', category: '農薬', title: p.name + ' の使用回数オーバー',
-        detail: fname(Number(fid)) + ' で ' + yr + '年に ' + evs.length + '回（上限 ' + p.max_times + '回）',
+        detail: fname(fid) + ' で ' + yr + '年に ' + evs.length + '回（上限 ' + p.max_times + '回）',
         cause: '同じ圃場で同じ農薬を上限より多く使用（記録ミス、または実際の使用超過）。',
         fix: '誤登録なら記録を訂正、実使用なら次作で剤をローテーション。',
         refs: evs.map(e => ({ kind: e.src.kind, id: e.src.id, label: e.date })),
-        nav: navField(Number(fid), 'pesticide'),
+        nav: navField(fid, 'pesticide'),
       })
     })
   })
@@ -1365,10 +1365,10 @@ function runFarmIntegrityChecks(ctx) {
         const a = rowset(act[i].row_range), b = rowset(act[j].row_range)
         if ([...a].some(n => b.has(n))) push({
           severity: 'mid', category: 'ロット重複', title: '同じ畝に栽培中ロットが重複',
-          detail: fname(Number(fid)) + ' 畝 ' + act[i].row_range + ' と ' + act[j].row_range + ' が重複',
+          detail: fname(fid) + ' 畝 ' + act[i].row_range + ' と ' + act[j].row_range + ' が重複',
           cause: '旧作の終了処理漏れ、または畝範囲の入力ミス（収穫が二重に集計される温床）。',
           fix: '古いロットを収穫済/終了にするか、畝範囲を修正。',
-          nav: navField(Number(fid), 'dashboard'),
+          nav: navField(fid, 'dashboard'),
         })
       }
     })
@@ -1412,7 +1412,7 @@ const INITIAL_CROP_CYCLES = INITIAL_CROP_PLANS.map(p => ({
 // 圃場の「現在の作付け」を取得するヘルパー
 // ※ 同一圃場に複数のactiveがある場合は最新（id最大）を採用
 function getCurrentCropCycle(cropCycles, fieldId) {
-  const actives = cropCycles.filter(c => c.field_id === fieldId && c.status === 'active')
+  const actives = cropCycles.filter(c => String(c.field_id) === String(fieldId) && c.status === 'active')
   if (actives.length === 0) return null
   return actives.reduce((a, b) => (b.id > a.id ? b : a))
 }
@@ -1420,7 +1420,7 @@ function getCurrentCropCycle(cropCycles, fieldId) {
 // 圃場の作付け履歴を時系列（新しい順）で取得するヘルパー
 function getCropCycleHistory(cropCycles, fieldId) {
   return cropCycles
-    .filter(c => c.field_id === fieldId)
+    .filter(c => String(c.field_id) === String(fieldId))
     .sort((a, b) => b.id - a.id)
 }
 

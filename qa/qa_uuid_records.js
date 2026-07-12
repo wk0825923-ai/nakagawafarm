@@ -13,6 +13,7 @@ const MIME = { '.html':'text/html','.js':'text/javascript','.css':'text/css','.s
 const server = http.createServer((q,r)=>{let p=decodeURIComponent(q.url.split('?')[0]);if(p==='/')p='/index.html';fs.readFile(path.join(ROOT,p),(e,d)=>{if(e){r.writeHead(404);r.end('404');return}r.writeHead(200,{'Content-Type':MIME[path.extname(p).toLowerCase()]||'application/octet-stream'});r.end(d)})})
 const sleep = ms => new Promise(r=>setTimeout(r,ms))
 const PU = 'aaaa1111-2222-3333-4444-555555550001' // UUID農薬
+const FLD = 'eeee1111-2222-3333-4444-555555550001' // UUID圃場(マスタUUID化第3弾)
 const FU = 'bbbb1111-2222-3333-4444-555555550001' // UUID肥料1
 const FU2 = 'bbbb1111-2222-3333-4444-555555550002' // UUID肥料2
 const clickText = (page,t)=>page.evaluate(t=>{const v=e=>e.offsetParent!==null;const cs=[...document.querySelectorAll('button,a,[role=button]')].filter(v);let el=cs.find(e=>e.textContent.trim()===t)||cs.find(e=>e.textContent.trim().includes(t)&&e.textContent.trim().length<t.length+18);if(!el){const all=[...document.querySelectorAll('div,span,li,label')].filter(v);el=all.find(e=>e.textContent.trim()===t)||all.find(e=>e.textContent.trim().includes(t)&&e.textContent.trim().length<t.length+16)}if(el){el.click();return true}return false},t)
@@ -48,10 +49,10 @@ const setInputByPh = (page, ph, v)=>page.evaluate(({ph,v})=>{
   await page.evaluate(()=>{Object.keys(localStorage).filter(k=>k.startsWith('farm_')).forEach(k=>localStorage.removeItem(k))})
   const fid=await page.evaluate(()=>CONFIG.CURRENT_FARM_ID)
   phase='seed'
-  await page.evaluate(({fid,PU,FU,FU2})=>{
+  await page.evaluate(({fid,PU,FU,FU2,FLD})=>{
     const set=(k,v)=>localStorage.setItem(k+'_'+fid,JSON.stringify(v))
-    set('farm_fields_v2',[{id:1,name:'第1圃場',field_no:'1',crop:'レタス',area_are:10,color:'#0D9972',row_count:6,crop_category:'leaf_veg'}])
-    set('farm_lots',{1:[{id:'L1',field_id:1,row_range:'1-3',variety:'シスコ',status:'growing',seed_date:'2026-05-01'}]})
+    set('farm_fields_v2',[{id:FLD,name:'第1圃場',field_no:'1',crop:'レタス',area_are:10,color:'#0D9972',row_count:6,crop_category:'leaf_veg',legacy_id:1}])
+    set('farm_lots',{[FLD]:[{id:'L1',field_id:FLD,row_range:'1-3',variety:'シスコ',status:'growing',seed_date:'2026-05-01'}]})
     // UUIDマスタ(先頭=フォームの既定選択)。農薬はlegacy_id=1(旧数値ID時代の自分)
     set('farm_pesticides',[{id:PU,name:'UUID農薬',reg_no:'第999号',dilution:1000,preharvest_days:7,max_times:3,legacy_id:1}])
     set('farm_pesticide_stock',[{pesticide_id:PU,stock_L:10,alert_threshold_L:1}])
@@ -62,7 +63,7 @@ const setInputByPh = (page, ph, v)=>page.evaluate(({ph,v})=>{
     // 旧数値ID(=legacy_id 1)で記録された仕入履歴 → UUIDマスタの詳細に表示されるべき
     set('farm_pesticide_purchases',[{id:1,pesticide_id:1,date:'2026-06-01',amount_L:5,price_yen:5000}])
     set('farm_records',[]); set('farm_lot_spray_records',[]); set('farm_top_dressing_records',[])
-  },{fid,PU,FU,FU2})
+  },{fid,PU,FU,FU2,FLD})
   await page.reload({waitUntil:'networkidle2'}); await sleep(1200)
 
   // ═══ E1: 畝ロット農薬散布（UUID農薬・既定選択） ═══
@@ -79,9 +80,9 @@ const setInputByPh = (page, ph, v)=>page.evaluate(({ph,v})=>{
     const recs=JSON.parse(localStorage.getItem('farm_lot_spray_records_'+fid)||'[]')
     const st=JSON.parse(localStorage.getItem('farm_pesticide_stock_'+fid)||'[]')[0]
     const r=recs[recs.length-1]
-    return recs.length?{pid:r.pesticides[0].pesticide_id,dilution:r.pesticides[0].dilution,stock:st?st.stock_L:null,n:recs.length}:{n:0}
+    return recs.length?{pid:r.pesticides[0].pesticide_id,fld:r.field_id,dilution:r.pesticides[0].dilution,stock:st?st.stock_L:null,n:recs.length}:{n:0}
   },fid)
-  ok('E1 畝ロット散布: pesticide_idがUUIDのまま保存される(NaN化しない)', e1.n===1 && e1.pid===PU, JSON.stringify(e1))
+  ok('E1 畝ロット散布: pesticide_id・field_idがUUIDのまま保存される', e1.n===1 && e1.pid===PU && String(e1.fld)===FLD, JSON.stringify(e1))
   ok('E1b 在庫減算がUUIDでも効く(10L→9.5L: 500L÷1000倍)', e1.stock===9.5, 'stock='+e1.stock)
 
   // ═══ E2: 施肥（UUID肥料・既定選択＋標準希釈で有効化） ═══

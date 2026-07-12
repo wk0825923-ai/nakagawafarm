@@ -174,7 +174,8 @@
           weight_per_bag_kg: nv(f.weight_per_bag_kg), price_per_bag_yen: iv(f.price_per_bag_yen),
           unit_price_yen_per_kg: nv(f.unit_price_yen_per_kg),
           default_dilution: nv(f.default_dilution),
-          crop_dilutions: (f.crop_dilutions && typeof f.crop_dilutions === 'object') ? f.crop_dilutions : null,
+          crop_dilutions: (f.crop_dilutions && typeof f.crop_dilutions === 'object') ? f.crop_dilutions : {}, // DBはnot null既定'{}'
+
           blend_components: Array.isArray(f.blend_components) ? f.blend_components : null,
           weight_unconfirmed: !!f.weight_unconfirmed,
           legacy_id: (typeof f.legacy_id === 'number') ? f.legacy_id : null,

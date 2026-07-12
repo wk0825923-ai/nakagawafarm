@@ -80,6 +80,37 @@
           .map(r => ({ key: r.key, label: r.label, frequent: !!r.frequent, sort_order: r.sort_order || 0 }))
       },
     },
+    // GAP文書管理台帳: アプリ形 { [docId]: {ready, updated, note} } ⇔ DB行(doc_idで一意)
+    farm_gap_documents: {
+      conflict: 'farm_id,doc_id',
+      toRows(value, ctx) {
+        const obj = (value && typeof value === 'object' && !Array.isArray(value)) ? value : {}
+        return Object.keys(obj).sort().map(docId => {
+          const d = obj[docId] || {}
+          // updatedはDBがdate型。YYYY-MM-DD以外(壊れた値)はnullに落として行ごと弾かれるのを防ぐ
+          const up = typeof d.updated === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d.updated) ? d.updated.slice(0, 10) : null
+          return { org_id: ctx.orgId, farm_id: ctx.farmId, doc_id: String(docId), ready: !!d.ready, updated: up, note: String(d.note == null ? '' : d.note) }
+        })
+      },
+      fromRows(rows) {
+        const out = {}
+        ;(rows || []).forEach(r => { out[r.doc_id] = { ready: !!r.ready, updated: r.updated || '', note: r.note || '' } })
+        return out
+      },
+    },
+    // 月別平均気温: アプリ形 [12ヶ月の数値] ⇔ DB1行(farm_idで一意・temps jsonb)。1農場1行のsingleton型
+    farm_monthly_temps: {
+      conflict: 'farm_id',
+      toRows(value, ctx) {
+        const arr = Array.isArray(value) ? value.map(v => Number(v) || 0) : []
+        if (!arr.length) return []
+        return [{ org_id: ctx.orgId, farm_id: ctx.farmId, field_id: null, temps: arr }]
+      },
+      fromRows(rows) {
+        const r = (rows || [])[0]
+        return (r && Array.isArray(r.temps)) ? r.temps.map(Number) : []
+      },
+    },
   }
 
   const getSb = () => (typeof sb !== 'undefined' && sb) ? sb
@@ -93,11 +124,13 @@
     // writeはこの差分だけを送る＝他端末が同時に追加した行を「自分の画面に無いから」と消さない(Codex High対応)。
     _snap: {},
     setContext(ctx) { this._ctx = Object.assign({}, this._ctx, ctx || {}) },
+    // 行の識別キー: 通常はconflictのfarm_id以外の列。singleton型(conflict='farm_id'のみ=1農場1行)は固定キー'_'
+    _keyColOf(conv) { return conv.conflict ? (conv.conflict.split(',').map(s => s.trim()).filter(c => c !== 'farm_id')[0] || null) : null },
     _snapshotOf(conv, table, farmId, value) {
-      const keyCol = conv.conflict ? conv.conflict.split(',').map(s => s.trim()).filter(c => c !== 'farm_id')[0] : null
-      if (!keyCol) return null
+      if (!conv.conflict) return null
+      const keyCol = this._keyColOf(conv)
       const ns = {}
-      conv.toRows(value, { orgId: this._ctx.orgId, farmId }).forEach(rw => { ns[String(rw[keyCol])] = JSON.stringify(rw) })
+      conv.toRows(value, { orgId: this._ctx.orgId, farmId }).forEach(rw => { ns[keyCol ? String(rw[keyCol]) : '_'] = JSON.stringify(rw) })
       return ns
     },
 
@@ -172,20 +205,23 @@
           //   変更/追加された行のみupsert・スナップショットにあって今回に無い行のみ狙い撃ちdelete。
           // 現DB全体との突き合わせ(delete not-in)をやめたので、他端末が同時に追加した行は
           // この端末の画面に無くても消えない。未変更行は送らない＝他端末で削除済みの行を蘇生させない。
-          const keyCol = conv.conflict.split(',').map(s => s.trim()).filter(c => c !== 'farm_id')[0]
+          const keyCol = this._keyColOf(conv)
+          const rowKey = (rw) => keyCol ? String(rw[keyCol]) : '_' // singleton型は固定キー
           const snapKey = table + '|' + farmId
           const snap = this._snap[snapKey] || null
-          const changed = snap ? rows.filter(rw => snap[String(rw[keyCol])] !== JSON.stringify(rw)) : rows
+          const changed = snap ? rows.filter(rw => snap[rowKey(rw)] !== JSON.stringify(rw)) : rows
           if (changed.length) {
             const up = await client.from(table).upsert(changed, { onConflict: conv.conflict })
             if (up.error) return { ok: false, error: up.error }
           }
-          if (snap && keyCol) {
+          if (snap) {
             const newKeys = {}
-            rows.forEach(rw => { newKeys[String(rw[keyCol])] = true })
+            rows.forEach(rw => { newKeys[rowKey(rw)] = true })
             const removed = Object.keys(snap).filter(k => !newKeys[k])
             if (removed.length) {
-              const del = await client.from(table).delete().eq('farm_id', farmId).in(keyCol, removed)
+              // singleton型(keyColなし)は自farmの行そのものを削除。通常型はリスト内keyだけ狙い撃ち
+              const dq = client.from(table).delete().eq('farm_id', farmId)
+              const del = await (keyCol ? dq.in(keyCol, removed) : dq)
               if (del.error) return { ok: false, error: del.error }
             }
           }
@@ -243,16 +279,21 @@
   }
 
   const router = makeRouter()
-  // ▼ フェーズ4の実切り替えはここに1テーブルずつ足す。setContextはapp.js起動時に配線済み。
-  // 【既定ON】出荷先マスタはDB経路が既定(2026-07-12・Codexゲート条件=行単位差分同期を実装済み)。
-  //   問題が出た端末は ?dbdest=0 を付けて開くと旧経路(localStorage)へ退避できる(記憶される)。
+  // ▼ フェーズ4の実切り替え: DB経路が既定のコレクション一覧（1テーブルずつここに足して横展開する）。
+  // 【既定ON・本番のみ】(2026-07-12・Codexゲート条件=行単位差分同期/直列化/fail-closed対応済み)
+  //   問題が出た端末は ?dbdest=0 を付けて開くと全テーブル旧経路(localStorage)へ退避できる(記憶される)。
   //   ?dbdest=1 で退避を解除。node(QAハーネス)ではrouteしない=テストが自分で管理する。
+  //   localhost(ブラウザQAハーネス環境)は既定OFF: 約45本のハーネスがlocalStorage直注入の従来挙動を
+  //   前提にしているため。localhostでDB経路を試す時だけ ?dbdest=1 を付ける。DB経路の検証はqa_dbdest_live担当。
+  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps']
   try {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       const q = new URLSearchParams(window.location.search).get('dbdest')
       if (q === '0') localStorage.setItem('sb_route_dest_off', '1')
       if (q === '1') localStorage.removeItem('sb_route_dest_off')
-      if (localStorage.getItem('sb_route_dest_off') !== '1') router.route('farm_shipment_destinations', SupabaseRepository)
+      const isLocalQA = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+      if (localStorage.getItem('sb_route_dest_off') !== '1' && (!isLocalQA || q === '1'))
+        ROUTED_COLLECTIONS.forEach(c => router.route(c, SupabaseRepository))
     }
   } catch (_) { /* localStorage不可環境では従来挙動(localStorage経路)のまま */ }
 

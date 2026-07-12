@@ -233,6 +233,47 @@ const KEY = 'farm_shipment_destinations_' + FARM
     JSON.stringify({ final: x18 && x18.label, sent: sentLabels }))
   farmRepo.unroute('farm_shipment_destinations')
 
+  // ── 横展開テーブルの検証: gap_documents(オブジェクト形) / monthly_temps(singleton・1農場1行) ──
+  const { SupabaseRepository: SR } = FarmRepositories
+
+  // 19) gap_documents: アプリ形{docId:{...}}⇔DB行の往復＋差分更新
+  farmRepo.route('farm_gap_documents', SR)
+  const GKEY = 'farm_gap_documents_' + FARM
+  const w19 = await farmRepo.write(GKEY, { doc1: { ready: true, updated: '2026-07-12', note: '整備済み' }, doc2: { ready: false, updated: '', note: '' } })
+  const r19 = await farmRepo.readAsync(GKEY)
+  ok('R19 gap_documents: オブジェクト形の往復(2文書・ready/updated/note保持)',
+    w19.ok && r19.ok && r19.value.doc1 && r19.value.doc1.ready === true && r19.value.doc1.updated === '2026-07-12' &&
+    r19.value.doc1.note === '整備済み' && r19.value.doc2 && r19.value.doc2.ready === false,
+    JSON.stringify(r19.value))
+
+  // 20) gap_documents: 片方だけ更新→もう片方は無傷(差分同期がオブジェクト形でも効く)
+  await farmRepo.write(GKEY, { doc1: { ready: true, updated: '2026-07-12', note: '整備済み' }, doc2: { ready: true, updated: '2026-07-13', note: '完了' } })
+  const r20 = await farmRepo.readAsync(GKEY)
+  ok('R20 gap_documents: 差分更新(doc2のみ変更が反映・doc1無傷)',
+    r20.value.doc2.ready === true && r20.value.doc2.updated === '2026-07-13' && r20.value.doc1.note === '整備済み',
+    JSON.stringify(r20.value))
+  farmRepo.unroute('farm_gap_documents')
+
+  // 21) monthly_temps: singleton(1農場1行)の往復と更新
+  farmRepo.route('farm_monthly_temps', SR)
+  const TKEY = 'farm_monthly_temps_' + FARM
+  const temps = [1, 2, 6, 12, 17, 21, 25, 26, 21, 15, 9, 3]
+  const w21 = await farmRepo.write(TKEY, temps)
+  const r21 = await farmRepo.readAsync(TKEY)
+  const temps2 = temps.slice(); temps2[0] = -2
+  await farmRepo.write(TKEY, temps2)
+  const r21b = await farmRepo.readAsync(TKEY)
+  const rowsT = global.sb._tables['farm_monthly_temps'].filter(r => r.farm_id === FARM)
+  ok('R21 monthly_temps: singleton往復＋更新で行が増えない(常に1行)',
+    w21.ok && r21.value.join(',') === temps.join(',') && r21b.value[0] === -2 && rowsT.length === 1,
+    JSON.stringify({ v: r21b.value[0], rows: rowsT.length }))
+
+  // 22) monthly_temps: 空配列write=行削除(singletonのremoved処理)
+  await farmRepo.write(TKEY, [])
+  const rowsT2 = global.sb._tables['farm_monthly_temps'].filter(r => r.farm_id === FARM)
+  ok('R22 monthly_temps: 空writeでsingleton行が消える(他farmは無傷)', rowsT2.length === 0)
+  farmRepo.unroute('farm_monthly_temps')
+
   const pass = checks.filter(c => c.pass).length
   const summary = { pass, total: checks.length, failed: checks.filter(c => !c.pass) }
   console.log('QAREPO_BEGIN'); console.log(JSON.stringify(summary, null, 1)); console.log('QAREPO_END')

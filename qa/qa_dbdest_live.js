@@ -71,14 +71,55 @@ const login = async (page) => {
     const originalsKept = after && after.ok && original.every(o => after.value.some(d => d.key === o.key))
     ok('A4: 後片付け(差分deleteでテスト行だけ消え、元の行は残る)', w2 && w2.ok && cleaned && originalsKept,
       'count=' + (after && after.value ? after.value.length : 'x') + ' keys=' + JSON.stringify((after.value || []).map(d => d.key)))
+
+    // ── 横展開テーブル: gap_documents / monthly_temps の本番往復（テストデータは自分で消す） ──
+    const routes3 = await A.evaluate(() => ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps']
+      .map(c => (farmRepo.routes[c] || {}).kind || 'none').join(','))
+    ok('C1: 3コレクションともDB経路にroute', routes3 === 'supabase,supabase,supabase', routes3)
+
+    const gRes = await A.evaluate(async () => {
+      const k = 'farm_gap_documents_' + CONFIG.CURRENT_FARM_ID
+      const before = await farmRepo.readAsync(k)
+      const merged = Object.assign({}, before.value, { qa_live_doc: { ready: true, updated: '2026-07-12', note: 'live検証(自動削除)' } })
+      const w = await farmRepo.write(k, merged)
+      const mid = await farmRepo.readAsync(k)
+      const rest = Object.assign({}, mid.value); delete rest.qa_live_doc
+      const w2 = await farmRepo.write(k, rest)
+      const fin = await farmRepo.readAsync(k)
+      return { w: w.ok, got: !!(mid.value.qa_live_doc && mid.value.qa_live_doc.ready), w2: w2.ok, gone: !fin.value.qa_live_doc }
+    })
+    ok('C2: gap_documentsの本番往復(write→read→削除)', gRes.w && gRes.got && gRes.w2 && gRes.gone, JSON.stringify(gRes))
+
+    const tRes = await A.evaluate(async () => {
+      const k = 'farm_monthly_temps_' + CONFIG.CURRENT_FARM_ID
+      const before = await farmRepo.readAsync(k) // 現状退避
+      const w = await farmRepo.write(k, [1, 2, 6, 12, 17, 21, 25, 26, 21, 15, 9, 3])
+      const mid = await farmRepo.readAsync(k)
+      const w2 = await farmRepo.write(k, before.found && before.value.length ? before.value : []) // 原状復帰(元が空なら行削除)
+      const fin = await farmRepo.readAsync(k)
+      return { w: w.ok, got: mid.value.length === 12 && mid.value[3] === 12, w2: w2.ok, restored: fin.value.join(',') === (before.value || []).join(',') }
+    })
+    ok('C3: monthly_temps(singleton)の本番往復＋原状復帰', tRes.w && tRes.got && tRes.w2 && tRes.restored, JSON.stringify(tRes))
   } finally {
-    // 途中で例外終了してもテスト行を残さない（成功時は⑤で消えているので実質no-op）
+    // 途中で例外終了してもテスト行を残さない（成功時は各検査内で消えているので実質no-op）
     try {
       if (A && key) {
         await A.evaluate(async (k) => {
           const cur = await farmRepo.readAsync(k)
           if (cur && cur.ok && cur.found && cur.value.some(d => d.key === 'qa_live_test')) {
             await farmRepo.write(k, cur.value.filter(d => d.key !== 'qa_live_test'))
+          }
+          // 横展開テーブルのテストデータ掃除
+          const gk = 'farm_gap_documents_' + CONFIG.CURRENT_FARM_ID
+          const g = await farmRepo.readAsync(gk)
+          if (g && g.ok && g.value && g.value.qa_live_doc) {
+            const rest = Object.assign({}, g.value); delete rest.qa_live_doc
+            await farmRepo.write(gk, rest)
+          }
+          const tk = 'farm_monthly_temps_' + CONFIG.CURRENT_FARM_ID
+          const t = await farmRepo.readAsync(tk)
+          if (t && t.ok && Array.isArray(t.value) && t.value.join(',') === '1,2,6,12,17,21,25,26,21,15,9,3') {
+            await farmRepo.write(tk, []) // テストで書いた気温だけ削除(実データはこの並びで書かない前提)
           }
         }, key)
       }

@@ -42,7 +42,7 @@ const ok = (name, cond, extra) => checks.push({ name, pass: !!cond, extra: extra
       const stockOf = async (pid) => { const r = await sb.from('farm_pesticides').select('stock_l').eq('id', pid); return r.data && r.data[0] ? Number(r.data[0].stock_l) : null }
       // 期待使用量 = spray_volume_L ÷ dilution（RPCがサーバー側で同じ式で検証する）
       const mkRec = (id, pests, vol, note) => ({ id, org_id: orgId, farm_id: fid, field_id: null, date: '2026-07-12',
-        row_range: '1-3', spray_volume_L: vol == null ? 500 : vol, weather: '晴', note: note || 'QA-RPC(自動削除)', pesticides: pests, staff_ids: [], version: 1 })
+        row_range: '1-3', spray_volume_l: vol == null ? 500 : vol, weather: '晴', note: note || 'QA-RPC(自動削除)', pesticides: pests, staff_ids: [], version: 1 })
       const mv = (pid, d) => ({ item_type: 'pesticide', item_id: pid, delta_amount: d, unit: 'L', reason: '農薬散布' })
       const save = (rec, mov) => sb.rpc('farm_save_record_with_stock', { p_table: T, p_record: rec, p_movements: mov })
       const upd = (rec, mov, v) => sb.rpc('farm_update_record_with_stock', { p_table: T, p_record: rec, p_movements: mov, p_expected_version: v })

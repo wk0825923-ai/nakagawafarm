@@ -109,16 +109,17 @@
     ))
   }
   const onAddLot = (fieldId, lot) => {
-    const entry = { ...lot, id: Date.now() }
+    // マスタUUID化第4弾: ロットIDもUUID発行(Date.now()は複数端末で衝突・DBのuuid列に入らない)
+    const entry = { ...lot, id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) }
     setFarmLots(prev => ({ ...prev, [fieldId]: [...(prev[fieldId] || []), entry] }))
     extendRowCount(fieldId, lot.row_range)
   }
   const onUpdateLot = (fieldId, lot) => {
-    setFarmLots(prev => ({ ...prev, [fieldId]: (prev[fieldId] || []).map(l => l.id === lot.id ? lot : l) }))
+    setFarmLots(prev => ({ ...prev, [fieldId]: (prev[fieldId] || []).map(l => String(l.id) === String(lot.id) ? lot : l) }))
     extendRowCount(fieldId, lot.row_range)
   }
   const onDeleteLot = (fieldId, lotId) => {
-    setFarmLots(prev => ({ ...prev, [fieldId]: (prev[fieldId] || []).filter(l => l.id !== lotId) }))
+    setFarmLots(prev => ({ ...prev, [fieldId]: (prev[fieldId] || []).filter(l => String(l.id) !== String(lotId)) }))
   }
 
   // 定植日報の保存 → 畝ロットを自動生成する。

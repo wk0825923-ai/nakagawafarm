@@ -184,6 +184,32 @@ const login = async (page) => {
     })
     ok('C8: 圃場マスタの本番往復(crop_category変換+boundary+legacy_id保持)',
       flRes.w && flRes.found && flRes.cat && flRes.legacy && flRes.boundary && flRes.w2 && flRes.gone, JSON.stringify(flRes))
+
+    // ── 畝ロット(マスタUUID化第4弾): 圃場を作り→ロット追加→group復元→両方削除（自動削除） ──
+    const ltRes = await A.evaluate(async () => {
+      const fk = 'farm_fields_v2_' + CONFIG.CURRENT_FARM_ID
+      const lk = 'farm_lots_' + CONFIG.CURRENT_FARM_ID
+      const fid2 = crypto.randomUUID(), lid = crypto.randomUUID()
+      const bf = await farmRepo.readAsync(fk)
+      const wf = await farmRepo.write(fk, (bf.value || []).concat([{ id: fid2, name: 'QA検証圃場L(自動削除)', crop: 'レタス', crop_category: 'leaf_veg', area_are: 5, status: '栽培中', color: '#0D9972', row_count: 6, gap_target: true }]))
+      const bl = await farmRepo.readAsync(lk)
+      const lots = Object.assign({}, bl.value)
+      lots[fid2] = [{ id: lid, field_id: fid2, row_range: '1-3', variety: 'QA品種', status: 'growing', seed_date: '2026-05-01', legacy_id: 990004 }]
+      const wl = await farmRepo.write(lk, lots)
+      const mid = await farmRepo.readAsync(lk)
+      const got = mid.ok && (mid.value[fid2] || []).find(x => String(x.id) === lid)
+      // 後片付け: ロット→圃場の順に削除
+      const rest = Object.assign({}, mid.value); delete rest[fid2]
+      const wl2 = await farmRepo.write(lk, rest)
+      const ff = await farmRepo.readAsync(fk)
+      const wf2 = await farmRepo.write(fk, ff.value.filter(x => String(x.id) !== fid2))
+      const fin = await farmRepo.readAsync(lk)
+      return { wf: wf.ok, wl: wl.ok, err: wl.error ? String(wl.error.message || wl.error) : null,
+        got: !!got, legacy: got ? got.legacy_id === 990004 : false,
+        wl2: wl2.ok, wf2: wf2.ok, gone: fin.ok && !(fin.value[fid2] || []).length }
+    })
+    ok('C9: 畝ロットの本番往復(圃場参照つきflatten⇔group+legacy_id保持)',
+      ltRes.wf && ltRes.wl && ltRes.got && ltRes.legacy && ltRes.wl2 && ltRes.wf2 && ltRes.gone, JSON.stringify(ltRes))
   } finally {
     // 途中で例外終了してもテスト行を残さない（成功時は各検査内で消えているので実質no-op）
     try {

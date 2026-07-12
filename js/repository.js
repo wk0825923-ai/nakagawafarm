@@ -178,6 +178,76 @@
         })
       },
     },
+    // 畝ロット(マスタUUID化第4弾): アプリ形は { [圃場ID]: [lot,...] } のオブジェクト。
+    // toRowsでflatten(親キー→field_id列)・fromRowsでfield_idごとにgroup化して復元。
+    // 旧数値IDの圃場に紐づくロット(field_idがuuid以外)はDBに送らない=レガシー混在ガード
+    // (uuid列にNaN/数値は入らずwrite全体が失敗するため。migration実行時にidMapsで正式に張り替える)。
+    farm_lots: {
+      conflict: 'id',
+      toRows(value, ctx) {
+        const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v))
+        const d = (v) => /^\d{4}-\d{2}-\d{2}/.test(String(v)) ? String(v).slice(0, 10) : null
+        const nv = (v) => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v)
+        const iv = (v) => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Math.trunc(Number(v))
+        const s = (v) => v != null ? String(v) : null
+        const ar = (v) => Array.isArray(v) ? v : [] // jsonb not null既定'[]'（肥料crop_dilutionsの教訓）
+        const obj = (value && typeof value === 'object' && !Array.isArray(value)) ? value : {}
+        const rows = []
+        Object.keys(obj).forEach(fieldKey => {
+          ;(Array.isArray(obj[fieldKey]) ? obj[fieldKey] : []).forEach(l => {
+            const fieldId = l.field_id != null ? l.field_id : fieldKey
+            if (!isUuid(l.id) || !isUuid(fieldId)) return // レガシーID行は送らない(表示はlocal・migrationで移す)
+            rows.push({
+              id: String(l.id), org_id: ctx.orgId, farm_id: ctx.farmId, field_id: String(fieldId),
+              row_range: s(l.row_range), row_count: nv(l.row_count), variety: s(l.variety),
+              crop_type: s(l.crop_type), season: s(l.season),
+              seed_date: d(l.seed_date), seed_lot_no: s(l.seed_lot_no), seedling_type: s(l.seedling_type),
+              seedling_period_days: iv(l.seedling_period_days),
+              transplant_date: d(l.transplant_date), transplant_method: s(l.transplant_method),
+              transplant_count: nv(l.transplant_count),
+              harvest_start: d(l.harvest_start), harvest_end: d(l.harvest_end),
+              status: String(l.status || 'growing'),
+              pretransplant_pesticides: ar(l.pretransplant_pesticides),
+              fertilizer_refs: ar(l.fertilizer_refs), pesticide_refs: ar(l.pesticide_refs),
+              data_note: String(l.data_note == null ? '' : l.data_note),
+              seed_supplier: s(l.seed_supplier), seed_origin: s(l.seed_origin),
+              seed_purchase_date: d(l.seed_purchase_date), seed_purchase_qty: nv(l.seed_purchase_qty),
+              seed_disinfection: s(l.seed_disinfection), seed_gmo: s(l.seed_gmo),
+              legacy_id: (typeof l.legacy_id === 'number') ? l.legacy_id : null,
+            })
+          })
+        })
+        return rows
+      },
+      fromRows(rows) {
+        const out = {}
+        ;(rows || []).forEach(r => {
+          const lot = {
+            id: r.id, field_id: r.field_id,
+            row_range: r.row_range || '', row_count: r.row_count != null ? Number(r.row_count) : undefined,
+            variety: r.variety || '', crop_type: r.crop_type || undefined, season: r.season || undefined,
+            seed_date: r.seed_date || '', seed_lot_no: r.seed_lot_no || undefined, seedling_type: r.seedling_type || undefined,
+            seedling_period_days: r.seedling_period_days != null ? Number(r.seedling_period_days) : undefined,
+            transplant_date: r.transplant_date || '', transplant_method: r.transplant_method || undefined,
+            transplant_count: r.transplant_count != null ? Number(r.transplant_count) : undefined,
+            harvest_start: r.harvest_start || '', harvest_end: r.harvest_end || '',
+            status: r.status || 'growing',
+            pretransplant_pesticides: Array.isArray(r.pretransplant_pesticides) ? r.pretransplant_pesticides : [],
+            fertilizer_refs: Array.isArray(r.fertilizer_refs) ? r.fertilizer_refs : [],
+            pesticide_refs: Array.isArray(r.pesticide_refs) ? r.pesticide_refs : [],
+            seed_supplier: r.seed_supplier || undefined, seed_origin: r.seed_origin || undefined,
+            seed_purchase_date: r.seed_purchase_date || undefined, seed_purchase_qty: r.seed_purchase_qty != null ? Number(r.seed_purchase_qty) : undefined,
+            seed_disinfection: r.seed_disinfection || undefined, seed_gmo: r.seed_gmo || undefined,
+          }
+          if (r.data_note) lot.data_note = r.data_note
+          if (r.legacy_id != null) lot.legacy_id = Number(r.legacy_id)
+          const key = String(r.field_id)
+          if (!out[key]) out[key] = []
+          out[key].push(lot)
+        })
+        return out
+      },
+    },
     // 農薬マスタ(マスタUUID化第1弾): id(uuid)をそのまま衝突キーにした行単位差分同期。
     // 在庫列(stock_l/alert_threshold_l)はtoRowsに含めない＝DB側の残高を上書きしない(在庫は在庫RPCフェーズで統合)。
     farm_pesticides: {
@@ -564,7 +634,7 @@
   //   ?dbdest=1 で退避を解除。node(QAハーネス)ではrouteしない=テストが自分で管理する。
   //   localhost(ブラウザQAハーネス環境)は既定OFF: 約45本のハーネスがlocalStorage直注入の従来挙動を
   //   前提にしているため。localhostでDB経路を試す時だけ ?dbdest=1 を付ける。DB経路の検証はqa_dbdest_live担当。
-  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers', 'farm_fields_v2']
+  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers', 'farm_fields_v2', 'farm_lots']
   try {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       const q = new URLSearchParams(window.location.search).get('dbdest')

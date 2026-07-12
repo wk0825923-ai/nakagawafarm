@@ -412,6 +412,29 @@ const KEY = 'farm_shipment_destinations_' + FARM
     JSON.stringify({ app: { cat: fl.crop_category, legacy: fl.legacy_id, b: fl.boundary && fl.boundary.length }, db: { rc: rowFl.row_count, cat: rowFl.crop_category_key } }))
   farmRepo.unroute('farm_fields_v2')
 
+  // 35) 畝ロット(マスタUUID化第4弾): {圃場ID:[lots]}のflatten⇔group往復・レガシー行ガード・jsonb既定
+  farmRepo.route('farm_lots', SR)
+  const LKEY = 'farm_lots_' + FARM
+  const LFLD = 'eeee5555-0000-0000-0000-000000000001' // R34の圃場uuid
+  const LID = 'ffff6666-0000-0000-0000-000000000001'
+  global.sb._tables['farm_lots'] = []
+  const lotsValue = {}
+  lotsValue[LFLD] = [
+    { id: LID, field_id: LFLD, row_range: '1-3', variety: 'シスコ', status: 'growing', seed_date: '2026-05-01', legacy_id: 11 },
+    { id: 9001, field_id: 1, row_range: '4-6', variety: 'ラプター', status: 'growing' }, // レガシー行(数値ID)=DBに送らない
+  ]
+  const w35 = await farmRepo.write(LKEY, lotsValue)
+  const dbLots = global.sb._tables['farm_lots'].filter(r => r.farm_id === FARM)
+  const r35 = await farmRepo.readAsync(LKEY)
+  const grp = r35.value[LFLD] || []
+  ok('R35 畝ロット: flatten往復(uuid行のみDBへ・レガシー行はガード)＋group復元＋jsonb配列既定',
+    w35.ok && dbLots.length === 1 && dbLots[0].id === LID && dbLots[0].field_id === LFLD &&
+    Array.isArray(dbLots[0].pretransplant_pesticides) && dbLots[0].data_note === '' &&
+    r35.ok && grp.length === 1 && grp[0].id === LID && grp[0].variety === 'シスコ' && grp[0].legacy_id === 11 &&
+    grp[0].status === 'growing' && Array.isArray(grp[0].fertilizer_refs),
+    JSON.stringify({ db: dbLots.length, app: grp[0] && { id: grp[0].id, v: grp[0].variety, legacy: grp[0].legacy_id } }))
+  farmRepo.unroute('farm_lots')
+
   const pass = checks.filter(c => c.pass).length
   const summary = { pass, total: checks.length, failed: checks.filter(c => !c.pass) }
   console.log('QAREPO_BEGIN'); console.log(JSON.stringify(summary, null, 1)); console.log('QAREPO_END')

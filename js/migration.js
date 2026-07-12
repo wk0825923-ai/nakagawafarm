@@ -154,7 +154,8 @@
         lotN++
         const id = mapId(idMaps.lots, l.id)
         put('farm_lots', [Object.assign(base(), {
-          id, field_id: refId(idMaps.fields, l.field_id != null ? l.field_id : fid),
+          id, legacy_id: (typeof l.id === 'number' ? l.id : null),
+          field_id: refId(idMaps.fields, l.field_id != null ? l.field_id : fid),
           row_range: S(l.row_range), row_count: N(l.row_count), variety: S(l.variety),
           crop_type: S(l.crop_type), season: S(l.season),
           seed_date: D(l.seed_date), seed_lot_no: S(l.seed_lot_no || l.seedling_lot),

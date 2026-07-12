@@ -16793,9 +16793,18 @@ function usePersistState(key, initial) {
   // 届く前に書くと「初期値ベースの内容」で差分deleteが走りDB側にしかない行が消えるため（読込前write事故防止）。
   // localStorage経路は同期読み済み(=常にloaded)なので従来挙動のまま。
   const loadedRef = React.useRef(!(farmRepo.isAsync && farmRepo.isAsync(key)))
+  // 世代トークン(農場/キー切替ごと+1)と編集リビジョン(setPersistごと+1)。
+  // 遅れて届いた保存失敗ロールバックが「新しい編集」や「切替後の別農場」を上書きしないための門番
+  //（Codexレビュー8 High対応。useRecordCollectionのgenRefと同型）。
+  const genRef = React.useRef(0)
+  const editRevRef = React.useRef(0)
+  const lastWarnRef = React.useRef(0)
   // 非同期ソース（Supabase）からの初期ロード。localStorageは同期で読めているので実質no-op。
   React.useEffect(() => {
     let alive = true
+    genRef.current++ // 農場/キー切替=旧世代の遅延ロールバックを無効化
+    editRevRef.current = 0
+    lastWarnRef.current = 0
     dirtyRef.current = false // 別コレクション(key変更)に切り替わったら未編集から開始
     remoteRef.current = false // key変更時はリモート更新もリセット
     loadedRef.current = !(farmRepo.isAsync && farmRepo.isAsync(key)) // key変更時は読込状態も判定し直す
@@ -16815,13 +16824,31 @@ function usePersistState(key, initial) {
       return
     }
     dirtyRef.current = true // この瞬間以降、初期ロードでの上書きを禁止
+    const gen = genRef.current            // この編集が属する農場世代
+    const rev = ++editRevRef.current      // この編集のリビジョン番号
     // DB経路の保存失敗時ロールバック: DBの権威状態を読み直して画面を一致させる
     //（楽観更新が画面に残ったまま「保存できたように見えて再読込で消える」のを防ぐ。Codexレビュー7 High対応）
+    // 世代・リビジョンが進んでいたら適用しない=遅延ロールバックが新しい編集/別農場を上書きしない（レビュー8 High対応）
     const rollbackFromDb = () => {
       if (!(farmRepo.isAsync && farmRepo.isAsync(key))) return // localStorage経路は編集内容を画面に残す(容量整理後に再保存できる方が親切)
       Promise.resolve(farmRepo.readAsync(key)).then(r => {
+        if (genRef.current !== gen || editRevRef.current !== rev) return // 切替済み/より新しい編集あり
         if (r && r.ok) setState((r.found && r.value !== undefined) ? r.value : initial)
       }).catch(() => {})
+    }
+    // 保存失敗の通知: DB経路は毎回通知(同一キー4秒debounce)=「変更だけ消えて説明が出ない」を防ぐ(レビュー8 Med対応)。
+    // localStorage経路(容量警告)は従来どおり全体で1回。
+    const notifyFail = () => {
+      const dbPath = !!(farmRepo.isAsync && farmRepo.isAsync(key))
+      if (dbPath) {
+        const now = Date.now()
+        if (now - lastWarnRef.current < 4000) return
+        lastWarnRef.current = now
+        try { showToast('サーバーへの保存に失敗しました。直前の変更は画面から取り消されています。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
+      } else if (typeof window !== 'undefined' && !window.__storageWarned) {
+        window.__storageWarned = true
+        try { showToast('データの保存に失敗しました。ブラウザの空き容量が不足している可能性があります。写真を減らすか不要なデータを整理してください。', 'error') } catch (_) {}
+      }
     }
     setState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater
@@ -16830,16 +16857,9 @@ function usePersistState(key, initial) {
         if (w && !w.ok) {
           console.warn('[usePersistState] 保存失敗:', key, w.error)
           rollbackFromDb()
-          if (typeof window !== 'undefined' && !window.__storageWarned) {
-            window.__storageWarned = true
-            // 経路別の案内(Codex Med対応): DB経路の失敗は通信/権限の問題であり「写真を減らす」は誤誘導になる
-            const msg = (farmRepo.isAsync && farmRepo.isAsync(key))
-              ? 'サーバーへの保存に失敗しました。直前の変更は画面から取り消されています。通信状態を確認してもう一度お試しください。'
-              : 'データの保存に失敗しました。ブラウザの空き容量が不足している可能性があります。写真を減らすか不要なデータを整理してください。'
-            try { showToast(msg, 'error') } catch (_) {}
-          }
+          notifyFail()
         }
-      }).catch(e => { console.warn('[usePersistState] 保存失敗:', key, e); rollbackFromDb() })
+      }).catch(e => { console.warn('[usePersistState] 保存失敗:', key, e); rollbackFromDb(); notifyFail() })
       return next
     })
   }, [key])

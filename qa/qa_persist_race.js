@@ -91,7 +91,12 @@ function makeMockRepo(asyncMode, opts) {
     isAsync() { return !!asyncMode },
     readSync() { return { ok: true, found: false, value: undefined } },
     readAsync() { return new Promise(r => { resolvers.push(r) }) },
-    write(key, value) { writes.push(value); return Promise.resolve(opts.writeResult || { ok: true }) },
+    write(key, value) {
+      writes.push(value)
+      // writeResults(配列)があれば1回ずつ消費(1回目失敗→2回目成功などの複合シナリオ用)
+      const r = (opts.writeResults && opts.writeResults.length) ? opts.writeResults.shift() : (opts.writeResult || { ok: true })
+      return Promise.resolve(r)
+    },
     subscribe(key, cb) { subCb = cb; return () => { subCb = null } },
     fireRemote(value) { if (subCb) subCb(value, { found: true }) },
     resolveInitialLoad(r) { const f = resolvers.shift(); if (f) f(r) }, // 最も古い未解決readを解決
@@ -243,6 +248,45 @@ const build = (repo, keyBox) => {
     const [state] = rt.result
     ok('R9: DB経路の保存失敗で楽観更新がロールバックされる(権威状態へ復帰)',
       state[0] === 'db-value', 'state=' + JSON.stringify(state))
+  }
+
+  // R10: [DB経路] 保存失敗→ロールバック読込中にユーザーが再編集 → 後着ロールバックが新編集を消さない
+  // （Codexレビュー8 High-1: 編集A失敗→編集B→Aのロールバック後着でBが消える穴）
+  {
+    const repo = makeMockRepo(true, { writeResults: [{ ok: false, error: new Error('offline') }, { ok: true }] })
+    const { rt } = build(repo)
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['db-value'] })
+    await tick()
+    rt.result[1](['編集A'])            // 失敗する編集(ロールバック読込がキューに入る)
+    await tick()
+    rt.result[1](['編集B'])            // ロールバック完了前にユーザーが再編集(こちらは保存成功)
+    await tick()
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['db-value'] }) // Aのロールバック読込が後着
+    await tick()
+    const [state] = rt.result
+    ok('R10: ロールバック後着が新しい編集を消さない(編集リビジョン門番)',
+      state[0] === '編集B', 'state=' + JSON.stringify(state))
+  }
+
+  // R11: [DB経路] 農場Aの保存失敗→農場Bへ切替→A用ロールバックが後着 → B画面にAのデータが混入しない
+  {
+    const repo = makeMockRepo(true, { writeResult: { ok: false, error: new Error('offline') } })
+    const keyBox = { k: 'farm_x_A' }
+    const { rt } = build(repo, keyBox)
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['A-db'] }) // 農場A読込完了
+    await tick()
+    rt.result[1](['Aでの失敗編集'])     // 失敗(Aのロールバック読込がキュー先頭に)
+    await tick()
+    keyBox.k = 'farm_x_B'; rt.render()  // 農場Bへ切替(Bの初期読込がキュー2番目に)
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['A-db'] })  // Aのロールバックが後着(旧世代)
+    await tick()
+    const midState = rt.result[0]       // Aのデータが混入していないこと
+    repo.resolveInitialLoad({ ok: true, found: true, value: ['B-db'] })  // Bの初期読込完了
+    await tick()
+    const [state] = rt.result
+    ok('R11: 農場切替後の遅延ロールバックが別農場の状態を上書きしない(世代門番)',
+      midState[0] !== 'A-db' && state[0] === 'B-db',
+      JSON.stringify({ mid: midState, final: state }))
   }
 
   const pass = checks.filter(c => c.pass).length

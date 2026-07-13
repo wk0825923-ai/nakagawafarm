@@ -1173,13 +1173,29 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
     return obj
   })
   const [saved, setSaved] = React.useState(false)
+  const [failCount, setFailCount] = React.useState(0)
 
-  const handleSaveAll = () => {
-    Object.entries(inputs).forEach(([id, val]) => {
-      onUpdateStock(Number(id), Number(val))
-    })
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  // 行ごとの送信ID: 成功(ok===true)確定まで同じIDを使い回す=応答喪失→再保存でも冪等。
+  // 値を変えたらIDを新しくする(同じIDだとサーバが「処理済み」として新しい値を無視するため)
+  const submitIdsRef = React.useRef({})
+  const savingRef = React.useRef(false)
+  const handleSaveAll = async () => {
+    if (savingRef.current) return
+    savingRef.current = true
+    let fails = 0
+    for (const [id, val] of Object.entries(inputs)) {
+      if (!submitIdsRef.current[id]) submitIdsRef.current[id] = newUuid()
+      // idはUUIDのため文字列のまま渡す(Number()はNaN化して棚卸しが全滅する)
+      const res = await Promise.resolve(onUpdateStock(id, Number(val), submitIdsRef.current[id])).catch(() => null)
+      if (res && res.ok === true) delete submitIdsRef.current[id]
+      else fails++
+    }
+    savingRef.current = false
+    setFailCount(fails)
+    if (fails === 0) {
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    }
   }
 
   const C = { green:'#0A6B52', greenL:'#E8F5F0', red:'#C2410C', redL:'#FFF1EE', border:'#E2E8E2', muted:'#9CA3AF', ink:'#111827', sub:'#4B5563' }
@@ -1239,7 +1255,7 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
               React.createElement('input', {
                 type:'number', min:'0', step:'0.1',
                 value: inputs[p.id],
-                onChange: e => setInputs(prev => ({ ...prev, [p.id]: e.target.value })),
+                onChange: e => { delete submitIdsRef.current[p.id]; setInputs(prev => ({ ...prev, [p.id]: e.target.value })) }, // 値変更=新しい要求としてIDを取り直す
                 style:{
                   width:'90px', padding:'7px 10px', borderRadius:'7px',
                   border:'1.5px solid ' + (isAlertNow ? '#FECACA' : '#D8E4D8'),
@@ -1277,6 +1293,11 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
         style:{ fontSize:'13px', color:C.green, fontWeight:600, display:'flex', alignItems:'center', gap:'5px' }
       },
         React.createElement('i', { className:'ti ti-circle-check' }), '保存しました'
+      ),
+      failCount > 0 && !saved && React.createElement('span', {
+        style:{ fontSize:'13px', color:C.red, fontWeight:600, display:'flex', alignItems:'center', gap:'5px' }
+      },
+        React.createElement('i', { className:'ti ti-alert-triangle' }), failCount + '件が保存できませんでした。もう一度お試しください'
       ),
       React.createElement('button', {
         onClick: handleSaveAll,
@@ -14524,8 +14545,11 @@ function PesticideMasterPage({ pesticides, pesticideStock, pesticidePurchases, o
     setShowForm(true)
   }
 
-  const handleSave = () => {
+  const savingRef = React.useRef(false) // 二重押しでマスタが2件登録されるのを防ぐ
+  const handleSave = async () => {
     if (!form.name.trim()) return
+    if (savingRef.current) return
+    savingRef.current = true
     const payload = {
       name:               form.name.trim(),
       reg_no:             form.reg_no.trim(),
@@ -14538,8 +14562,11 @@ function PesticideMasterPage({ pesticides, pesticideStock, pesticidePurchases, o
     if (editId !== null) {
       onUpdate({ ...payload, id: editId })
     } else {
-      onAdd(payload)
+      // 初期在庫の反映(DB経路はRPC)まで待ってから閉じる。失敗してもマスタ自体は登録済みのため
+      // 閉じてよい(祝福はapp側が成功時のみ・失敗時は棚卸し入力へ誘導するトーストが出る)
+      await Promise.resolve(onAdd(payload)).catch(() => null)
     }
+    savingRef.current = false
     setForm(EMPTY_FORM)
     setEditId(null)
     setShowForm(false)
@@ -15458,7 +15485,7 @@ function FertilizerMasterPage({ fertilizers, fertilizerStock, fertilizerPurchase
     showAddModal && React.createElement(FertilizerAddModal, {
       C, fertilizers,
       onClose: () => setShowAddModal(false),
-      onSave: (payload) => { onAdd(payload); setShowAddModal(false) },
+      onSave: (payload) => onAdd(payload), // {ok}を返す。閉じるのはモーダル側(結果確定後)
     })
   )
 }
@@ -15570,23 +15597,31 @@ function FertilizerAddModal({ C, fertilizers, onClose, onSave }) {
     return next
   })
 
-  const handleSave = () => {
+  const savingRef = React.useRef(false) // 二重押しでマスタが2件登録されるのを防ぐ
+  const handleSave = async () => {
     if (!form.name.trim()) return
-    setSaved(true)
-    setTimeout(() => {
-      onSave({
-        name:                  form.name.trim(),
-        maker:                 form.maker.trim(),
-        weight_per_bag_kg:     Number(form.weight_per_bag_kg) || (blendCalc ? blendCalc.kg : 0),
-        price_per_bag_yen:     Number(form.price_per_bag_yen) || (blendCalc && blendCalc.unit != null ? blendCalc.yen : 0),
-        unit_price_yen_per_kg: Number(form.unit_price_yen_per_kg) || (blendCalc && blendCalc.unit != null ? blendCalc.unit : 0),
-        stock_kg:              Number(form.stock_kg) || 0,
-        alert_threshold_kg:    Number(form.alert_threshold_kg) || 0,
-        default_dilution:      Number(defaultDilution) || null,
-        crop_dilutions:        fertilizerCropRowsToObject(cropRows),
-        blend_components:      (isBlend && blendComponents.length > 0) ? blendComponents : null,
-      })
-    }, 600)
+    if (savingRef.current) return
+    savingRef.current = true
+    // 「保存しました」は初期在庫の反映まで成功が確定してから出す(先出しすると失敗が成功に見える)
+    const res = await Promise.resolve(onSave({
+      name:                  form.name.trim(),
+      maker:                 form.maker.trim(),
+      weight_per_bag_kg:     Number(form.weight_per_bag_kg) || (blendCalc ? blendCalc.kg : 0),
+      price_per_bag_yen:     Number(form.price_per_bag_yen) || (blendCalc && blendCalc.unit != null ? blendCalc.yen : 0),
+      unit_price_yen_per_kg: Number(form.unit_price_yen_per_kg) || (blendCalc && blendCalc.unit != null ? blendCalc.unit : 0),
+      stock_kg:              Number(form.stock_kg) || 0,
+      alert_threshold_kg:    Number(form.alert_threshold_kg) || 0,
+      default_dilution:      Number(defaultDilution) || null,
+      crop_dilutions:        fertilizerCropRowsToObject(cropRows),
+      blend_components:      (isBlend && blendComponents.length > 0) ? blendComponents : null,
+    })).catch(() => null)
+    savingRef.current = false
+    if (res && res.ok === true) {
+      setSaved(true)
+      setTimeout(() => onClose(), 600)
+    } else {
+      onClose() // 失敗でもマスタ自体は登録済み(棚卸しへ誘導するトーストが出ている)。成功表示は出さない
+    }
   }
 
   const fieldInp = (label, key, type='text', placeholder='') =>
@@ -15998,10 +16033,19 @@ function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateS
     return ((s && s.stock_kg != null) ? s.stock_kg : f.stock_kg) ?? 0
   }
 
-  const handleApply = (f) => {
+  // 行ごとの送信ID: 成功(ok===true)確定まで同じIDを使い回す(応答喪失→再送でも冪等)。値変更でIDを取り直す
+  const submitIdsRef = React.useRef({})
+  const applyingRef = React.useRef({})
+  const handleApply = async (f) => {
     const val = edits[f.id]
     if (val === undefined || val === '') return
-    onUpdateStock(f.id, Number(val))
+    if (applyingRef.current[f.id]) return // 同一行の二重押しガード
+    applyingRef.current[f.id] = true
+    if (!submitIdsRef.current[f.id]) submitIdsRef.current[f.id] = newUuid()
+    const res = await Promise.resolve(onUpdateStock(f.id, Number(val), submitIdsRef.current[f.id])).catch(() => null)
+    applyingRef.current[f.id] = false
+    if (!(res && res.ok === true)) return // 失敗/不明: 入力とIDを保持(トーストはapp側)
+    delete submitIdsRef.current[f.id]
     setEdits(prev => { const next = { ...prev }; delete next[f.id]; return next })
   }
 
@@ -16046,7 +16090,7 @@ function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateS
             React.createElement('input', {
               type:'number', placeholder:'例: 90',
               value: val,
-              onChange: e => setEdits(prev => ({ ...prev, [f.id]: e.target.value })),
+              onChange: e => { delete submitIdsRef.current[f.id]; setEdits(prev => ({ ...prev, [f.id]: e.target.value })) },
               style:{ width:'100%', padding:'8px 10px', border:`1.5px solid ${hasInput ? C2.green : C2.border}`, borderRadius:'7px', fontSize:'13px', fontWeight:600, color:C2.ink, outline:'none', boxSizing:'border-box' },
               onFocus: e => { e.target.style.borderColor=C2.green; e.target.style.boxShadow='0 0 0 3px rgba(10,107,82,.1)' },
               onBlur:  e => { e.target.style.borderColor = hasInput ? C2.green : C2.border; e.target.style.boxShadow='none' },

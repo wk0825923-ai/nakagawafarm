@@ -3,6 +3,8 @@
 //  R1 応答喪失: RPCはサーバで成功したが返事が失敗に見える→成功表示なし・履歴に残らない(記帳はサーバに1行)
 //  R2 再登録: 同じ入力のまま再クリック→同一送信IDで冪等(duplicate)→履歴1件・記帳1行・残高は1回分のみ
 //  R3 初期在庫失敗: 農薬追加で在庫RPCが失敗→祝福を出さず「初期在庫の反映に失敗」トーストで棚卸しへ誘導
+//  R4 農薬棚卸し(実UI): UUID農薬の一括保存がDB残高に反映される(レビュー15 Critical: Number(id)のNaN化検出)
+//  R5 棚卸しの応答喪失→再保存: 失敗表示・同一送信IDで冪等・二重記帳なし
 // 実行: cd qa && node qa_purchase_resend.js  ※デモ農場(live QA環境)の実DBに書き、テスト行は自動削除
 const http = require('http'); const fs = require('fs'); const path = require('path')
 const puppeteer = require('puppeteer-core')
@@ -31,9 +33,10 @@ const setInputByPh = (page, ph, v)=>page.evaluate(({ph,v})=>{
 // RPC応答の失敗化/正常化(サーバ側は本物を実行=「応答だけ喪失」の忠実な再現)
 const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
   if(!window.__origAdjust) window.__origAdjust = farmRepo.adjustStockDb.bind(farmRepo)
-  if(mode==='lose')      farmRepo.adjustStockDb = async (...a)=>{ await window.__origAdjust(...a); return { ok:false, error:new Error('simulated response loss') } }
-  else if(mode==='fail') farmRepo.adjustStockDb = async ()=>({ ok:false, error:new Error('simulated failure') })
-  else                   farmRepo.adjustStockDb = window.__origAdjust
+  window.__adjCalls = window.__adjCalls || []
+  if(mode==='lose')      farmRepo.adjustStockDb = async (...a)=>{ window.__adjCalls.push(['lose',...a.slice(0,5)]); await window.__origAdjust(...a); return { ok:false, error:new Error('simulated response loss') } }
+  else if(mode==='fail') farmRepo.adjustStockDb = async (...a)=>{ window.__adjCalls.push(['fail',...a.slice(0,5)]); return { ok:false, error:new Error('simulated failure') } }
+  else                   farmRepo.adjustStockDb = async (...a)=>{ window.__adjCalls.push(['real',...a.slice(0,5)]); return window.__origAdjust(...a) }
 },mode)
 ;(async()=>{
   await new Promise(r=>server.listen(PORT,r))
@@ -130,6 +133,65 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
     ok('R3 初期在庫の反映失敗: 祝福を出さず「初期在庫の反映に失敗」トーストで棚卸しへ誘導',
       r3.celeb===false && r3.toast===true, JSON.stringify(r3))
     await patchAdjust(page,'restore')
+
+    // ═══ R4: 農薬棚卸し(実UI・一括保存)がUUID農薬のDB残高に反映される ═══
+    phase='r4-inventory-ui'
+    // R1〜R3のモーダル状態を持ち越さない(詳細モーダルが残ると行検索が誤爆する)
+    await page.goto(`http://localhost:${PORT}/?dbdest=1`,{waitUntil:'networkidle2',timeout:60000}); await sleep(1500)
+    await navClick(page,'マスタ管理'); await sleep(800)
+    await clickText(page,'農薬マスタ'); await sleep(700)
+    await patchAdjust(page,'restore') // reloadでパッチが消えるため記録用ラッパーを貼り直す
+    await clickText(page,'棚卸し入力'); await sleep(700)
+    // 実キーボード入力(trusted event)。合成inputイベントはこの画面のcontrolled inputでReactに拾われなかった
+    const setRowInput=async (name,v)=>{
+      const handle=await page.evaluateHandle((name)=>{
+        const rows=[...document.querySelectorAll('.main div')].filter(e=>e.offsetParent&&e.textContent.includes(name)&&e.querySelector('input[type=number]'))
+        const row=rows[rows.length-1]; return row?row.querySelector('input[type=number]'):null
+      },name)
+      if(!(await handle.evaluate(el=>!!el)))return false
+      await handle.click({clickCount:3}) // 全選択→打ち替え
+      await page.keyboard.type(String(v))
+      return true
+    }
+    if(!(await setRowInput(PNAME,50)))throw new Error('inventory row input not found')
+    await sleep(300)
+    await clickText(page,'在庫を一括保存')
+    let r4saved=false
+    for(let i=0;i<25;i++){ if(await page.evaluate(()=>/保存しました/.test(document.body.innerText))){r4saved=true;break}; await sleep(300) }
+    const r4=await page.evaluate(async (pid)=>{
+      const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
+      const calls=(window.__adjCalls||[]).filter(c=>String(c[3])===pid||String(c[2])===pid)
+      return { stock:Number(st.data[0].stock_l), calls }
+    },pid)
+    ok('R4 農薬棚卸し(実UI): UUID農薬の一括保存で「保存しました」＋DB残高38→50L',
+      r4saved===true && r4.stock===50, JSON.stringify({saved:r4saved,...r4}))
+
+    // ═══ R5: 棚卸しの応答喪失→失敗表示→同じ値で再保存→同一送信IDで冪等 ═══
+    phase='r5-inventory-loss'
+    await patchAdjust(page,'lose')
+    if(!(await setRowInput(PNAME,60)))throw new Error('inventory row input not found (r5)')
+    await sleep(200)
+    await clickText(page,'在庫を一括保存')
+    let r5fail=false
+    for(let i=0;i<25;i++){ if(await page.evaluate(()=>/件が保存できませんでした/.test(document.body.innerText))){r5fail=true;break}; await sleep(300) }
+    const r5a=await page.evaluate(async (pid)=>{
+      const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
+      return { stock:Number(st.data[0].stock_l) }
+    },pid)
+    await patchAdjust(page,'restore')
+    await clickText(page,'在庫を一括保存')
+    let r5saved=false
+    for(let i=0;i<25;i++){ if(await page.evaluate(()=>/保存しました/.test(document.body.innerText))){r5saved=true;break}; await sleep(300) }
+    const r5b=await page.evaluate(async (pid)=>{
+      const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
+      const mv=await sb.from('farm_stock_movements').select('id').eq('item_id',pid)
+      return { stock:Number(st.data[0].stock_l), rows:mv.data?mv.data.length:-1 }
+    },pid)
+    // 記帳=仕入れ+20(R1/R2)・set50(R4)・set60(R5)の3行のみ(再保存は同一IDでduplicate=増えない)
+    ok('R5 棚卸し応答喪失: 失敗表示→同じ値で再保存は冪等(残高60L・記帳3行のまま)',
+      r5fail===true && r5a.stock===60 && r5saved===true && r5b.stock===60 && r5b.rows===3,
+      JSON.stringify({fail:r5fail,stockAfterLoss:r5a.stock,saved:r5saved,...r5b}))
+
     initPid=await page.evaluate(async (name)=>{ // R3で作られたマスタ行(DB同期後)のidを後片付け用に取得
       for(let i=0;i<10;i++){
         const r=await sb.from('farm_pesticides').select('id').eq('farm_id',CONFIG.CURRENT_FARM_ID).eq('name',name)
@@ -144,6 +206,10 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
       await page.evaluate(async ({pid,initPid})=>{
         if(pid){ await sb.from('farm_stock_movements').delete().eq('item_id',pid); await sb.from('farm_pesticides').delete().eq('id',pid) }
         if(initPid){ await sb.from('farm_stock_movements').delete().eq('item_id',initPid); await sb.from('farm_pesticides').delete().eq('id',initPid) }
+        // R4/R5の一括保存でデモ農場の実農薬に飛んだ同値棚卸し(変化なし=0記帳)を掃除
+        await sb.from('farm_stock_movements').delete()
+          .eq('farm_id',CONFIG.CURRENT_FARM_ID).eq('record_collection','stock_adjust')
+          .eq('delta_amount',0).like('reason','%変化なし%')
       },{pid,initPid})
     }catch(_){}
   }

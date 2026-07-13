@@ -291,6 +291,28 @@ const login = async (page) => {
     ok('C12: 在庫調整RPCのrace(同一ref_id同時2要求→両方ok・片方duplicate・記帳1行・残高23L=1回分のみ)',
       rcRes.oks === 2 && rcRes.dups === 1 && rcRes.stock === 23 && rcRes.rows === 1,
       JSON.stringify(rcRes))
+
+    // ── set no-opの冪等マーカー: 同値棚卸し(応答喪失)→別操作→再送で巻き戻らない(レビュー15 Medium・自動削除) ──
+    const noRes = await A.evaluate(async () => {
+      const fid = CONFIG.CURRENT_FARM_ID
+      const farmRow = await sb.from('farm_farms').select('org_id').eq('id', fid).limit(1)
+      const orgId = farmRow.data[0].org_id
+      const pid = crypto.randomUUID()
+      await sb.from('farm_pesticides').insert([{ id: pid, org_id: orgId, farm_id: fid, name: 'QA-NOOP農薬(自動削除)', reg_no: 'QA', dilution: 1000, max_times: 3, preharvest_days: 7, stock_l: 18 }])
+      const ref = crypto.randomUUID()
+      const a1 = await farmRepo.adjustStockDb('pesticide', fid, pid, 'set', 18, '棚卸し調整', ref) // 同値=noop(でも記帳される)
+      const a2 = await farmRepo.adjustStockDb('pesticide', fid, pid, 'delta', 5, '仕入れ', crypto.randomUUID()) // 18→23
+      const a3 = await farmRepo.adjustStockDb('pesticide', fid, pid, 'set', 18, '棚卸し調整', ref) // 応答喪失後の再送→duplicateで巻き戻らない
+      const st = await sb.from('farm_pesticides').select('stock_l').eq('id', pid)
+      const mv = await sb.from('farm_stock_movements').select('delta_amount').eq('item_id', pid)
+      await sb.from('farm_stock_movements').delete().eq('item_id', pid)
+      await sb.from('farm_pesticides').delete().eq('id', pid)
+      return { noop: a1 && a1.noop === true, a2: a2 && a2.ok, dup: a3 && a3.duplicate === true,
+        stock: Number(st.data[0].stock_l), rows: mv.data ? mv.data.length : -1 }
+    })
+    ok('C13: set同値(no-op)も冪等記録: 応答喪失→仕入れ+5L→同一ref_id再送はduplicate=23Lのまま巻き戻らない(記帳2行=0とその+5)',
+      noRes.noop && noRes.a2 && noRes.dup && noRes.stock === 23 && noRes.rows === 2,
+      JSON.stringify(noRes))
   } finally {
     // 途中で例外終了してもテスト行を残さない（成功時は各検査内で消えているので実質no-op）
     try {

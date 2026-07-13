@@ -401,19 +401,20 @@
     setPesticides(prev => prev.filter(p => String(p.id) !== String(id)))
     setPesticideStock(prev => prev.filter(s => String(s.pesticide_id) !== String(id)))
   }
-  // 棚卸し: 在庫量を直接更新
-  const onUpdateStock = async (pesticideId, newStockL) => {
+  // 棚卸し: 在庫量を直接更新。refId=フォームが保持する冪等キー(応答喪失→再送でも巻き戻さない)。{ok}を返しUIが成否判定する
+  const onUpdateStock = async (pesticideId, newStockL, refId) => {
     if (masterStockDb('farm_pesticides')) {
-      const res = await adjustStockDbRetry('pesticide', pesticideId, 'set', Number(newStockL) || 0, '棚卸し調整', newUuid())
-      if (res && res.ok) reloadPesticides()
-      else { try { showToast('棚卸しの反映に失敗しました。通信状態を確認してください。', 'error') } catch (_) {} }
-      return
+      const res = await adjustStockDbRetry('pesticide', pesticideId, 'set', Number(newStockL) || 0, '棚卸し調整', refId || newUuid())
+      if (res && res.ok) { reloadPesticides(); return { ok: true } }
+      try { showToast('棚卸しの反映に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
+      return { ok: false, error: res && res.error }
     }
     setPesticideStock(prev => prev.map(s =>
       String(s.pesticide_id) === String(pesticideId)
         ? { ...s, stock_L: Math.round(newStockL * 100) / 100 }
         : s
     ))
+    return { ok: true }
   }
 
   // =====================================================
@@ -467,18 +468,19 @@
   }
 
   // 肥料棚卸し: 在庫量を直接更新（onUpdateStockと同パターン）
-  const onUpdateFertilizerStock = async (fertilizerId, newStockKg) => {
+  const onUpdateFertilizerStock = async (fertilizerId, newStockKg, refId) => {
     if (masterStockDb('farm_fertilizers')) {
-      const res = await adjustStockDbRetry('fertilizer', fertilizerId, 'set', Number(newStockKg) || 0, '棚卸し調整', newUuid())
-      if (res && res.ok) reloadFertilizers()
-      else { try { showToast('棚卸しの反映に失敗しました。通信状態を確認してください。', 'error') } catch (_) {} }
-      return
+      const res = await adjustStockDbRetry('fertilizer', fertilizerId, 'set', Number(newStockKg) || 0, '棚卸し調整', refId || newUuid())
+      if (res && res.ok) { reloadFertilizers(); return { ok: true } }
+      try { showToast('棚卸しの反映に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
+      return { ok: false, error: res && res.error }
     }
     setFertilizerStock(prev => prev.map(s =>
       String(s.fertilizer_id) === String(fertilizerId)
         ? { ...s, stock_kg: Math.round(newStockKg * 100) / 100 }
         : s
     ))
+    return { ok: true }
   }
 
   // 肥料在庫連動ヘルパー（adjustStockの肥料版）

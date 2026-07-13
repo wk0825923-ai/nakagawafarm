@@ -267,6 +267,30 @@ const login = async (page) => {
       adRes.a1 && adRes.s1 === 23 && adRes.dup && adRes.s2 === 23 && adRes.a3 && adRes.s3 === 20 &&
       adRes.rows === 2 && adRes.deltas.includes(5) && adRes.deltas.includes(-3),
       JSON.stringify(adRes))
+
+    // ── 在庫調整RPCのrace: 同一ref_idの同時2要求→記帳1行だけ(レビュー14 Medium・自動削除) ──
+    const rcRes = await A.evaluate(async () => {
+      const fid = CONFIG.CURRENT_FARM_ID
+      const farmRow = await sb.from('farm_farms').select('org_id').eq('id', fid).limit(1)
+      const orgId = farmRow.data[0].org_id
+      const pid = crypto.randomUUID()
+      await sb.from('farm_pesticides').insert([{ id: pid, org_id: orgId, farm_id: fid, name: 'QA-RACE農薬(自動削除)', reg_no: 'QA', dilution: 1000, max_times: 3, preharvest_days: 7, stock_l: 18 }])
+      const ref = crypto.randomUUID()
+      const [r1, r2] = await Promise.all([
+        farmRepo.adjustStockDb('pesticide', fid, pid, 'delta', 5, '仕入れ', ref),
+        farmRepo.adjustStockDb('pesticide', fid, pid, 'delta', 5, '仕入れ', ref),
+      ])
+      const st = await sb.from('farm_pesticides').select('stock_l').eq('id', pid)
+      const mv = await sb.from('farm_stock_movements').select('id').eq('item_id', pid)
+      await sb.from('farm_stock_movements').delete().eq('item_id', pid)
+      await sb.from('farm_pesticides').delete().eq('id', pid)
+      const dups = [r1, r2].filter(x => x && x.duplicate === true).length
+      const oks = [r1, r2].filter(x => x && x.ok).length
+      return { oks, dups, stock: Number(st.data[0].stock_l), rows: mv.data ? mv.data.length : -1 }
+    })
+    ok('C12: 在庫調整RPCのrace(同一ref_id同時2要求→両方ok・片方duplicate・記帳1行・残高23L=1回分のみ)',
+      rcRes.oks === 2 && rcRes.dups === 1 && rcRes.stock === 23 && rcRes.rows === 1,
+      JSON.stringify(rcRes))
   } finally {
     // 途中で例外終了してもテスト行を残さない（成功時は各検査内で消えているので実質no-op）
     try {

@@ -322,22 +322,26 @@
     return { ok: false, error: new Error('在庫への反映に失敗しました') }
   }
 
-  // 仕入れ登録: 購入履歴に追記 + 在庫に加算
+  // 仕入れ登録: 在庫反映(DB経路はRPC)の成功後にだけ購入履歴へ追記・祝福（レビュー14 Critical/High対応）
+  // purchase.id=フォームのsubmitIdRefが保持する冪等キー(応答喪失→再送でも二重加算しない)
   const onAddPurchase = async (purchase) => {
-    const entry = { ...purchase, id: newUuid() } // idはDB経路の冪等キーにも使う
-    setPesticidePurchases(prev => [...prev, entry]) // 履歴はローカル(履歴コレクションのDB化は在庫フェーズ)
+    const entry = { ...purchase, id: purchase.id || newUuid() }
+    const pushHistory = () => setPesticidePurchases(prev =>
+      prev.some(x => String(x.id) === String(entry.id)) ? prev : [...prev, entry]) // 再送でも履歴1件
     if (masterStockDb('farm_pesticides')) {
       const res = await adjustStockDbRetry('pesticide', purchase.pesticide_id, 'delta', Number(purchase.amount_L) || 0, '仕入れ', entry.id)
-      if (res && res.ok) { celebrateSave('仕入れを登録！'); reloadPesticides() }
-      else { try { showToast('在庫への反映に失敗しました。通信状態を確認してください。', 'error') } catch (_) {} }
-      return
+      if (res && res.ok) { pushHistory(); celebrateSave('仕入れを登録！'); reloadPesticides(); return { ok: true } }
+      try { showToast('在庫への反映に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
+      return { ok: false, error: res && res.error }
     }
+    pushHistory()
     setPesticideStock(prev => prev.map(s =>
       String(s.pesticide_id) === String(purchase.pesticide_id)
         ? { ...s, stock_L: Math.round((s.stock_L + Number(purchase.amount_L)) * 100) / 100 }
         : s
     ))
     celebrateSave('仕入れを登録！')
+    return { ok: true }
   }
 
   // 農薬マスタ CRUD
@@ -373,7 +377,7 @@
   // 新規追加時は pesticideStock にも対応エントリを作成する
   // （これが無いと仕入れ登録・棚卸しの更新が pesticideStock.map() でヒットせず、
   //   カードの在庫表示に反映されない不具合になる）
-  const onAddPesticide = (p) => {
+  const onAddPesticide = async (p) => {
     // マスタUUID化: 新規農薬はUUIDを発行(Date.now()は複数端末で衝突・DBのuuid列に入らない)
     const newId = newUuid()
     setPesticides(prev => [...prev, { ...p, id: newId }])
@@ -382,12 +386,15 @@
       stock_L:            Number(p.stock_L) || 0,
       alert_threshold_L:  Number(p.alert_threshold_L) || 0,
     }])
-    // DB経路: 初期在庫をRPCで反映(マスタ行の差分同期完了を待ってリトライ)
+    // DB経路: 初期在庫をRPCで反映(マスタ行の差分同期完了を待ってリトライ)。祝福は反映成功後だけ
     if (masterStockDb('farm_pesticides') && Number(p.stock_L) > 0) {
-      adjustStockDbRetry('pesticide', newId, 'delta', Number(p.stock_L), '初期在庫', newUuid())
-        .then(res => { if (res && res.ok) reloadPesticides() })
+      const res = await adjustStockDbRetry('pesticide', newId, 'delta', Number(p.stock_L), '初期在庫', newUuid())
+      if (res && res.ok) { celebrateSave('農薬を登録！'); reloadPesticides(); return { ok: true } }
+      try { showToast('農薬は登録しましたが初期在庫の反映に失敗しました。棚卸し入力で在庫を設定してください。', 'error') } catch (_) {}
+      return { ok: false, error: res && res.error }
     }
     celebrateSave('農薬を登録！')
+    return { ok: true }
   }
   const onUpdatePesticide = (p) => setPesticides(prev => prev.map(x => String(x.id) === String(p.id) ? p : x))
   const onDeletePesticide = (id) => {
@@ -414,7 +421,7 @@
   // onAddPesticide / onUpdatePesticide / onDeletePesticide と同パターン。
   // 既存のpesticides系ロジックには触れず、肥料用に完全に独立して追加する。
   // =====================================================
-  const onAddFertilizer = (f) => {
+  const onAddFertilizer = async (f) => {
     // マスタUUID化: 新規肥料はUUIDを発行(Date.now()は複数端末で衝突・DBのuuid列に入らない)
     const newId = newUuid()
     setFertilizers(prev => [...prev, { ...f, id: newId }])
@@ -424,10 +431,13 @@
       alert_threshold_kg: Number(f.alert_threshold_kg) || 0,
     }])
     if (masterStockDb('farm_fertilizers') && Number(f.stock_kg) > 0) {
-      adjustStockDbRetry('fertilizer', newId, 'delta', Number(f.stock_kg), '初期在庫', newUuid())
-        .then(res => { if (res && res.ok) reloadFertilizers() })
+      const res = await adjustStockDbRetry('fertilizer', newId, 'delta', Number(f.stock_kg), '初期在庫', newUuid())
+      if (res && res.ok) { celebrateSave('肥料を登録！'); reloadFertilizers(); return { ok: true } }
+      try { showToast('肥料は登録しましたが初期在庫の反映に失敗しました。棚卸し入力で在庫を設定してください。', 'error') } catch (_) {}
+      return { ok: false, error: res && res.error }
     }
     celebrateSave('肥料を登録！')
+    return { ok: true }
   }
   const onUpdateFertilizer = (f) => setFertilizers(prev => prev.map(x => String(x.id) === String(f.id) ? f : x))
   const onDeleteFertilizer = (id) => {
@@ -435,22 +445,25 @@
     setFertilizerStock(prev => prev.filter(s => String(s.fertilizer_id) !== String(id)))
   }
 
-  // 肥料仕入れ登録: 購入履歴に追記 + 在庫に加算（onAddPurchaseと同パターン）
+  // 肥料仕入れ登録: 在庫反映の成功後にだけ購入履歴へ追記・祝福（onAddPurchaseと同パターン）
   const onAddFertilizerPurchase = async (purchase) => {
-    const entry = { ...purchase, id: newUuid() }
-    setFertilizerPurchases(prev => [...prev, entry])
+    const entry = { ...purchase, id: purchase.id || newUuid() }
+    const pushHistory = () => setFertilizerPurchases(prev =>
+      prev.some(x => String(x.id) === String(entry.id)) ? prev : [...prev, entry])
     if (masterStockDb('farm_fertilizers')) {
       const res = await adjustStockDbRetry('fertilizer', purchase.fertilizer_id, 'delta', Number(purchase.amount_kg) || 0, '仕入れ', entry.id)
-      if (res && res.ok) { celebrateSave('仕入れを登録！'); reloadFertilizers() }
-      else { try { showToast('在庫への反映に失敗しました。通信状態を確認してください。', 'error') } catch (_) {} }
-      return
+      if (res && res.ok) { pushHistory(); celebrateSave('仕入れを登録！'); reloadFertilizers(); return { ok: true } }
+      try { showToast('在庫への反映に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
+      return { ok: false, error: res && res.error }
     }
+    pushHistory()
     setFertilizerStock(prev => prev.map(s =>
       String(s.fertilizer_id) === String(purchase.fertilizer_id)
         ? { ...s, stock_kg: Math.round((s.stock_kg + Number(purchase.amount_kg)) * 100) / 100 }
         : s
     ))
     celebrateSave('仕入れを登録！')
+    return { ok: true }
   }
 
   // 肥料棚卸し: 在庫量を直接更新（onUpdateStockと同パターン）

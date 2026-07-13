@@ -14903,15 +14903,21 @@ function PesticideDetailModal({ pesticide: p, stock, thresh, ratio, isAlert: ale
   }
   const rowStyle = { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 0', borderBottom:'1px solid #F1F5F9', fontSize:'13px' }
 
-  const handlePurchaseSave = () => {
+  // 送信ID保持: 成功(ok===true)が確定するまで同じIDを使い回す(応答喪失→再登録でも冪等で二重加算しない)
+  const purchaseSubmitIdRef = React.useRef(null)
+  const handlePurchaseSave = async () => {
     if (!purchaseForm.amount_L || Number(purchaseForm.amount_L) <= 0) return
-    onAddPurchase({
+    if (!purchaseSubmitIdRef.current) purchaseSubmitIdRef.current = newUuid()
+    const res = await Promise.resolve(onAddPurchase({
+      id:           purchaseSubmitIdRef.current,
       pesticide_id: p.id,
       date:         purchaseForm.date,
       amount_L:     Number(purchaseForm.amount_L),
       supplier:     purchaseForm.supplier.trim() || '—',
       price_yen:    Number(purchaseForm.price_yen) || 0,
-    })
+    })).catch(() => null)
+    if (!(res && res.ok === true)) return // 失敗/不明: 入力とIDを保持(成功表示を出さない)
+    purchaseSubmitIdRef.current = null
     setPurchaseDone(true)
     setTimeout(() => {
       setPurchaseDone(false)
@@ -15752,9 +15758,15 @@ function FertilizerDetailModal({ f, stock, thresh, alert, ratio, C, onClose, onU
 
   const myPurchases = (fertilizerPurchases || []).filter(p => String(p.fertilizer_id) === String(f.id)).sort((a,b) => a.date < b.date ? 1 : -1)
 
-  const handlePurchaseSave = () => {
+  // 送信ID保持: 成功(ok===true)が確定するまで同じIDを使い回す(応答喪失→再登録でも冪等で二重加算しない)
+  const purchaseSubmitIdRef = React.useRef(null)
+  const handlePurchaseSave = async () => {
     if (!purchaseForm.amount_kg) return
-    if (onAddPurchase) onAddPurchase({ fertilizer_id: f.id, ...purchaseForm, amount_kg: Number(purchaseForm.amount_kg), price_yen: Number(purchaseForm.price_yen) || null })
+    if (!onAddPurchase) return
+    if (!purchaseSubmitIdRef.current) purchaseSubmitIdRef.current = newUuid()
+    const res = await Promise.resolve(onAddPurchase({ id: purchaseSubmitIdRef.current, fertilizer_id: f.id, ...purchaseForm, amount_kg: Number(purchaseForm.amount_kg), price_yen: Number(purchaseForm.price_yen) || null })).catch(() => null)
+    if (!(res && res.ok === true)) return // 失敗/不明: 入力とIDを保持(成功表示を出さない)
+    purchaseSubmitIdRef.current = null
     setPurchaseSaved(true)
     setTimeout(() => { setPurchaseSaved(false); setModalTab('history') }, 800)
     setPurchaseForm({ date: todayYmd(), amount_kg: '', supplier: '', price_yen: '' })

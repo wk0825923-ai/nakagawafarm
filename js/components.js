@@ -1164,16 +1164,18 @@ function PesticideStockWidget({ pesticides, pesticideStock, onNavigate, _inGrid 
 // 棚卸し入力パネル（農薬マスタページ用）
 // =====================================================
 function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
-  const [inputs, setInputs] = React.useState(() => {
-    const obj = {}
-    pesticides.forEach(p => {
-      const s = pesticideStock.find(s => String(s.pesticide_id) === String(p.id))
-      obj[p.id] = String(s ? s.stock_L : 0)
-    })
-    return obj
-  })
+  // 変更した行(dirty)だけ値を持つ。未変更行は常に最新のpesticideStockへ追随して表示する。
+  // 画面を開いたときのスナップショットを全行送ると、別端末の仕入れ等で進んだDB在庫を
+  // 古い画面値で巻き戻してしまうため、送信は「ユーザーが触った行」に限定する。
+  const [inputs, setInputs] = React.useState({})
   const [saved, setSaved] = React.useState(false)
   const [failCount, setFailCount] = React.useState(0)
+
+  const stockValOf = (p) => {
+    const s = pesticideStock.find(s => String(s.pesticide_id) === String(p.id))
+    return String(s ? s.stock_L : 0)
+  }
+  const valueOf = (p) => inputs[p.id] !== undefined ? inputs[p.id] : stockValOf(p)
 
   // 行ごとの送信ID: 成功(ok===true)確定まで同じIDを使い回す=応答喪失→再保存でも冪等。
   // 値を変えたらIDを新しくする(同じIDだとサーバが「処理済み」として新しい値を無視するため)
@@ -1183,12 +1185,14 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
     if (savingRef.current) return
     savingRef.current = true
     let fails = 0
-    for (const [id, val] of Object.entries(inputs)) {
+    for (const [id, val] of Object.entries(inputs)) { // 変更行のみ(未変更行は送らない=0記帳ノイズも出さない)
       if (!submitIdsRef.current[id]) submitIdsRef.current[id] = newUuid()
       // idはUUIDのため文字列のまま渡す(Number()はNaN化して棚卸しが全滅する)
       const res = await Promise.resolve(onUpdateStock(id, Number(val), submitIdsRef.current[id])).catch(() => null)
-      if (res && res.ok === true) delete submitIdsRef.current[id]
-      else fails++
+      if (res && res.ok === true) {
+        delete submitIdsRef.current[id]
+        setInputs(prev => { const next = { ...prev }; delete next[id]; return next }) // 保存済み=最新在庫へ追随に戻す
+      } else fails++
     }
     savingRef.current = false
     setFailCount(fails)
@@ -1222,7 +1226,7 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
       ...pesticides.map(p => {
         const s = pesticideStock.find(s => String(s.pesticide_id) === String(p.id))
         const thresh = s ? s.alert_threshold_L : 0
-        const current = Number(inputs[p.id] ?? 0)
+        const current = Number(valueOf(p)) || 0
         const isAlertNow = current <= thresh
         // 在庫バー: 閾値を100%の基準とし、現在値の位置を可視化（農薬一覧カードと同じ視覚言語）
         const barRatio = thresh > 0
@@ -1254,8 +1258,8 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
             React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:'8px', flexShrink:0 } },
               React.createElement('input', {
                 type:'number', min:'0', step:'0.1',
-                value: inputs[p.id],
-                onChange: e => { delete submitIdsRef.current[p.id]; setInputs(prev => ({ ...prev, [p.id]: e.target.value })) }, // 値変更=新しい要求としてIDを取り直す
+                value: valueOf(p),
+                onChange: e => { delete submitIdsRef.current[p.id]; setInputs(prev => ({ ...prev, [p.id]: e.target.value })) }, // 変更した行だけdirty化＋IDを取り直す
                 style:{
                   width:'90px', padding:'7px 10px', borderRadius:'7px',
                   border:'1.5px solid ' + (isAlertNow ? '#FECACA' : '#D8E4D8'),

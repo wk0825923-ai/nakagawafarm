@@ -5,6 +5,7 @@
 //  R3 初期在庫失敗: 農薬追加で在庫RPCが失敗→祝福を出さず「初期在庫の反映に失敗」トーストで棚卸しへ誘導
 //  R4 農薬棚卸し(実UI): UUID農薬の一括保存がDB残高に反映される(レビュー15 Critical: Number(id)のNaN化検出)
 //  R5 棚卸しの応答喪失→再保存: 失敗表示・同一送信IDで冪等・二重記帳なし
+//  R6 棚卸しは変更行だけ送信: 別端末の仕入れで進んだ在庫を、開きっぱなし画面の一括保存が巻き戻さない
 // 実行: cd qa && node qa_purchase_resend.js  ※デモ農場(live QA環境)の実DBに書き、テスト行は自動削除
 const http = require('http'); const fs = require('fs'); const path = require('path')
 const puppeteer = require('puppeteer-core')
@@ -192,6 +193,28 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
       r5fail===true && r5a.stock===60 && r5saved===true && r5b.stock===60 && r5b.rows===3,
       JSON.stringify({fail:r5fail,stockAfterLoss:r5a.stock,saved:r5saved,...r5b}))
 
+    // ═══ R6: 変更していない行は送らない=別端末で進んだ在庫を一括保存が巻き戻さない ═══
+    phase='r6-no-rollback'
+    // 別端末の仕入れ相当: DBを直接80Lへ(この画面のinputsはR5の保存成功でdirty解除済み)
+    await page.evaluate(async (pid)=>{ await sb.from('farm_pesticides').update({stock_l:80}).eq('id',pid) },pid)
+    let r6follow=false // 未変更行の表示が最新在庫(80)へ追随するか(realtime経由)
+    for(let i=0;i<40;i++){
+      const v=await page.evaluate((name)=>{
+        const rows=[...document.querySelectorAll('.main div')].filter(e=>e.offsetParent&&e.textContent.includes(name)&&e.querySelector('input[type=number]'))
+        const row=rows[rows.length-1]; return row?row.querySelector('input[type=number]').value:null
+      },PNAME)
+      if(v==='80'){r6follow=true;break}
+      await sleep(300)
+    }
+    await clickText(page,'在庫を一括保存'); await sleep(2000)
+    const r6=await page.evaluate(async (pid)=>{
+      const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
+      const mv=await sb.from('farm_stock_movements').select('id').eq('item_id',pid)
+      return { stock:Number(st.data[0].stock_l), rows:mv.data?mv.data.length:-1 }
+    },pid)
+    ok('R6 一括保存は変更行だけ送信: 別端末の80Lを巻き戻さない(表示も80へ追随・記帳3行のまま)',
+      r6follow===true && r6.stock===80 && r6.rows===3, JSON.stringify({follow:r6follow,...r6}))
+
     initPid=await page.evaluate(async (name)=>{ // R3で作られたマスタ行(DB同期後)のidを後片付け用に取得
       for(let i=0;i<10;i++){
         const r=await sb.from('farm_pesticides').select('id').eq('farm_id',CONFIG.CURRENT_FARM_ID).eq('name',name)
@@ -204,12 +227,9 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
     // ── 後片付け: DBのテスト行を削除(ブラウザ側localStorageは使い捨てプロファイル) ──
     try{
       await page.evaluate(async ({pid,initPid})=>{
+        // 削除はテストが作った資材のIDに限定する(正規の冪等マーカーを消すと巻き戻し防止が壊れる)
         if(pid){ await sb.from('farm_stock_movements').delete().eq('item_id',pid); await sb.from('farm_pesticides').delete().eq('id',pid) }
         if(initPid){ await sb.from('farm_stock_movements').delete().eq('item_id',initPid); await sb.from('farm_pesticides').delete().eq('id',initPid) }
-        // R4/R5の一括保存でデモ農場の実農薬に飛んだ同値棚卸し(変化なし=0記帳)を掃除
-        await sb.from('farm_stock_movements').delete()
-          .eq('farm_id',CONFIG.CURRENT_FARM_ID).eq('record_collection','stock_adjust')
-          .eq('delta_amount',0).like('reason','%変化なし%')
       },{pid,initPid})
     }catch(_){}
   }

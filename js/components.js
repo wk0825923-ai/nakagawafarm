@@ -1187,6 +1187,13 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
   // 未保存の変更が残っていることを明示する(利用者が安心して画面を離れるのを防ぐ)
   const editedDuringSaveRef = React.useRef(false)
   const [unsavedNote, setUnsavedNote] = React.useState(false)
+  const [invalidIds, setInvalidIds] = React.useState({}) // 空欄/不正値の行(在庫0で上書きせず入力を促す)
+  // 棚卸しの入力値として在庫数を確定できるか。空欄はNumber('')=0で在庫全消しになるため必ず弾く
+  const isValidStock = (val) => {
+    if (val === '' || val == null) return false
+    const n = Number(val)
+    return Number.isFinite(n) && n >= 0
+  }
   const handleSaveAll = async () => {
     if (savingRef.current) return
     savingRef.current = true
@@ -1198,7 +1205,9 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
     setUnsavedNote(false)
     editedDuringSaveRef.current = false
     let fails = 0
+    const invalid = {}
     for (const [id, val] of Object.entries(inputs)) { // 変更行のみ(未変更行は送らない=0記帳ノイズも出さない)
+      if (!isValidStock(val)) { invalid[id] = true; continue } // 空欄/不正はRPCを呼ばず入力保持(在庫0上書き防止)
       if (!submitIdsRef.current[id]) submitIdsRef.current[id] = newUuid()
       const sentId = submitIdsRef.current[id]
       // idはUUIDのため文字列のまま渡す(Number()はNaN化して棚卸しが全滅する)
@@ -1212,10 +1221,12 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
         if (submitIdsRef.current[id] === sentId) delete submitIdsRef.current[id]
       } else fails++
     }
+    setInvalidIds(invalid)
     savingRef.current = false
     setSaving(false)
     setFailCount(fails)
-    if (fails === 0) {
+    // 空欄/不正が残っている間は成功表示を出さない(行単位のエラーで入力を促す)
+    if (fails === 0 && Object.keys(invalid).length === 0) {
       if (editedDuringSaveRef.current) {
         setUnsavedNote(true) // 送信分は保存済みだが新しい変更が未保存=緑の成功表示は出さない
       } else {
@@ -1286,11 +1297,12 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
                   delete submitIdsRef.current[p.id] // 変更した行だけdirty化＋IDを取り直す
                   if (savingRef.current) editedDuringSaveRef.current = true // 保存中の打ち替え=完了時に未保存を明示
                   setUnsavedNote(false) // 新たに編集を始めたら注意書きは畳む(ボタンが「未保存あり」を示す)
+                  if (invalidIds[p.id]) setInvalidIds(prev => { const next = { ...prev }; delete next[p.id]; return next }) // 入力し直したらエラー解除
                   setInputs(prev => ({ ...prev, [p.id]: e.target.value }))
                 },
                 style:{
                   width:'90px', padding:'7px 10px', borderRadius:'7px',
-                  border:'1.5px solid ' + (isAlertNow ? '#FECACA' : '#D8E4D8'),
+                  border:'1.5px solid ' + (invalidIds[p.id] ? C.red : isAlertNow ? '#FECACA' : '#D8E4D8'),
                   fontSize:'14px', fontWeight:700,
                   color: isAlertNow ? C.red : C.ink,
                   textAlign:'right', outline:'none', background:'#fff',
@@ -1305,6 +1317,12 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
                 }
               }, '要発注')
             )
+          ),
+          invalidIds[p.id] && React.createElement('div', {
+            style:{ fontSize:'11px', color:C.red, fontWeight:600, display:'flex', alignItems:'center', gap:'4px' }
+          },
+            React.createElement('i', { className:'ti ti-alert-triangle', style:{ fontSize:'12px' } }),
+            '在庫量を入力してください（空欄では保存できません）'
           ),
           React.createElement('div', { style:{ background:'#EDF2ED', borderRadius:'6px', height:'6px', overflow:'hidden' } },
             React.createElement('div', {

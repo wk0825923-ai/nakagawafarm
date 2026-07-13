@@ -146,19 +146,26 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
     await patchAdjust(page,'restore') // reloadでパッチが消えるため記録用ラッパーを貼り直す
     await clickText(page,'棚卸し入力'); await sleep(700)
     // 実キーボード入力(trusted event)。合成inputイベントはこの画面のcontrolled inputでReactに拾われなかった
+    const rowInputVal=(name)=>page.evaluate((name)=>{
+      const rows=[...document.querySelectorAll('.main div')].filter(e=>e.offsetParent&&e.textContent.includes(name)&&e.querySelector('input[type=number]'))
+      const row=rows[rows.length-1]; return row?row.querySelector('input[type=number]').value:null
+    },name)
     const setRowInput=async (name,v)=>{
       const handle=await page.evaluateHandle((name)=>{
         const rows=[...document.querySelectorAll('.main div')].filter(e=>e.offsetParent&&e.textContent.includes(name)&&e.querySelector('input[type=number]'))
         const row=rows[rows.length-1]; return row?row.querySelector('input[type=number]'):null
       },name)
       if(!(await handle.evaluate(el=>!!el)))return false
-      await handle.click({clickCount:3}) // 全選択→打ち替え
-      await page.keyboard.type(String(v))
-      return true
+      for(let attempt=0;attempt<3;attempt++){ // 稀にkeyboard入力が反映されないので値が乗るまで再試行
+        await handle.click({clickCount:3}) // 全選択→打ち替え
+        await page.keyboard.type(String(v))
+        for(let i=0;i<10;i++){ if(await rowInputVal(name)===String(v))return true; await sleep(150) }
+      }
+      return (await rowInputVal(name))===String(v)
     }
     // 「在庫を一括保存」が有効化される(React再描画でdirty反映)まで待ってからクリック=タイミングレース回避
     const clickSaveAll=async ()=>{
-      for(let i=0;i<25;i++){
+      for(let i=0;i<40;i++){
         const clicked=await page.evaluate(()=>{
           const b=[...document.querySelectorAll('button')].find(e=>e.offsetParent&&/在庫を一括保存/.test(e.textContent)&&!e.disabled)
           if(b){b.click();return true}return false
@@ -261,6 +268,35 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
     ok('R7 保存中の打ち替え: 70保存後は「未保存の変更あり」を明示(成功表示なし)・入力欄75維持→再保存で75L反映+保存しました',
       r7note===true && r7a.savedShown===false && r7a.stock===70 && r7a.inputVal==='75' && r7saved2===true && r7b.stock===75,
       JSON.stringify({note:r7note,savedShown:r7a.savedShown,stockAfter70:r7a.stock,inputAfter:r7a.inputVal,saved2:r7saved2,stockFinal:r7b.stock}))
+
+    // ═══ R8: 空欄のまま保存しても在庫0に上書きしない(Number('')=0事故の防止・レビュー19 High) ═══
+    phase='r8-empty-guard'
+    await patchAdjust(page,'restore')
+    // 入力欄を空にする(全選択→Backspace)。合成inputは拾われないため実キーボード操作で
+    const handle8=await page.evaluateHandle((name)=>{
+      const rows=[...document.querySelectorAll('.main div')].filter(e=>e.offsetParent&&e.textContent.includes(name)&&e.querySelector('input[type=number]'))
+      const row=rows[rows.length-1]; return row?row.querySelector('input[type=number]'):null
+    },PNAME)
+    if(!(await handle8.evaluate(el=>!!el)))throw new Error('input not found (R8)')
+    await handle8.click({clickCount:3})
+    await page.keyboard.press('Backspace')
+    await sleep(300)
+    const clearedVal=await handle8.evaluate(el=>el.value)
+    if(clearedVal!=='')throw new Error('input not cleared (R8): '+clearedVal)
+    const callsBefore8=await page.evaluate(()=>(window.__adjCalls||[]).length)
+    // 空欄でもボタンは有効(押せてエラーを出す)。有効ボタンを探して押す
+    for(let i=0;i<15;i++){ const c=await page.evaluate(()=>{const b=[...document.querySelectorAll('button')].find(e=>e.offsetParent&&/在庫を一括保存/.test(e.textContent)&&!e.disabled);if(b){b.click();return true}return false}); if(c)break; await sleep(200) }
+    await sleep(1500)
+    const r8=await page.evaluate(async ({pid,callsBefore8})=>{
+      const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
+      const t=document.body.innerText
+      return { stock:Number(st.data[0].stock_l),
+        rpcCalls:(window.__adjCalls||[]).length-callsBefore8,
+        errShown:/在庫量を入力してください/.test(t), savedShown:/保存しました/.test(t) }
+    },{pid,callsBefore8})
+    ok('R8 空欄ガード: 空欄保存はRPC0件・DB在庫75Lのまま・「在庫量を入力してください」表示・成功表示なし',
+      r8.rpcCalls===0 && r8.stock===75 && r8.errShown===true && r8.savedShown===false,
+      JSON.stringify(r8))
 
     initPid=await page.evaluate(async (name)=>{ // R3で作られたマスタ行(DB同期後)のidを後片付け用に取得
       for(let i=0;i<10;i++){

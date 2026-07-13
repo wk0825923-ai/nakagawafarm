@@ -1181,24 +1181,37 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
   // 値を変えたらIDを新しくする(同じIDだとサーバが「処理済み」として新しい値を無視するため)
   const submitIdsRef = React.useRef({})
   const savingRef = React.useRef(false)
+  const [saving, setSaving] = React.useState(false)
+  const savedTimerRef = React.useRef(null)
   const handleSaveAll = async () => {
     if (savingRef.current) return
     savingRef.current = true
+    setSaving(true)
+    // 直前の結果表示をリセット(前回成功の「保存しました」が今回の失敗を隠さない)
+    if (savedTimerRef.current) { clearTimeout(savedTimerRef.current); savedTimerRef.current = null }
+    setSaved(false)
+    setFailCount(0)
     let fails = 0
     for (const [id, val] of Object.entries(inputs)) { // 変更行のみ(未変更行は送らない=0記帳ノイズも出さない)
       if (!submitIdsRef.current[id]) submitIdsRef.current[id] = newUuid()
+      const sentId = submitIdsRef.current[id]
       // idはUUIDのため文字列のまま渡す(Number()はNaN化して棚卸しが全滅する)
-      const res = await Promise.resolve(onUpdateStock(id, Number(val), submitIdsRef.current[id])).catch(() => null)
+      const res = await Promise.resolve(onUpdateStock(id, Number(val), sentId)).catch(() => null)
       if (res && res.ok === true) {
-        delete submitIdsRef.current[id]
-        setInputs(prev => { const next = { ...prev }; delete next[id]; return next }) // 保存済み=最新在庫へ追随に戻す
+        // 応答待ちの間に同じ欄へ入力されていたら、新しい値をdirtyのまま残す(黙って消さない)
+        setInputs(prev => {
+          if (prev[id] !== val) return prev
+          const next = { ...prev }; delete next[id]; return next // 保存済み=最新在庫へ追随に戻す
+        })
+        if (submitIdsRef.current[id] === sentId) delete submitIdsRef.current[id]
       } else fails++
     }
     savingRef.current = false
+    setSaving(false)
     setFailCount(fails)
     if (fails === 0) {
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
+      savedTimerRef.current = setTimeout(() => setSaved(false), 2000)
     }
   }
 
@@ -1305,14 +1318,16 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
       ),
       React.createElement('button', {
         onClick: handleSaveAll,
+        disabled: saving,
         style:{
           padding:'10px 24px', borderRadius:'8px', border:'none',
-          background:C.green, color:'#fff', fontSize:'13px', fontWeight:700, cursor:'pointer',
+          background:C.green, color:'#fff', fontSize:'13px', fontWeight:700,
+          cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1,
           display:'flex', alignItems:'center', gap:'6px',
         }
       },
         React.createElement('i', { className:'ti ti-device-floppy', style:{ fontSize:'15px' } }),
-        '在庫を一括保存'
+        saving ? '保存中…' : '在庫を一括保存'
       )
     )
   )
@@ -16046,11 +16061,16 @@ function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateS
     if (applyingRef.current[f.id]) return // 同一行の二重押しガード
     applyingRef.current[f.id] = true
     if (!submitIdsRef.current[f.id]) submitIdsRef.current[f.id] = newUuid()
-    const res = await Promise.resolve(onUpdateStock(f.id, Number(val), submitIdsRef.current[f.id])).catch(() => null)
+    const sentId = submitIdsRef.current[f.id]
+    const res = await Promise.resolve(onUpdateStock(f.id, Number(val), sentId)).catch(() => null)
     applyingRef.current[f.id] = false
     if (!(res && res.ok === true)) return // 失敗/不明: 入力とIDを保持(トーストはapp側)
-    delete submitIdsRef.current[f.id]
-    setEdits(prev => { const next = { ...prev }; delete next[f.id]; return next })
+    if (submitIdsRef.current[f.id] === sentId) delete submitIdsRef.current[f.id]
+    // 応答待ちの間に同じ欄へ入力されていたら、新しい値を残す(黙って消さない・農薬側と同型)
+    setEdits(prev => {
+      if (prev[f.id] !== val) return prev
+      const next = { ...prev }; delete next[f.id]; return next
+    })
   }
 
   const C2 = { green:'#0A6B52', greenL:'#E8F5F0', amber:'#B45309', amberL:'#FFFBEB', red:'#C2410C', ink:'#111827', sub:'#4B5563', muted:'#9CA3AF', border:'#E2E8E2' }

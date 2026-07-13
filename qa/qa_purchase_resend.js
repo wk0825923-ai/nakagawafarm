@@ -6,6 +6,7 @@
 //  R4 農薬棚卸し(実UI): UUID農薬の一括保存がDB残高に反映される(レビュー15 Critical: Number(id)のNaN化検出)
 //  R5 棚卸しの応答喪失→再保存: 失敗表示・同一送信IDで冪等・二重記帳なし
 //  R6 棚卸しは変更行だけ送信: 別端末の仕入れで進んだ在庫を、開きっぱなし画面の一括保存が巻き戻さない
+//  R7 保存の応答待ち中に打ち替えた新しい値が黙って消えない(dirty保持→再保存で反映)
 // 実行: cd qa && node qa_purchase_resend.js  ※デモ農場(live QA環境)の実DBに書き、テスト行は自動削除
 const http = require('http'); const fs = require('fs'); const path = require('path')
 const puppeteer = require('puppeteer-core')
@@ -37,6 +38,7 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
   window.__adjCalls = window.__adjCalls || []
   if(mode==='lose')      farmRepo.adjustStockDb = async (...a)=>{ window.__adjCalls.push(['lose',...a.slice(0,5)]); await window.__origAdjust(...a); return { ok:false, error:new Error('simulated response loss') } }
   else if(mode==='fail') farmRepo.adjustStockDb = async (...a)=>{ window.__adjCalls.push(['fail',...a.slice(0,5)]); return { ok:false, error:new Error('simulated failure') } }
+  else if(mode==='slow') farmRepo.adjustStockDb = async (...a)=>{ window.__adjCalls.push(['slow',...a.slice(0,5)]); await new Promise(r=>setTimeout(r,2500)); return window.__origAdjust(...a) }
   else                   farmRepo.adjustStockDb = async (...a)=>{ window.__adjCalls.push(['real',...a.slice(0,5)]); return window.__origAdjust(...a) }
 },mode)
 ;(async()=>{
@@ -214,6 +216,34 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
     },pid)
     ok('R6 一括保存は変更行だけ送信: 別端末の80Lを巻き戻さない(表示も80へ追随・記帳3行のまま)',
       r6follow===true && r6.stock===80 && r6.rows===3, JSON.stringify({follow:r6follow,...r6}))
+
+    // ═══ R7: 保存の応答待ち中に打ち替えた新しい値が黙って消えない ═══
+    phase='r7-edit-while-saving'
+    await patchAdjust(page,'slow') // RPCを2.5秒遅延(成功はする)
+    if(!(await setRowInput(PNAME,70)))throw new Error('inventory row input not found (r7)')
+    await sleep(200)
+    await clickText(page,'在庫を一括保存') // 70の保存が走り出す(保存中…)
+    await sleep(600)
+    if(!(await setRowInput(PNAME,75)))throw new Error('inventory row input not found (r7b)') // 応答待ち中に打ち替え
+    let r7saved=false // 70の保存完了(保存しました)を待つ
+    for(let i=0;i<30;i++){ if(await page.evaluate(()=>/保存しました/.test(document.body.innerText))){r7saved=true;break}; await sleep(300) }
+    await sleep(400)
+    const r7a=await page.evaluate(async ({pid,name})=>{
+      const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
+      const rows=[...document.querySelectorAll('.main div')].filter(e=>e.offsetParent&&e.textContent.includes(name)&&e.querySelector('input[type=number]'))
+      const row=rows[rows.length-1]
+      return { stock:Number(st.data[0].stock_l), inputVal: row?row.querySelector('input[type=number]').value:null }
+    },{pid,name:PNAME})
+    // 打ち替えた75はdirtyのまま残り、再保存で反映される
+    await patchAdjust(page,'restore')
+    await clickText(page,'在庫を一括保存'); await sleep(2500)
+    const r7b=await page.evaluate(async (pid)=>{
+      const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
+      return { stock:Number(st.data[0].stock_l) }
+    },pid)
+    ok('R7 保存中の打ち替えが消えない: 70保存完了後も入力欄は75のまま→再保存で75L反映',
+      r7saved===true && r7a.stock===70 && r7a.inputVal==='75' && r7b.stock===75,
+      JSON.stringify({saved:r7saved,stockAfter70:r7a.stock,inputAfter:r7a.inputVal,stockFinal:r7b.stock}))
 
     initPid=await page.evaluate(async (name)=>{ // R3で作られたマスタ行(DB同期後)のidを後片付け用に取得
       for(let i=0;i<10;i++){

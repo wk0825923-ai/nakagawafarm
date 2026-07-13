@@ -4820,7 +4820,7 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
       (form.field_ids && form.field_ids.length > 1) ? React.createElement('span', { style:{ fontSize:12, color:'#B45309' } }, '※畝の記録は主圃場のみ') : null
     )
     let el
-    if (kind === 'spray')     el = React.createElement(LotSprayRecordForm,    { field:selField, pesticides:pesticides||[], lots, staff, defaultWeather:suggestedWeather, pastSprays:lotSprayRecords||[], onCancel:backToStep2, onSave: async (r)=>{ const res = await Promise.resolve(onSaveLotSpray(r)).catch(()=>null); if (res && res.ok === false) return res; clearDraft(); setDraftSaved(false); backToStep2(); return res } })
+    if (kind === 'spray')     el = React.createElement(LotSprayRecordForm,    { field:selField, pesticides:pesticides||[], lots, staff, defaultWeather:suggestedWeather, pastSprays:lotSprayRecords||[], onCancel:backToStep2, onSave: async (r)=>{ const res = await Promise.resolve(onSaveLotSpray(r)).catch(()=>null); if (!(res && res.ok === true)) return res; clearDraft(); setDraftSaved(false); backToStep2(); return res } })
     else if (kind === 'fert') el = React.createElement(TopDressingRecordForm, { field:selField, fertilizers:fertilizers||[], lots, staff, onCancel:backToStep2, onSave:(r)=>{ onSaveTopDressing(r); clearDraft(); setDraftSaved(false); backToStep2() } })
     else                      el = React.createElement(HarvestRecordForm,     { field:selField, lots, destinations:destinations||[], harvestRecords:harvestRecords||[], staff, onCancel:backToStep2, onSave:(r)=>{ onSaveHarvest(r); clearDraft(); setDraftSaved(false) } })
     return React.createElement('div', null, header, el)
@@ -6194,13 +6194,18 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff, 
     items.length > 0 && items.every(it => it.pesticide_id && Number(it.dilution) > 0)
 
   const submittingRef = React.useRef(false)
+  // 【送信IDの保持(Codexレビュー13 Critical)】保存が成功と確定するまで同じ記録IDを使い回す。
+  // 「DBはcommit済みなのに応答だけ喪失→再送」でも、同一IDならRPCの冪等性で二重登録・二重減算にならない。
+  const submitIdRef = React.useRef(null)
   const handleSubmit = async () => {
     if (!valid) { showToast('日付・畝範囲・散布量・農薬と希釈倍率を入力してください', 'warn'); return }
     if (submittingRef.current) return   // 連打による二重登録を防止
     submittingRef.current = true
     setTimeout(() => { submittingRef.current = false }, 1200)
+    if (!submitIdRef.current) submitIdRef.current = newUuid()
     // 祝福(紙吹雪)は保存側(app.js)がRPC/保存成功をawaitした後に出す。失敗時はフォームを保持する
     const res = await Promise.resolve(onSave({
+      id: submitIdRef.current,
       field_id: field.id,
       date,
       weather,
@@ -6215,7 +6220,9 @@ function LotSprayRecordForm({ field, pesticides, lots, onSave, onCancel, staff, 
       checks,
       staff_ids: staffIds,
     })).catch(() => null)
-    if (res && res.ok === false) { submittingRef.current = false; return } // 失敗: 入力を残して再試行可能に
+    // 成功はok===trueのみ(null/例外/不明応答は失敗扱い=入力と送信IDを保持し、再送は同じIDで冪等)
+    if (!(res && res.ok === true)) { submittingRef.current = false; return }
+    submitIdRef.current = null // 成功が確定: 次の記録は新しいIDで
   }
 
   return React.createElement('div', null,
@@ -16549,12 +16556,15 @@ function MaintenanceLogPage({ records, staff, onSave, onDelete }) {
   const [deleteTarget, setDeleteTarget] = React.useState(null)
   const up = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const valid = form.machine_name.trim() !== ''
+  // 送信ID保持: 成功が確定するまで同じIDを使い回す(応答喪失→再送でも冪等で二重登録しない)
+  const submitIdRef = React.useRef(null)
   const submit = async () => {
     if (!valid) { showToast('機械名を入力してください', 'warn'); return }
-    // idは付けない: useRecordCollection側がUUIDを発行する(Date.now()は複数端末で衝突し得るため廃止)
-    // 保存が失敗したら入力内容を残す(再入力の手間をなくす)。成功した時だけフォームを空に戻す
-    const res = await Promise.resolve(onSave({ ...form, machine_name: form.machine_name.trim(), machine_no: form.machine_no.trim(), worker: form.worker.trim(), note: form.note.trim() })).catch(() => null)
-    if (res && res.ok === false) return
+    if (!submitIdRef.current) submitIdRef.current = newUuid()
+    // 保存が失敗したら入力内容を残す(再入力の手間をなくす)。成功(ok===true)の時だけフォームを空に戻す
+    const res = await Promise.resolve(onSave({ ...form, id: submitIdRef.current, machine_name: form.machine_name.trim(), machine_no: form.machine_no.trim(), worker: form.worker.trim(), note: form.note.trim() })).catch(() => null)
+    if (!(res && res.ok === true)) return
+    submitIdRef.current = null
     setForm(blank)
   }
   const rows = [...(records || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)))
@@ -16663,12 +16673,15 @@ function ShipmentLogPage({ shipmentRecords, harvestRecords, fields, destinations
     setForm(f => ({ ...f, lot_code: code, harvest_date: (rec && rec.date) ? rec.date : f.harvest_date }))
   }
   const valid = form.variety && form.dest && Number(form.cases) > 0
+  // 送信ID保持: 成功が確定するまで同じIDを使い回す(応答喪失→再送でも冪等で二重登録しない)
+  const submitIdRef = React.useRef(null)
   const submit = async () => {
     if (!valid) { showToast('品目・出荷先・数量を入力してください', 'warn'); return }
-    // idは付けない: useRecordCollection側がUUIDを発行する
-    // 保存が失敗したら入力内容を残す。成功した時だけフォームを次の入力用に戻す
-    const res = await Promise.resolve(onSave({ ...form, cases: Number(form.cases), note: form.note.trim() })).catch(() => null)
-    if (res && res.ok === false) return
+    if (!submitIdRef.current) submitIdRef.current = newUuid()
+    // 保存が失敗したら入力内容を残す。成功(ok===true)の時だけフォームを次の入力用に戻す
+    const res = await Promise.resolve(onSave({ ...form, id: submitIdRef.current, cases: Number(form.cases), note: form.note.trim() })).catch(() => null)
+    if (!(res && res.ok === true)) return
+    submitIdRef.current = null
     setForm({ ...blank, variety: form.variety, dest: form.dest })
   }
   const rows = [...(shipmentRecords || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)))

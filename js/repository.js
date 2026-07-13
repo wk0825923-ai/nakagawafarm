@@ -643,6 +643,21 @@
       } catch (e) { return { ok: false, error: e } }
     },
 
+    // 在庫調整RPC(仕入れ/棚卸し/初期在庫): 記帳+残高を1トランザクション・refIdが冪等キー
+    async adjustStock(itemType, farmId, itemId, mode, amount, reason, refId) {
+      const client = getSb()
+      if (!client) return { ok: false, error: new Error('DB未接続') }
+      const bad = this._checkFarm(farmId); if (bad) return { ok: false, error: new Error(bad) }
+      try {
+        const { data, error } = await client.rpc('farm_adjust_stock', {
+          p_item_type: itemType, p_item_id: itemId, p_farm_id: farmId,
+          p_mode: mode, p_amount: amount, p_reason: reason, p_ref_id: refId,
+        })
+        if (error) return { ok: false, error }
+        return data
+      } catch (e) { return { ok: false, error: e } }
+    },
+
     // 記録系のリアルタイム: 全件再読込ではなくINSERT/UPDATE/DELETEを1行ずつ通知（編集中UIを壊さない）
     subscribeRows(collection, farmId, cb) {
       const table = KEY_TABLE[collection], conv = CONVERTERS[collection], client = getSb()
@@ -716,6 +731,10 @@
         const r = routes[collection]
         if (r && r.removeRecordWithStock) return Promise.resolve(r.removeRecordWithStock(collection, farmId, id, expectedVersion))
         return Promise.resolve(LocalStorageRepository.removeRecord(collection, farmId, id, expectedVersion))
+      },
+      // 在庫調整RPC(仕入れ/棚卸し/初期在庫)。マスタがDB経路の時だけapp側から呼ばれる
+      adjustStockDb(itemType, farmId, itemId, mode, amount, reason, refId) {
+        return Promise.resolve(SupabaseRepository.adjustStock(itemType, farmId, itemId, mode, amount, reason, refId))
       },
       // 記録系のリアルタイム(1行単位)。localStorage経路は全量イベントをreplaceに変換して届ける
       subscribeRows(collection, farmId, cb) {

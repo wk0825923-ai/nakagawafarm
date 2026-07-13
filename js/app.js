@@ -308,10 +308,30 @@
     setHarvestRecords(prev => prev.filter(r => r.id !== id))
   }
 
+  // 【在庫調整のDB経路化(レビュー13 High)】マスタがDB経路なら仕入れ/棚卸し/初期在庫も
+  // farm_adjust_stock RPC(記帳+残高が1トランザクション・refId冪等)でDB残高へ反映する。
+  // 新規マスタ行は差分同期の完了を待つ必要があるため「対象未検出なら少し待って再試行」する。
+  const masterStockDb = (collection) => !!(farmRepo.routes && farmRepo.routes[collection])
+  const adjustStockDbRetry = async (itemType, itemId, mode, amount, reason, refId, tries = 6) => {
+    for (let i = 0; i < tries; i++) {
+      const res = await farmRepo.adjustStockDb(itemType, farmKey, String(itemId), mode, amount, reason, refId)
+      if (res && res.ok) return res
+      if (!/見つかりません/.test(String(res && res.error && res.error.message || ''))) return res
+      await new Promise(r => setTimeout(r, 500))
+    }
+    return { ok: false, error: new Error('在庫への反映に失敗しました') }
+  }
+
   // 仕入れ登録: 購入履歴に追記 + 在庫に加算
-  const onAddPurchase = (purchase) => {
-    const entry = { ...purchase, id: Date.now() }
-    setPesticidePurchases(prev => [...prev, entry])
+  const onAddPurchase = async (purchase) => {
+    const entry = { ...purchase, id: newUuid() } // idはDB経路の冪等キーにも使う
+    setPesticidePurchases(prev => [...prev, entry]) // 履歴はローカル(履歴コレクションのDB化は在庫フェーズ)
+    if (masterStockDb('farm_pesticides')) {
+      const res = await adjustStockDbRetry('pesticide', purchase.pesticide_id, 'delta', Number(purchase.amount_L) || 0, '仕入れ', entry.id)
+      if (res && res.ok) { celebrateSave('仕入れを登録！'); reloadPesticides() }
+      else { try { showToast('在庫への反映に失敗しました。通信状態を確認してください。', 'error') } catch (_) {} }
+      return
+    }
     setPesticideStock(prev => prev.map(s =>
       String(s.pesticide_id) === String(purchase.pesticide_id)
         ? { ...s, stock_L: Math.round((s.stock_L + Number(purchase.amount_L)) * 100) / 100 }
@@ -362,6 +382,11 @@
       stock_L:            Number(p.stock_L) || 0,
       alert_threshold_L:  Number(p.alert_threshold_L) || 0,
     }])
+    // DB経路: 初期在庫をRPCで反映(マスタ行の差分同期完了を待ってリトライ)
+    if (masterStockDb('farm_pesticides') && Number(p.stock_L) > 0) {
+      adjustStockDbRetry('pesticide', newId, 'delta', Number(p.stock_L), '初期在庫', newUuid())
+        .then(res => { if (res && res.ok) reloadPesticides() })
+    }
     celebrateSave('農薬を登録！')
   }
   const onUpdatePesticide = (p) => setPesticides(prev => prev.map(x => String(x.id) === String(p.id) ? p : x))
@@ -370,7 +395,13 @@
     setPesticideStock(prev => prev.filter(s => String(s.pesticide_id) !== String(id)))
   }
   // 棚卸し: 在庫量を直接更新
-  const onUpdateStock = (pesticideId, newStockL) => {
+  const onUpdateStock = async (pesticideId, newStockL) => {
+    if (masterStockDb('farm_pesticides')) {
+      const res = await adjustStockDbRetry('pesticide', pesticideId, 'set', Number(newStockL) || 0, '棚卸し調整', newUuid())
+      if (res && res.ok) reloadPesticides()
+      else { try { showToast('棚卸しの反映に失敗しました。通信状態を確認してください。', 'error') } catch (_) {} }
+      return
+    }
     setPesticideStock(prev => prev.map(s =>
       String(s.pesticide_id) === String(pesticideId)
         ? { ...s, stock_L: Math.round(newStockL * 100) / 100 }
@@ -392,6 +423,10 @@
       stock_kg:           Number(f.stock_kg) || 0,
       alert_threshold_kg: Number(f.alert_threshold_kg) || 0,
     }])
+    if (masterStockDb('farm_fertilizers') && Number(f.stock_kg) > 0) {
+      adjustStockDbRetry('fertilizer', newId, 'delta', Number(f.stock_kg), '初期在庫', newUuid())
+        .then(res => { if (res && res.ok) reloadFertilizers() })
+    }
     celebrateSave('肥料を登録！')
   }
   const onUpdateFertilizer = (f) => setFertilizers(prev => prev.map(x => String(x.id) === String(f.id) ? f : x))
@@ -401,9 +436,15 @@
   }
 
   // 肥料仕入れ登録: 購入履歴に追記 + 在庫に加算（onAddPurchaseと同パターン）
-  const onAddFertilizerPurchase = (purchase) => {
-    const entry = { ...purchase, id: Date.now() }
+  const onAddFertilizerPurchase = async (purchase) => {
+    const entry = { ...purchase, id: newUuid() }
     setFertilizerPurchases(prev => [...prev, entry])
+    if (masterStockDb('farm_fertilizers')) {
+      const res = await adjustStockDbRetry('fertilizer', purchase.fertilizer_id, 'delta', Number(purchase.amount_kg) || 0, '仕入れ', entry.id)
+      if (res && res.ok) { celebrateSave('仕入れを登録！'); reloadFertilizers() }
+      else { try { showToast('在庫への反映に失敗しました。通信状態を確認してください。', 'error') } catch (_) {} }
+      return
+    }
     setFertilizerStock(prev => prev.map(s =>
       String(s.fertilizer_id) === String(purchase.fertilizer_id)
         ? { ...s, stock_kg: Math.round((s.stock_kg + Number(purchase.amount_kg)) * 100) / 100 }
@@ -413,7 +454,13 @@
   }
 
   // 肥料棚卸し: 在庫量を直接更新（onUpdateStockと同パターン）
-  const onUpdateFertilizerStock = (fertilizerId, newStockKg) => {
+  const onUpdateFertilizerStock = async (fertilizerId, newStockKg) => {
+    if (masterStockDb('farm_fertilizers')) {
+      const res = await adjustStockDbRetry('fertilizer', fertilizerId, 'set', Number(newStockKg) || 0, '棚卸し調整', newUuid())
+      if (res && res.ok) reloadFertilizers()
+      else { try { showToast('棚卸しの反映に失敗しました。通信状態を確認してください。', 'error') } catch (_) {} }
+      return
+    }
     setFertilizerStock(prev => prev.map(s =>
       String(s.fertilizer_id) === String(fertilizerId)
         ? { ...s, stock_kg: Math.round(newStockKg * 100) / 100 }

@@ -241,6 +241,32 @@ const login = async (page) => {
     ok('C10: 在庫RPC切替の本番往復(createWithStock=記録+残高18→17.5L・converter往復(液量/checks)・removeWithStockで18L復帰)',
       spRes.c && spRes.found && spRes.vol === 500 && spRes.checks && spRes.stockAfterSave === 17.5 && spRes.d && spRes.stockAfterDelete === 18,
       JSON.stringify(spRes))
+
+    // ── 在庫調整RPC(仕入れ/棚卸し): delta加算・冪等再送・set絶対値（自動削除） ──
+    const adRes = await A.evaluate(async () => {
+      const fid = CONFIG.CURRENT_FARM_ID
+      const farmRow = await sb.from('farm_farms').select('org_id').eq('id', fid).limit(1)
+      const orgId = farmRow.data[0].org_id
+      const pid = crypto.randomUUID()
+      await sb.from('farm_pesticides').insert([{ id: pid, org_id: orgId, farm_id: fid, name: 'QA-ADJ農薬(自動削除)', reg_no: 'QA', dilution: 1000, max_times: 3, preharvest_days: 7, stock_l: 18 }])
+      const stockOf = async () => { const r = await sb.from('farm_pesticides').select('stock_l').eq('id', pid); return Number(r.data[0].stock_l) }
+      const ref = crypto.randomUUID()
+      const a1 = await farmRepo.adjustStockDb('pesticide', fid, pid, 'delta', 5, '仕入れ', ref)      // 18→23
+      const s1 = await stockOf()
+      const a2 = await farmRepo.adjustStockDb('pesticide', fid, pid, 'delta', 5, '仕入れ', ref)      // 再送=冪等
+      const s2 = await stockOf()
+      const a3 = await farmRepo.adjustStockDb('pesticide', fid, pid, 'set', 20, '棚卸し調整', crypto.randomUUID()) // 23→20
+      const s3 = await stockOf()
+      const mv = await sb.from('farm_stock_movements').select('delta_amount,reason').eq('item_id', pid)
+      await sb.from('farm_stock_movements').delete().eq('item_id', pid)
+      await sb.from('farm_pesticides').delete().eq('id', pid)
+      return { a1: a1 && a1.ok, s1, dup: a2 && a2.duplicate === true, s2, a3: a3 && a3.ok, s3,
+        rows: mv.data ? mv.data.length : -1, deltas: (mv.data || []).map(x => Number(x.delta_amount)) }
+    })
+    ok('C11: 在庫調整RPC(仕入れ+5L→23L・再送は冪等・棚卸しset20L=差分-3記帳)',
+      adRes.a1 && adRes.s1 === 23 && adRes.dup && adRes.s2 === 23 && adRes.a3 && adRes.s3 === 20 &&
+      adRes.rows === 2 && adRes.deltas.includes(5) && adRes.deltas.includes(-3),
+      JSON.stringify(adRes))
   } finally {
     // 途中で例外終了してもテスト行を残さない（成功時は各検査内で消えているので実質no-op）
     try {

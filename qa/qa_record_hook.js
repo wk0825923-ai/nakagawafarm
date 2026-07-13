@@ -240,6 +240,29 @@ const build = (repo, farmBox) => {
       rt.result.list.length === 0, JSON.stringify(rt.result.list.map(x => x.id)))
   }
 
+  // H12: 送信ID保持の再送(Codexレビュー13 Critical) — 1回目「失敗」(実はDB成功で応答だけ喪失)→
+  // フォームが同じIDで再送→リポジトリはduplicate成功→listに1件だけ・IDは全送信で同一
+  {
+    const repo = makeRepo({ dbList: [] })
+    repo.create = (c, f, rec) => {
+      repo.calls.create.push(rec)
+      return Promise.resolve(repo.calls.create.length === 1
+        ? { ok: false, error: new Error('応答喪失') }              // 1回目: 応答だけ失われた
+        : { ok: true, duplicate: true, record: rec })               // 再送: 同一IDで冪等成功
+    }
+    const { rt } = build(repo); await tick()
+    const fixedId = 'aaaa1111-2222-4333-8444-555555550099' // フォームのsubmitIdRefが保持するID
+    const r1 = await rt.result.add({ id: fixedId, machine_name: '応答喪失テスト' })
+    await tick()
+    const afterFail = rt.result.list.length
+    const r2 = await rt.result.add({ id: fixedId, machine_name: '応答喪失テスト' })
+    await tick()
+    ok('H12 送信ID保持の再送: 同一IDで冪等成功・記録は1件だけ(二重登録なし)',
+      !r1.ok && afterFail === 0 && r2.ok === true && rt.result.list.length === 1 &&
+      repo.calls.create.length === 2 && repo.calls.create.every(c => c.id === fixedId),
+      JSON.stringify({ afterFail, n: rt.result.list.length, ids: repo.calls.create.map(c => c.id === fixedId) }))
+  }
+
   const pass = checks.filter(c => c.pass).length
   console.log('QARECORDHOOK_START')
   checks.forEach(c => console.log((c.pass ? 'PASS' : 'FAIL') + ' ' + c.name + (c.extra ? ' [' + c.extra + ']' : '')))

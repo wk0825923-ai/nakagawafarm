@@ -156,9 +156,20 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
       await page.keyboard.type(String(v))
       return true
     }
+    // 「在庫を一括保存」が有効化される(React再描画でdirty反映)まで待ってからクリック=タイミングレース回避
+    const clickSaveAll=async ()=>{
+      for(let i=0;i<25;i++){
+        const clicked=await page.evaluate(()=>{
+          const b=[...document.querySelectorAll('button')].find(e=>e.offsetParent&&/在庫を一括保存/.test(e.textContent)&&!e.disabled)
+          if(b){b.click();return true}return false
+        })
+        if(clicked)return true
+        await sleep(200)
+      }
+      return false
+    }
     if(!(await setRowInput(PNAME,50)))throw new Error('inventory row input not found')
-    await sleep(300)
-    await clickText(page,'在庫を一括保存')
+    if(!(await clickSaveAll()))throw new Error('save-all button not enabled (R4)')
     let r4saved=false
     for(let i=0;i<25;i++){ if(await page.evaluate(()=>/保存しました/.test(document.body.innerText))){r4saved=true;break}; await sleep(300) }
     const r4=await page.evaluate(async (pid)=>{
@@ -173,8 +184,7 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
     phase='r5-inventory-loss'
     await patchAdjust(page,'lose')
     if(!(await setRowInput(PNAME,60)))throw new Error('inventory row input not found (r5)')
-    await sleep(200)
-    await clickText(page,'在庫を一括保存')
+    if(!(await clickSaveAll()))throw new Error('save-all button not enabled (R5 first)')
     let r5fail=false
     for(let i=0;i<25;i++){ if(await page.evaluate(()=>/件が保存できませんでした/.test(document.body.innerText))){r5fail=true;break}; await sleep(300) }
     const r5a=await page.evaluate(async (pid)=>{
@@ -182,7 +192,7 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
       return { stock:Number(st.data[0].stock_l) }
     },pid)
     await patchAdjust(page,'restore')
-    await clickText(page,'在庫を一括保存')
+    if(!(await clickSaveAll()))throw new Error('save-all button not enabled (R5 resave)')
     let r5saved=false
     for(let i=0;i<25;i++){ if(await page.evaluate(()=>/保存しました/.test(document.body.innerText))){r5saved=true;break}; await sleep(300) }
     const r5b=await page.evaluate(async (pid)=>{
@@ -208,42 +218,49 @@ const patchAdjust = (page, mode)=>page.evaluate((mode)=>{
       if(v==='80'){r6follow=true;break}
       await sleep(300)
     }
-    await clickText(page,'在庫を一括保存'); await sleep(2000)
-    const r6=await page.evaluate(async (pid)=>{
+    const callsBefore=await page.evaluate(()=>(window.__adjCalls||[]).length)
+    // 変更ゼロ=ボタンは「変更はありません」でdisabled。押せないこと自体を検証するのでクリックしない
+    await sleep(2000)
+    const r6=await page.evaluate(async ({pid,callsBefore})=>{
       const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
       const mv=await sb.from('farm_stock_movements').select('id').eq('item_id',pid)
-      return { stock:Number(st.data[0].stock_l), rows:mv.data?mv.data.length:-1 }
-    },pid)
-    ok('R6 一括保存は変更行だけ送信: 別端末の80Lを巻き戻さない(表示も80へ追随・記帳3行のまま)',
-      r6follow===true && r6.stock===80 && r6.rows===3, JSON.stringify({follow:r6follow,...r6}))
+      const noChangeBtn=[...document.querySelectorAll('button')].some(b=>b.offsetParent&&/変更はありません/.test(b.textContent)&&b.disabled)
+      return { stock:Number(st.data[0].stock_l), rows:mv.data?mv.data.length:-1,
+        rpcCalls:(window.__adjCalls||[]).length-callsBefore, noChangeBtn }
+    },{pid,callsBefore})
+    ok('R6 一括保存は変更行だけ送信: 別端末の80Lを巻き戻さない(表示追随・RPC0件・ボタンは「変更はありません」)',
+      r6follow===true && r6.stock===80 && r6.rows===3 && r6.rpcCalls===0 && r6.noChangeBtn===true,
+      JSON.stringify({follow:r6follow,...r6}))
 
     // ═══ R7: 保存の応答待ち中に打ち替えた新しい値が黙って消えない ═══
     phase='r7-edit-while-saving'
     await patchAdjust(page,'slow') // RPCを2.5秒遅延(成功はする)
     if(!(await setRowInput(PNAME,70)))throw new Error('inventory row input not found (r7)')
-    await sleep(200)
-    await clickText(page,'在庫を一括保存') // 70の保存が走り出す(保存中…)
+    if(!(await clickSaveAll()))throw new Error('save-all button not enabled (R7 first)') // 70の保存が走り出す(保存中…)
     await sleep(600)
     if(!(await setRowInput(PNAME,75)))throw new Error('inventory row input not found (r7b)') // 応答待ち中に打ち替え
-    let r7saved=false // 70の保存完了(保存しました)を待つ
-    for(let i=0;i<30;i++){ if(await page.evaluate(()=>/保存しました/.test(document.body.innerText))){r7saved=true;break}; await sleep(300) }
+    let r7note=false // 70の保存完了時、「保存しました」ではなく未保存の明示が出ることを待つ
+    for(let i=0;i<30;i++){ if(await page.evaluate(()=>/保存中に入力した変更が未保存です/.test(document.body.innerText))){r7note=true;break}; await sleep(300) }
     await sleep(400)
     const r7a=await page.evaluate(async ({pid,name})=>{
       const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
       const rows=[...document.querySelectorAll('.main div')].filter(e=>e.offsetParent&&e.textContent.includes(name)&&e.querySelector('input[type=number]'))
       const row=rows[rows.length-1]
-      return { stock:Number(st.data[0].stock_l), inputVal: row?row.querySelector('input[type=number]').value:null }
+      const savedShown=/保存しました/.test(document.body.innerText) // 未保存があるのに緑の成功表示を出していないか
+      return { stock:Number(st.data[0].stock_l), inputVal: row?row.querySelector('input[type=number]').value:null, savedShown }
     },{pid,name:PNAME})
-    // 打ち替えた75はdirtyのまま残り、再保存で反映される
+    // 打ち替えた75はdirtyのまま残り、再保存で反映される(このときは全て保存済み=保存しました)
     await patchAdjust(page,'restore')
-    await clickText(page,'在庫を一括保存'); await sleep(2500)
+    if(!(await clickSaveAll()))throw new Error('save-all button not enabled (R7 resave)')
+    let r7saved2=false
+    for(let i=0;i<25;i++){ if(await page.evaluate(()=>/保存しました/.test(document.body.innerText))){r7saved2=true;break}; await sleep(300) }
     const r7b=await page.evaluate(async (pid)=>{
       const st=await sb.from('farm_pesticides').select('stock_l').eq('id',pid)
       return { stock:Number(st.data[0].stock_l) }
     },pid)
-    ok('R7 保存中の打ち替えが消えない: 70保存完了後も入力欄は75のまま→再保存で75L反映',
-      r7saved===true && r7a.stock===70 && r7a.inputVal==='75' && r7b.stock===75,
-      JSON.stringify({saved:r7saved,stockAfter70:r7a.stock,inputAfter:r7a.inputVal,stockFinal:r7b.stock}))
+    ok('R7 保存中の打ち替え: 70保存後は「未保存の変更あり」を明示(成功表示なし)・入力欄75維持→再保存で75L反映+保存しました',
+      r7note===true && r7a.savedShown===false && r7a.stock===70 && r7a.inputVal==='75' && r7saved2===true && r7b.stock===75,
+      JSON.stringify({note:r7note,savedShown:r7a.savedShown,stockAfter70:r7a.stock,inputAfter:r7a.inputVal,saved2:r7saved2,stockFinal:r7b.stock}))
 
     initPid=await page.evaluate(async (name)=>{ // R3で作られたマスタ行(DB同期後)のidを後片付け用に取得
       for(let i=0;i<10;i++){

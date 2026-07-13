@@ -1183,6 +1183,10 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
   const savingRef = React.useRef(false)
   const [saving, setSaving] = React.useState(false)
   const savedTimerRef = React.useRef(null)
+  // 保存の応答待ち中に打ち替えがあったか。あった場合は「保存しました」を出さず
+  // 未保存の変更が残っていることを明示する(利用者が安心して画面を離れるのを防ぐ)
+  const editedDuringSaveRef = React.useRef(false)
+  const [unsavedNote, setUnsavedNote] = React.useState(false)
   const handleSaveAll = async () => {
     if (savingRef.current) return
     savingRef.current = true
@@ -1191,6 +1195,8 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
     if (savedTimerRef.current) { clearTimeout(savedTimerRef.current); savedTimerRef.current = null }
     setSaved(false)
     setFailCount(0)
+    setUnsavedNote(false)
+    editedDuringSaveRef.current = false
     let fails = 0
     for (const [id, val] of Object.entries(inputs)) { // 変更行のみ(未変更行は送らない=0記帳ノイズも出さない)
       if (!submitIdsRef.current[id]) submitIdsRef.current[id] = newUuid()
@@ -1210,8 +1216,12 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
     setSaving(false)
     setFailCount(fails)
     if (fails === 0) {
-      setSaved(true)
-      savedTimerRef.current = setTimeout(() => setSaved(false), 2000)
+      if (editedDuringSaveRef.current) {
+        setUnsavedNote(true) // 送信分は保存済みだが新しい変更が未保存=緑の成功表示は出さない
+      } else {
+        setSaved(true)
+        savedTimerRef.current = setTimeout(() => setSaved(false), 2000)
+      }
     }
   }
 
@@ -1272,7 +1282,12 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
               React.createElement('input', {
                 type:'number', min:'0', step:'0.1',
                 value: valueOf(p),
-                onChange: e => { delete submitIdsRef.current[p.id]; setInputs(prev => ({ ...prev, [p.id]: e.target.value })) }, // 変更した行だけdirty化＋IDを取り直す
+                onChange: e => {
+                  delete submitIdsRef.current[p.id] // 変更した行だけdirty化＋IDを取り直す
+                  if (savingRef.current) editedDuringSaveRef.current = true // 保存中の打ち替え=完了時に未保存を明示
+                  setUnsavedNote(false) // 新たに編集を始めたら注意書きは畳む(ボタンが「未保存あり」を示す)
+                  setInputs(prev => ({ ...prev, [p.id]: e.target.value }))
+                },
                 style:{
                   width:'90px', padding:'7px 10px', borderRadius:'7px',
                   border:'1.5px solid ' + (isAlertNow ? '#FECACA' : '#D8E4D8'),
@@ -1316,18 +1331,24 @@ function InventoryCheckPanel({ pesticides, pesticideStock, onUpdateStock }) {
       },
         React.createElement('i', { className:'ti ti-alert-triangle' }), failCount + '件が保存できませんでした。もう一度お試しください'
       ),
+      unsavedNote && React.createElement('span', {
+        style:{ fontSize:'13px', color:'#B45309', fontWeight:600, display:'flex', alignItems:'center', gap:'5px' }
+      },
+        React.createElement('i', { className:'ti ti-alert-triangle' }), '送信した分は保存済みです。保存中に入力した変更が未保存です'
+      ),
       React.createElement('button', {
         onClick: handleSaveAll,
-        disabled: saving,
+        disabled: saving || Object.keys(inputs).length === 0, // 変更ゼロなら押せない(「保存しました」の空振り表示を出さない)
         style:{
           padding:'10px 24px', borderRadius:'8px', border:'none',
           background:C.green, color:'#fff', fontSize:'13px', fontWeight:700,
-          cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1,
+          cursor: (saving || Object.keys(inputs).length === 0) ? 'default' : 'pointer',
+          opacity: (saving || Object.keys(inputs).length === 0) ? 0.55 : 1,
           display:'flex', alignItems:'center', gap:'6px',
         }
       },
         React.createElement('i', { className:'ti ti-device-floppy', style:{ fontSize:'15px' } }),
-        saving ? '保存中…' : '在庫を一括保存'
+        saving ? '保存中…' : (Object.keys(inputs).length === 0 ? '変更はありません' : '在庫を一括保存')
       )
     )
   )
@@ -16055,15 +16076,18 @@ function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateS
   // 行ごとの送信ID: 成功(ok===true)確定まで同じIDを使い回す(応答喪失→再送でも冪等)。値変更でIDを取り直す
   const submitIdsRef = React.useRef({})
   const applyingRef = React.useRef({})
+  const [applying, setApplying] = React.useState({}) // 行別の「反映中…」表示(農薬側の保存中…と一貫)
   const handleApply = async (f) => {
     const val = edits[f.id]
     if (val === undefined || val === '') return
     if (applyingRef.current[f.id]) return // 同一行の二重押しガード
     applyingRef.current[f.id] = true
+    setApplying(prev => ({ ...prev, [f.id]: true }))
     if (!submitIdsRef.current[f.id]) submitIdsRef.current[f.id] = newUuid()
     const sentId = submitIdsRef.current[f.id]
     const res = await Promise.resolve(onUpdateStock(f.id, Number(val), sentId)).catch(() => null)
     applyingRef.current[f.id] = false
+    setApplying(prev => { const next = { ...prev }; delete next[f.id]; return next })
     if (!(res && res.ok === true)) return // 失敗/不明: 入力とIDを保持(トーストはapp側)
     if (submitIdsRef.current[f.id] === sentId) delete submitIdsRef.current[f.id]
     // 応答待ちの間に同じ欄へ入力されていたら、新しい値を残す(黙って消さない・農薬側と同型)
@@ -16132,13 +16156,15 @@ function FertilizerInventoryCheckPanel({ fertilizers, fertilizerStock, onUpdateS
             }, diff > 0 ? `+${diff} kg` : diff < 0 ? `${diff} kg` : '変更なし'),
             React.createElement('button', {
               onClick: () => handleApply(f),
-              disabled: !hasInput,
+              disabled: !hasInput || !!applying[f.id],
               style:{
                 marginLeft:'auto', padding:'7px 14px', background: hasInput ? C2.green : '#E2E8E2',
                 color: hasInput ? '#fff' : C2.muted,
-                border:'none', borderRadius:'7px', fontSize:'12px', cursor: hasInput ? 'pointer' : 'not-allowed', fontWeight:600, transition:'background .15s',
+                border:'none', borderRadius:'7px', fontSize:'12px',
+                cursor: (hasInput && !applying[f.id]) ? 'pointer' : 'not-allowed', fontWeight:600,
+                opacity: applying[f.id] ? 0.6 : 1, transition:'background .15s',
               }
-            }, '反映')
+            }, applying[f.id] ? '反映中…' : '反映')
           )
         )
       })

@@ -400,7 +400,8 @@ function StaffQuickView(props) {
       targetName: deleteTarget.label,
       detail: '消したあと、正しい内容で入力し直してください。',
       onCancel: () => setDeleteTarget(null),
-      onConfirm: () => { const del = DELETERS[deleteTarget.kind]; if (del) del(deleteTarget.id); setDeleteTarget(null) },
+      // 削除成功(ok===true)を待ってから閉じる。失敗時は確認画面を保持(DB経路のロールバックと整合)
+      onConfirm: async () => { const del = DELETERS[deleteTarget.kind]; if (!del) { setDeleteTarget(null); return } const res = await Promise.resolve(del(deleteTarget.id)).catch(() => null); if (res && res.ok === true) setDeleteTarget(null) },
     })
   )
 }
@@ -8046,7 +8047,8 @@ function HarvestRecordList({ records, onDelete, field, staff }) {
       title: '収穫記録を削除しますか？',
       targetName: deleteTarget.variety + '　' + deleteTarget.row_range + '畝　' + deleteTarget.date,
       onCancel: () => setDeleteTarget(null),
-      onConfirm: () => { onDelete(deleteTarget.id); setDeleteTarget(null) }
+      // 削除成功(ok===true)を待ってから閉じる。失敗時は確認画面を保持(DB経路のロールバックと整合)
+      onConfirm: async () => { const res = await Promise.resolve(onDelete(deleteTarget.id)).catch(() => null); if (res && res.ok === true) setDeleteTarget(null) }
     })
   )
 }

@@ -381,9 +381,9 @@ const login = async (page) => {
       const r1 = await farmRepo.readAsync(sk)
       const got = r1.ok ? r1.value.find(x => String(x.id) === rid) : null
       const stA1 = (await sb.from('farm_pesticides').select('stock_l').eq('id', pA)).data[0].stock_l // 20→15
-      // 農薬A→Bへ編集(逆仕訳: A+5戻し / B-5適用)
-      const edited = Object.assign({}, got, { pesticide_id: pB, amount: 5, version: got.version })
-      const u = await farmRepo.updateWithStock(col, fid, edited, [{ item_type: 'pesticide', item_id: pB, delta_amount: -5, unit: 'L', reason: '農薬散布' }])
+      // 農薬A→Bへ編集(逆仕訳: A+5戻し / B-5適用)。直接呼びなのでexpectedVersion(=got.version)を渡す(hookは内部で渡す)
+      const edited = Object.assign({}, got, { pesticide_id: pB, amount: 5 })
+      const u = await farmRepo.updateWithStock(col, fid, edited, [{ item_type: 'pesticide', item_id: pB, delta_amount: -5, unit: 'L', reason: '農薬散布' }], got.version)
       const stA2 = (await sb.from('farm_pesticides').select('stock_l').eq('id', pA)).data[0].stock_l // 15→20
       const stB2 = (await sb.from('farm_pesticides').select('stock_l').eq('id', pB)).data[0].stock_l // 20→15
       const r2 = await farmRepo.readAsync(sk)

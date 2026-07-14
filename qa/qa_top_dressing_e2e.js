@@ -135,7 +135,10 @@ const selectFert = (page,name)=>page.evaluate((name)=>{
       btnInvalid===true && t2n===1 && t2stock===80 && t2n2===2 && t2stock2===78,
       JSON.stringify({btnInvalid,afterDilOnly:{n:t2n,stock:t2stock},afterVolume:{n:t2n2,stock:t2stock2}}))
 
-    // ═══ T3: 削除で肥料残高が戻る(routed removeWithStock=UIの削除が呼ぶ経路) ═══
+    // ═══ T3: 削除RPC(逆仕訳)で肥料残高が戻る。app.jsのonDeleteTopDressingRecord(routed分岐)が呼ぶ
+    //         farmRepo.removeWithStock を直接検証する(記録削除+通帳の逆仕訳+残高復元が1トランザクション)。
+    //         ※UIの削除ボタン(スタッフ画面の「けす」→確認→DELETERS['fert'])→この関数、の結線自体は
+    //         このE2Eの対象外(管理画面の日報入力はウィザードのみで削除一覧を持たないため)。 ═══
     phase='t3-delete-restore'
     const t3=await page.evaluate(async (fieldId)=>{
       const col='farm_top_dressing_records', fid=CONFIG.CURRENT_FARM_ID
@@ -146,7 +149,7 @@ const selectFert = (page,name)=>page.evaluate((name)=>{
     },fieldId)
     await sleep(500)
     const t3stock=await stockOf(); const t3n=await recCount()
-    ok('T3 施肥記録の削除で肥料残高が戻る(2件削除→100kg・記録0件)',
+    ok('T3 削除RPC(逆仕訳)で肥料残高が戻る(2件削除→100kg・記録0件)',
       t3===true && t3stock===100 && t3n===0, JSON.stringify({del:t3,stock:t3stock,n:t3n}))
   } finally {
     // ── 後片付け: テストが作った圃場/ロット/肥料/記録/通帳をIDで限定削除 ──

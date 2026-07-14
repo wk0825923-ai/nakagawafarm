@@ -463,6 +463,33 @@ const login = async (page) => {
     ok('C17: 仕入れ履歴DB化(履歴+通帳+残高が単一RPC・在庫10→15・converter読み・同一送信ID再送はduplicate=15のまま/履歴1件/記帳1行)',
       puRes.r1 && puRes.st1 === 15 && puRes.hist1 && puRes.dup && puRes.st2 === 15 && puRes.hcount === 1 && puRes.mvRows === 1 && puRes.mvReason && puRes.shownAmt === 5,
       JSON.stringify(puRes))
+
+    // ── 仕入れの異内容再送ガード(レビュー High): 同一purchase_idで量を変えて再送→RPCが拒否・在庫/履歴は初回のまま ──
+    const puGuard = await A.evaluate(async () => {
+      const fid = CONFIG.CURRENT_FARM_ID
+      const farmRow = await sb.from('farm_farms').select('org_id').eq('id', fid).limit(1)
+      const orgId = farmRow.data[0].org_id
+      const pid = crypto.randomUUID()
+      await sb.from('farm_pesticides').insert([{ id: pid, org_id: orgId, farm_id: fid, name: 'QA-PUG農薬(自動削除)', reg_no: 'QA', dilution: 1000, max_times: 3, preharvest_days: 7, stock_l: 10 }])
+      const purchaseId = crypto.randomUUID()
+      const r1 = await farmRepo.addPurchaseWithStock('farm_pesticide_purchases', fid, { id: purchaseId, pesticide_id: pid, date: '2026-07-14', amount_L: 5, supplier: 'QA商店', price_yen: 3000 }) // 10→15
+      const st1 = Number((await sb.from('farm_pesticides').select('stock_l').eq('id', pid)).data[0].stock_l)
+      // 同一IDで量を6Lに変えて再送 → 拒否(ok:false)・在庫15のまま・履歴のamount_lは5のまま
+      const r2 = await farmRepo.addPurchaseWithStock('farm_pesticide_purchases', fid, { id: purchaseId, pesticide_id: pid, date: '2026-07-14', amount_L: 6, supplier: 'QA商店', price_yen: 3000 })
+      const st2 = Number((await sb.from('farm_pesticides').select('stock_l').eq('id', pid)).data[0].stock_l)
+      const h = (await sb.from('farm_pesticide_purchases').select('amount_l').eq('id', purchaseId)).data
+      // 同一内容(5L)の再送は引き続き冪等成功
+      const r3 = await farmRepo.addPurchaseWithStock('farm_pesticide_purchases', fid, { id: purchaseId, pesticide_id: pid, date: '2026-07-14', amount_L: 5, supplier: 'QA商店', price_yen: 3000 })
+      const st3 = Number((await sb.from('farm_pesticides').select('stock_l').eq('id', pid)).data[0].stock_l)
+      await sb.from('farm_stock_movements').delete().eq('item_id', pid)
+      await sb.from('farm_pesticide_purchases').delete().eq('pesticide_id', pid)
+      await sb.from('farm_pesticides').delete().eq('id', pid)
+      return { r1: !!(r1 && r1.ok), st1, rejected: !!(r2 && r2.ok === false), st2,
+        histAmt: h && h[0] ? Number(h[0].amount_l) : null, dupSame: !!(r3 && r3.ok && r3.duplicate === true), st3 }
+    })
+    ok('C18: 仕入れの異内容再送ガード(同一ID・量5→6は拒否ok:false・在庫15/履歴5Lのまま・同一内容5Lの再送は冪等成功)',
+      puGuard.r1 && puGuard.st1 === 15 && puGuard.rejected && puGuard.st2 === 15 && puGuard.histAmt === 5 && puGuard.dupSame && puGuard.st3 === 15,
+      JSON.stringify(puGuard))
   } finally {
     // 途中で例外終了してもテスト行を残さない（成功時は各検査内で消えているので実質no-op）
     try {

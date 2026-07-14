@@ -17345,11 +17345,13 @@ function useRecordCollection(collection, farmId, initial) {
     const gen = genRef.current
     const rec = Object.assign({}, purchase)
     if (rec.id == null) rec.id = newUuid()
-    const existed = listRef.current.some(x => String(x.id) === String(rec.id))
-    setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? rec : x) : prev.concat([rec])) // 楽観的更新
+    const prevRec = listRef.current.find(x => String(x.id) === String(rec.id)) // 既存IDなら更新前(異内容再送で来る)
+    const existed = !!prevRec
+    setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? rec : x) : prev.concat([rec])) // 楽観的更新(ID単位upsert)
     const res = await Promise.resolve(farmRepo.addPurchaseWithStock(collection, farmId, rec)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {
-      if (genRef.current === gen && !existed) setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック(新規分のみ)
+      // ロールバック: 新規は削除・既存は更新前へ復元(異内容再送がRPCで拒否された時に画面だけ書き換わらない)
+      if (genRef.current === gen) setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? prevRec : x) : prev.filter(x => String(x.id) !== String(rec.id)))
       try { showToast('仕入れの登録に失敗しました: ' + ((res && res.error && res.error.message) || '通信状態を確認してください'), 'error') } catch (_) {}
     }
     return res || { ok: false }

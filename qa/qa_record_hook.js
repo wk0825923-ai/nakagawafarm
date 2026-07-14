@@ -75,6 +75,11 @@ function makeRepo(opts) {
     resolveRead(r) { const f = readResolvers.shift(); if (f) f(r) },
     create(collection, farmId, rec) { calls.create.push(rec); return Promise.resolve(opts.createResult || { ok: true, record: rec }) },
     update(collection, farmId, id, patch, ev) { calls.update.push({ id, patch, ev }); return Promise.resolve(opts.updateResult || { ok: true }) },
+    // 在庫連動記録(RPC)の作成: 記録insert+通帳記帳+残高更新を1トランザクションで。同一IDの再送は冪等(duplicate)。
+    createWithStock(collection, farmId, rec, movements) {
+      calls.create.push(rec)
+      return Promise.resolve(opts.createWithStockResult || { ok: true, record: rec })
+    },
     // 在庫連動記録(RPC)の編集: 逆仕訳(旧movements戻し)+記録更新+新movements適用を1トランザクションで行う想定。
     // hookはmovementsを計算せず渡すだけ。ここでは呼び出し内容の記録と結果の差し替えができればよい。
     updateWithStock(collection, farmId, record, movements, ev) {
@@ -82,6 +87,7 @@ function makeRepo(opts) {
       calls.updateWithStock.push({ record, movements, ev })
       return Promise.resolve(opts.updateWithStockResult || { ok: true })
     },
+    removeWithStock(collection, farmId, id, ev) { calls.remove.push({ id, ev }); return Promise.resolve(opts.removeWithStockResult || { ok: true }) },
     remove(collection, farmId, id, ev) {
       calls.remove.push({ id, ev })
       if (opts.deferRemove) return new Promise(r => removeResolvers.push(r))
@@ -308,6 +314,24 @@ const build = (repo, farmBox) => {
     ok('H15 updateWithStock RPC失敗: 楽観更新を旧値(A5L/v3)へロールバック＋トースト・ok:false',
       !res.ok && got && got.pesticide_id === 'A' && got.amount === 5 && got.version === 3 && toasts.length === 1,
       JSON.stringify({ got: got && { p: got.pesticide_id, a: got.amount, v: got.version }, toasts: toasts.length }))
+  }
+
+  // H16: 部分成功→再送(addWithStock同一ID・Codexレビュー25 High) — 複数圃場保存の一部失敗後、
+  // フォームが同じUUIDで全件再送。成功済みIDが再度addWithStockされても、listは重複追加せず1件のまま。
+  {
+    const repo = makeRepo({ dbList: [] })
+    let n = 0
+    repo.createWithStock = (c, f, rec) => { n++; repo.calls.create.push(rec); return Promise.resolve(n === 1 ? { ok: true, record: rec } : { ok: true, duplicate: true, record: rec }) }
+    const { rt } = build(repo); await tick()
+    const fixedId = 'bbbb2222-3333-4444-8555-666666660099' // フォームのsubmitIdsRefが保持する圃場ぶんのID
+    const r1 = await rt.result.addWithStock({ id: fixedId, work_type: '定植' }, [])
+    await tick()
+    const after1 = rt.result.list.length
+    const r2 = await rt.result.addWithStock({ id: fixedId, work_type: '定植' }, []) // 再送: 同一ID
+    await tick()
+    ok('H16 部分成功→再送(addWithStock同一ID): listは1件のまま重複追加しない・2回目はduplicate冪等成功',
+      r1.ok && after1 === 1 && r2.ok && r2.duplicate === true && rt.result.list.length === 1 && repo.calls.create.length === 2,
+      JSON.stringify({ after1, n: rt.result.list.length, creates: repo.calls.create.length }))
   }
 
   const pass = checks.filter(c => c.pass).length

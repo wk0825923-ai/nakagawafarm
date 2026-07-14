@@ -147,6 +147,8 @@
     const rows = Number(r.rows_worked) || 0
     if (rows <= 0) return
     const existing = farmLots[r.field_id] || []
+    // 二重防御: この定植日報から既にロットを生成済みなら作らない(部分成功→再送で重複生成を防ぐ)
+    if (r.id != null && existing.some(l => l.source_record_id != null && String(l.source_record_id) === String(r.id))) return
     const usedMax = existing.reduce((m, l) => {
       const set = parseRowRange(l.row_range)
       return set.size > 0 ? Math.max(m, ...set) : m
@@ -225,13 +227,14 @@
   const onSaveRecordWithStock = async (r) => {
     if (workStockRouted()) {
       const res = await workRecords.addWithStock(r, workMovements(r))
-      if (res && res.ok) { if (workMovements(r).length) reloadPesticides(); autoCreateLotFromTransplant(r) } // 残高即時反映(realtimeが保険)
+      // duplicate(=同一IDの再送でDBは冪等成功)ではロット再生成しない(重複生成防止)
+      if (res && res.ok) { if (workMovements(r).length) reloadPesticides(); if (res.duplicate !== true) autoCreateLotFromTransplant(r) } // 残高即時反映(realtimeが保険)
       return res
     }
     const res = await workRecords.add(r)
     if (res && res.ok) {
       if (r.work_type === '農薬散布' && r.pesticide_id && r.amount) adjustStock(r.pesticide_id, Number(r.amount))
-      autoCreateLotFromTransplant(r)
+      if (res.duplicate !== true) autoCreateLotFromTransplant(r)
     }
     return res
   }

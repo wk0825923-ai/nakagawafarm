@@ -391,8 +391,8 @@ function StaffQuickView(props) {
     detailRecord && React.createElement(RecordDetailModal, {
       record: detailRecord, fields, pesticides,
       onClose: () => setDetailRecord(null),
-      onUpdate: onUpdate ? r => { onUpdate(r); setDetailRecord(null) } : null,
-      onDelete: onDelete ? id => { onDelete(id); setDetailRecord(null) } : null,
+      onUpdate: onUpdate ? r => onUpdate(r) : null, // 閉じるのはモーダル側(handleUpdate)が成功時のみ
+      onDelete: onDelete ? id => onDelete(id) : null,
     }),
     // ── リッチ記録（農薬/施肥/収穫）の削除確認 ──
     deleteTarget && React.createElement(ConfirmDeleteModal, {
@@ -2855,8 +2855,8 @@ function Dashboard({ fields, records, staff, gap, todayTasks, onToggleTodayTask,
       fields,
       pesticides: pesticides || [],
       onClose: () => setSelectedRecord(null),
-      onUpdate: onUpdateRecord ? r => { onUpdateRecord(r); setSelectedRecord(null) } : null,
-      onDelete: onDeleteRecord ? id => { onDeleteRecord(id); setSelectedRecord(null) } : null,
+      onUpdate: onUpdateRecord ? r => onUpdateRecord(r) : null, // 閉じるのはモーダル側(handleUpdate)が成功時のみ
+      onDelete: onDeleteRecord ? id => onDeleteRecord(id) : null,
     }),
 
     // 【スッキリ化・ユーザー要望】月次作業サマリー・来年の作付提案・圃場サマリーはダッシュボードから外した。
@@ -3929,14 +3929,21 @@ function RecordDetailModal({ record, fields, pesticides, onClose, onUpdate, onDe
   const cfg = WORK_ICON_MAP[record.work_type] || WORK_ICON_MAP['その他']
   const uf = (k, v) => setForm(prev => ({ ...prev, [k]: v }))
 
-  const handleUpdate = () => {
-    if (onUpdate) onUpdate({ ...form, field_id: String(form.field_id) })
-    setIsEditing(false)
-    onClose()
+  // 更新/削除はawaitし、ok===trueの時だけ閉じる。失敗時(RPCロールバック等)は編集/確認画面を保持し入力を消さない
+  const busyRef = React.useRef(false)
+  const handleUpdate = async () => {
+    if (!onUpdate) { setIsEditing(false); onClose(); return }
+    if (busyRef.current) return; busyRef.current = true
+    const res = await Promise.resolve(onUpdate({ ...form, field_id: String(form.field_id) })).catch(() => null)
+    busyRef.current = false
+    if (res && res.ok === true) { setIsEditing(false); onClose() } // 失敗時は編集画面を保持
   }
-  const handleDelete = () => {
-    if (onDelete) onDelete(record.id)
-    onClose()
+  const handleDelete = async () => {
+    if (!onDelete) { onClose(); return }
+    if (busyRef.current) return; busyRef.current = true
+    const res = await Promise.resolve(onDelete(record.id)).catch(() => null)
+    busyRef.current = false
+    if (res && res.ok === true) onClose() // 失敗時は確認画面を保持
   }
 
   const labelStyle = { fontSize:'10px', fontWeight:700, color:'#4B5563', textTransform:'uppercase', letterSpacing:'.06em', display:'block', marginBottom:'5px' }
@@ -4488,8 +4495,8 @@ function RecordTable({ records, fields, pesticides, onUpdate, onDelete, cropCycl
       fields,
       pesticides,
       onClose: () => setSelectedRecord(null),
-      onUpdate: onUpdate ? (updated) => { onUpdate(updated); setSelectedRecord(null) } : null,
-      onDelete: onDelete ? (id) => { onDelete(id); setSelectedRecord(null) } : null,
+      onUpdate: onUpdate ? (updated) => onUpdate(updated) : null, // 閉じるのはモーダル側(handleUpdate)が成功時のみ
+      onDelete: onDelete ? (id) => onDelete(id) : null,
     })
   )
 }
@@ -8278,7 +8285,8 @@ function CropSpecificDetailsPanel({ field, onUpdate }) {
 function CropCycleSelector({ record, cropCycles, onUpdate }) {
   const [isEditing, setIsEditing] = React.useState(false)
   const history = getCropCycleHistory(cropCycles, record.field_id)
-  const current = history.find(c => c.id === record.crop_cycle_id)
+  // DB往復でcrop_cycle_idはtext("123")になる一方サイクルidが数値123のことがある→String比較で揃える(紐付け済みが未紐付け表示になるのを防ぐ)
+  const current = history.find(c => String(c.id) === String(record.crop_cycle_id))
 
   if (!isEditing) {
     return React.createElement('div', {
@@ -17106,10 +17114,11 @@ function useRecordCollection(collection, farmId, initial) {
     const gen = genRef.current // この操作が属する農場世代（切替後は結果を新農場に作用させない）
     const rec = Object.assign({}, record)
     if (rec.id == null) rec.id = newUuid()
-    setList(prev => prev.concat([rec])) // 楽観的更新: 画面は即反映
+    const existed = listRef.current.some(x => String(x.id) === String(rec.id)) // 部分成功→再送で既存IDが来ることがある
+    setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? rec : x) : prev.concat([rec])) // 楽観的更新(ID単位upsert=重複追加しない)
     const res = await Promise.resolve(farmRepo.create(collection, farmId, rec)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {
-      if (genRef.current === gen) setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック
+      if (genRef.current === gen && !existed) setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック(この操作で新規追加した分のみ)
       console.warn('[useRecordCollection] 追加失敗:', collection, res && res.error)
       try { showToast('保存に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
     }
@@ -17156,10 +17165,11 @@ function useRecordCollection(collection, farmId, initial) {
     const rec = Object.assign({}, record)
     if (rec.id == null) rec.id = newUuid()
     if (rec.version == null) rec.version = 1
-    setList(prev => prev.concat([rec])) // 楽観的更新
+    const existed = listRef.current.some(x => String(x.id) === String(rec.id)) // 部分成功→再送で既存IDが来ることがある
+    setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? rec : x) : prev.concat([rec])) // 楽観的更新(ID単位upsert=重複追加しない)
     const res = await Promise.resolve(farmRepo.createWithStock(collection, farmId, rec, movements)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {
-      if (genRef.current === gen) setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック
+      if (genRef.current === gen && !existed) setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック(この操作で新規追加した分のみ)
       console.warn('[useRecordCollection] 追加失敗(在庫連動):', collection, res && res.error)
       try { showToast('保存に失敗しました: ' + ((res && res.error && res.error.message) || '通信状態を確認してください'), 'error') } catch (_) {}
     }

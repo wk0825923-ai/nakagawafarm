@@ -17114,11 +17114,13 @@ function useRecordCollection(collection, farmId, initial) {
     const gen = genRef.current // この操作が属する農場世代（切替後は結果を新農場に作用させない）
     const rec = Object.assign({}, record)
     if (rec.id == null) rec.id = newUuid()
-    const existed = listRef.current.some(x => String(x.id) === String(rec.id)) // 部分成功→再送で既存IDが来ることがある
+    const prevRec = listRef.current.find(x => String(x.id) === String(rec.id)) // 既存IDなら更新前レコード(部分成功→再送で来る)
+    const existed = !!prevRec
     setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? rec : x) : prev.concat([rec])) // 楽観的更新(ID単位upsert=重複追加しない)
     const res = await Promise.resolve(farmRepo.create(collection, farmId, rec)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {
-      if (genRef.current === gen && !existed) setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック(この操作で新規追加した分のみ)
+      // ロールバック: 新規は削除・既存は更新前へ復元(既存を置換したまま失敗すると画面だけ未保存内容になる)
+      if (genRef.current === gen) setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? prevRec : x) : prev.filter(x => String(x.id) !== String(rec.id)))
       console.warn('[useRecordCollection] 追加失敗:', collection, res && res.error)
       try { showToast('保存に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
     }
@@ -17165,11 +17167,13 @@ function useRecordCollection(collection, farmId, initial) {
     const rec = Object.assign({}, record)
     if (rec.id == null) rec.id = newUuid()
     if (rec.version == null) rec.version = 1
-    const existed = listRef.current.some(x => String(x.id) === String(rec.id)) // 部分成功→再送で既存IDが来ることがある
+    const prevRec = listRef.current.find(x => String(x.id) === String(rec.id)) // 既存IDなら更新前レコード(部分成功→再送で来る)
+    const existed = !!prevRec
     setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? rec : x) : prev.concat([rec])) // 楽観的更新(ID単位upsert=重複追加しない)
     const res = await Promise.resolve(farmRepo.createWithStock(collection, farmId, rec, movements)).catch(e => ({ ok: false, error: e }))
     if (!res || !res.ok) {
-      if (genRef.current === gen && !existed) setList(prev => prev.filter(x => String(x.id) !== String(rec.id))) // ロールバック(この操作で新規追加した分のみ)
+      // ロールバック: 新規は削除・既存は更新前へ復元(既存を置換したまま失敗すると画面だけ未保存内容になる)
+      if (genRef.current === gen) setList(prev => existed ? prev.map(x => String(x.id) === String(rec.id) ? prevRec : x) : prev.filter(x => String(x.id) !== String(rec.id)))
       console.warn('[useRecordCollection] 追加失敗(在庫連動):', collection, res && res.error)
       try { showToast('保存に失敗しました: ' + ((res && res.error && res.error.message) || '通信状態を確認してください'), 'error') } catch (_) {}
     }

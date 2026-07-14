@@ -334,6 +334,20 @@ const build = (repo, farmBox) => {
       JSON.stringify({ after1, n: rt.result.list.length, creates: repo.calls.create.length }))
   }
 
+  // H17: 既存IDの保存失敗時の復元(Codexレビュー26 Medium) — 再送前にフォームを変更(新内容)して
+  // addWithStock→RPC失敗。楽観置換した新内容を残さず、更新前レコードへ復元する(画面だけ未保存内容を防ぐ)
+  {
+    const OLD = { id: 'e-1', date: '2026-07-14', machine_name: '旧内容', version: 1 }
+    const repo = makeRepo({ dbList: [OLD], createWithStockResult: { ok: false, error: new Error('offline') } })
+    const { rt, toasts } = build(repo); await tick()
+    const res = await rt.result.addWithStock({ id: 'e-1', date: '2026-07-14', machine_name: '新内容(未保存)' }, [])
+    await tick()
+    const got = rt.result.list.find(x => x.id === 'e-1')
+    ok('H17 既存ID保存失敗: 楽観置換した新内容を残さず更新前(旧内容)へ復元・件数不変＋トースト',
+      !res.ok && rt.result.list.length === 1 && got && got.machine_name === '旧内容' && toasts.length === 1,
+      JSON.stringify({ n: rt.result.list.length, name: got && got.machine_name, toasts: toasts.length }))
+  }
+
   const pass = checks.filter(c => c.pass).length
   console.log('QARECORDHOOK_START')
   checks.forEach(c => console.log((c.pass ? 'PASS' : 'FAIL') + ' ' + c.name + (c.extra ? ' [' + c.extra + ']' : '')))

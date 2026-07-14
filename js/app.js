@@ -227,14 +227,15 @@
   const onSaveRecordWithStock = async (r) => {
     if (workStockRouted()) {
       const res = await workRecords.addWithStock(r, workMovements(r))
-      // duplicate(=同一IDの再送でDBは冪等成功)ではロット再生成しない(重複生成防止)
-      if (res && res.ok) { if (workMovements(r).length) reloadPesticides(); if (res.duplicate !== true) autoCreateLotFromTransplant(r) } // 残高即時反映(realtimeが保険)
+      // res.okなら duplicate(応答喪失→再送でDBは冪等成功)でもロット生成を試みる。source_record_id
+      // 二重防御で重複しない。duplicateで弾くと「1回目は応答喪失で未生成→再送でも未生成」でロットが欠落する
+      if (res && res.ok) { if (workMovements(r).length) reloadPesticides(); autoCreateLotFromTransplant(r) } // 残高即時反映(realtimeが保険)
       return res
     }
     const res = await workRecords.add(r)
     if (res && res.ok) {
       if (r.work_type === '農薬散布' && r.pesticide_id && r.amount) adjustStock(r.pesticide_id, Number(r.amount))
-      if (res.duplicate !== true) autoCreateLotFromTransplant(r)
+      autoCreateLotFromTransplant(r) // duplicateでも呼ぶ(source_record_id二重防御で重複しない・再送でのロット欠落防止)
     }
     return res
   }

@@ -328,10 +328,11 @@
         })
       },
     },
-    // 日報(farm_work_records・在庫連動記録の切替第3弾): 汎用の日次作業ログ。全作業種が入る混在コレクション。
+    // 日報(collection名=farm_records / DB表=farm_work_records・在庫連動記録の切替第3弾):
+    // 汎用の日次作業ログ。全作業種が入る混在コレクション。KEY_TABLEでfarm_records→farm_work_recordsに変換。
     // work_type='農薬散布'かつpesticide_id+amountのときだけ在庫連動(RPC v6が期待量=amountを検証)。
     // それ以外の作業(除草/定植/灌水等)はmovements空でそのまま保存。編集(update)も逆仕訳RPCで対応。
-    farm_work_records: {
+    farm_records: {
       recordCrud: true,
       stockRpc: true,
       toRow(rec, ctx) {
@@ -855,7 +856,7 @@
   //   ?dbdest=1 で退避を解除。node(QAハーネス)ではrouteしない=テストが自分で管理する。
   //   localhost(ブラウザQAハーネス環境)は既定OFF: 約45本のハーネスがlocalStorage直注入の従来挙動を
   //   前提にしているため。localhostでDB経路を試す時だけ ?dbdest=1 を付ける。DB経路の検証はqa_dbdest_live担当。
-  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers', 'farm_fields_v2', 'farm_lots', 'farm_lot_spray_records', 'farm_top_dressing_records']
+  const ROUTED_COLLECTIONS = ['farm_shipment_destinations', 'farm_gap_documents', 'farm_monthly_temps', 'farm_maintenance_records', 'farm_shipment_records', 'farm_pesticides', 'farm_fertilizers', 'farm_fields_v2', 'farm_lots', 'farm_lot_spray_records', 'farm_top_dressing_records', 'farm_records']
   try {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       const q = new URLSearchParams(window.location.search).get('dbdest')

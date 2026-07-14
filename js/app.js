@@ -65,7 +65,9 @@
   const navigateTo = (p, focus) => { if (focus != null) setFocusRecordId(focus); setPage(p) }
   const [fields,    setFields]   = useFPS('farm_fields_v2',     INITIAL_FIELDS)
   const [cropCycles, setCropCycles] = useFPS('farm_crop_cycles', INITIAL_CROP_CYCLES)
-  const [records,   setRecords]  = useFPS('farm_records',    INITIAL_RECORDS)
+  // 【在庫連動記録の切替第3弾】日報は1行CRUD+在庫RPC(routed時・農薬散布のみ在庫連動)。編集(update)も対応。
+  const workRecords = useRecordCollection('farm_records', farmKey, INITIAL_RECORDS)
+  const records = workRecords.list
   const [staff,     setStaff]    = useFPS('farm_staff',      INITIAL_STAFF)
   // 【実装手順書 A】技能実習生日誌
   const [traineeDiaries, setTraineeDiaries] = useFPS('farm_trainee_diaries', [])
@@ -212,44 +214,64 @@
     ))
   }
 
-  // 記録保存時: 農薬散布なら在庫を減算 / 定植なら畝ロットを自動生成
-  const onSaveRecordWithStock = (r) => {
-    setRecords(p => [...p, r])
-    if (r.work_type === '農薬散布' && r.pesticide_id && r.amount) {
-      adjustStock(r.pesticide_id, Number(r.amount))
+  // 日報の在庫連動: work_type='農薬散布'かつ農薬+amountのときだけ在庫を1回分(-amount)動かす。
+  // それ以外の作業は在庫非連動(movements空)。RPC v6が記録から期待量を再計算して検証する。
+  const workStockRouted = () => !!(farmRepo.isStockRouted && farmRepo.isStockRouted('farm_records'))
+  const workMovements = (r) => (r.work_type === '農薬散布' && r.pesticide_id && Number(r.amount) > 0)
+    ? [{ item_type: 'pesticide', item_id: String(r.pesticide_id), delta_amount: -Number(r.amount), unit: 'L', reason: '農薬散布' }]
+    : []
+
+  // 記録保存時: 農薬散布なら在庫を減算 / 定植なら畝ロットを自動生成。祝福はフォーム側(複数圃場を1回にまとめるため)
+  const onSaveRecordWithStock = async (r) => {
+    if (workStockRouted()) {
+      const res = await workRecords.addWithStock(r, workMovements(r))
+      if (res && res.ok) { if (workMovements(r).length) reloadPesticides(); autoCreateLotFromTransplant(r) } // 残高即時反映(realtimeが保険)
+      return res
     }
-    autoCreateLotFromTransplant(r)
+    const res = await workRecords.add(r)
+    if (res && res.ok) {
+      if (r.work_type === '農薬散布' && r.pesticide_id && r.amount) adjustStock(r.pesticide_id, Number(r.amount))
+      autoCreateLotFromTransplant(r)
+    }
+    return res
   }
 
-  // 記録更新時: 差分計算で在庫を調整
-  const onUpdateRecordWithStock = (newRecord) => {
-    setRecords(p => p.map(x => x.id === newRecord.id ? newRecord : x))
-    const oldRecord = records.find(x => x.id === newRecord.id)
-    if (!oldRecord) return
-    // 旧記録が農薬散布だった場合は旧 amount を在庫に戻す
-    if (oldRecord.work_type === '農薬散布' && oldRecord.pesticide_id && oldRecord.amount) {
-      adjustStock(oldRecord.pesticide_id, -Number(oldRecord.amount))
+  // 記録更新時: routedは逆仕訳RPC(旧movements戻し+新適用)。localStorageは差分計算で在庫を調整。
+  const onUpdateRecordWithStock = async (newRecord) => {
+    const oldRecord = records.find(x => String(x.id) === String(newRecord.id))
+    if (workStockRouted()) {
+      const res = await workRecords.updateWithStock(newRecord, workMovements(newRecord))
+      if (res && res.ok && (workMovements(newRecord).length || (oldRecord && oldRecord.work_type === '農薬散布'))) reloadPesticides()
+      return res
     }
-    // 新記録が農薬散布なら新 amount を減算
-    if (newRecord.work_type === '農薬散布' && newRecord.pesticide_id && newRecord.amount) {
-      adjustStock(newRecord.pesticide_id, Number(newRecord.amount))
+    const res = await workRecords.updateById(newRecord.id, newRecord)
+    if (res && res.ok) {
+      if (oldRecord && oldRecord.work_type === '農薬散布' && oldRecord.pesticide_id && oldRecord.amount) adjustStock(oldRecord.pesticide_id, -Number(oldRecord.amount))
+      if (newRecord.work_type === '農薬散布' && newRecord.pesticide_id && newRecord.amount) adjustStock(newRecord.pesticide_id, Number(newRecord.amount))
     }
+    return res
   }
 
   // 記録削除時: 農薬散布なら amount を在庫に戻す
-  const onDeleteRecordWithStock = (id) => {
-    const rec = records.find(x => x.id === id)
-    setRecords(p => p.filter(x => x.id !== id))
-    if (rec && rec.work_type === '農薬散布' && rec.pesticide_id && rec.amount) {
-      adjustStock(rec.pesticide_id, -Number(rec.amount))
+  const onDeleteRecordWithStock = async (id) => {
+    const rec = records.find(x => String(x.id) === String(id))
+    if (workStockRouted()) {
+      const res = await workRecords.removeWithStock(id)
+      if (res && res.ok && rec && rec.work_type === '農薬散布') reloadPesticides()
+      return res
     }
+    const res = await workRecords.removeById(id)
+    if (res && res.ok && rec && rec.work_type === '農薬散布' && rec.pesticide_id && rec.amount) adjustStock(rec.pesticide_id, -Number(rec.amount))
+    return res
   }
 
-  // 記録の作付け紐付け（crop_cycle_id）のみを更新する
-  const onUpdateRecordCycle = (recordId, newCycleId) => {
-    setRecords(prev => prev.map(r =>
-      r.id === recordId ? { ...r, crop_cycle_id: newCycleId } : r
-    ))
+  // 記録の作付け紐付け（crop_cycle_id）のみを更新する。routedは在庫不変(現movements=逆仕訳+同一再適用)。
+  const onUpdateRecordCycle = async (recordId, newCycleId) => {
+    const rec = records.find(x => String(x.id) === String(recordId))
+    if (!rec) return { ok: false }
+    const updated = Object.assign({}, rec, { crop_cycle_id: newCycleId })
+    if (workStockRouted()) return workRecords.updateWithStock(updated, workMovements(updated))
+    return workRecords.updateById(recordId, { crop_cycle_id: newCycleId })
   }
 
   // =====================================================

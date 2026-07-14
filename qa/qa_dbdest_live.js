@@ -360,6 +360,50 @@ const login = async (page) => {
       tdRes.c && tdRes.found && tdRes.ftype && tdRes.checks && tdRes.vol &&
       tdRes.stockA === 37 && tdRes.stockB === 38 && tdRes.d && tdRes.stockAafter === 40 && tdRes.stockBafter === 40,
       JSON.stringify(tdRes))
+
+    // ── 日報(farm_records→farm_work_records)=在庫RPC切替: 農薬散布create→農薬A残高減算・converter往復
+    //    (crop_cycle_id/spray_volume_L)→農薬A→Bへupdate(逆仕訳でA復元・B減算)→removeでB復元 ──
+    const wrRes = await A.evaluate(async () => {
+      const col = 'farm_records', fid = CONFIG.CURRENT_FARM_ID
+      const pk = 'farm_pesticides_' + fid, sk = col + '_' + fid
+      const farmRow = await sb.from('farm_farms').select('org_id').eq('id', fid).limit(1)
+      const orgId = farmRow.data[0].org_id
+      const pA = crypto.randomUUID(), pB = crypto.randomUUID()
+      await sb.from('farm_pesticides').insert([
+        { id: pA, org_id: orgId, farm_id: fid, name: 'QA-WR農薬A(自動削除)', reg_no: 'QA', dilution: 1000, max_times: 3, preharvest_days: 7, stock_l: 20 },
+        { id: pB, org_id: orgId, farm_id: fid, name: 'QA-WR農薬B(自動削除)', reg_no: 'QA', dilution: 1000, max_times: 3, preharvest_days: 7, stock_l: 20 },
+      ])
+      const rid = crypto.randomUUID()
+      const rec = { id: rid, field_id: null, date: '2026-07-14', work_type: '農薬散布', pesticide_id: pA,
+        dilution: 1000, amount: 5, spray_volume_L: 500, crop_cycle_id: 'cycle-QA-1', weather: '晴', worker: 'QA',
+        note: 'QA-WR(自動削除)', field_ids: [], checks: { kanri: true } }
+      const c = await farmRepo.createWithStock(col, fid, rec, [{ item_type: 'pesticide', item_id: pA, delta_amount: -5, unit: 'L', reason: '農薬散布' }])
+      const r1 = await farmRepo.readAsync(sk)
+      const got = r1.ok ? r1.value.find(x => String(x.id) === rid) : null
+      const stA1 = (await sb.from('farm_pesticides').select('stock_l').eq('id', pA)).data[0].stock_l // 20→15
+      // 農薬A→Bへ編集(逆仕訳: A+5戻し / B-5適用)
+      const edited = Object.assign({}, got, { pesticide_id: pB, amount: 5, version: got.version })
+      const u = await farmRepo.updateWithStock(col, fid, edited, [{ item_type: 'pesticide', item_id: pB, delta_amount: -5, unit: 'L', reason: '農薬散布' }])
+      const stA2 = (await sb.from('farm_pesticides').select('stock_l').eq('id', pA)).data[0].stock_l // 15→20
+      const stB2 = (await sb.from('farm_pesticides').select('stock_l').eq('id', pB)).data[0].stock_l // 20→15
+      const r2 = await farmRepo.readAsync(sk)
+      const got2 = r2.ok ? r2.value.find(x => String(x.id) === rid) : null
+      const d = await farmRepo.removeWithStock(col, fid, rid, (got2 && got2.version) || 2)
+      const stB3 = (await sb.from('farm_pesticides').select('stock_l').eq('id', pB)).data[0].stock_l // 15→20
+      // 片付け
+      await sb.from('farm_stock_movements').delete().eq('item_id', pA)
+      await sb.from('farm_stock_movements').delete().eq('item_id', pB)
+      await sb.from('farm_pesticides').delete().eq('id', pA)
+      await sb.from('farm_pesticides').delete().eq('id', pB)
+      return { c: !!(c && c.ok), found: !!got, cycle: got && got.crop_cycle_id === 'cycle-QA-1', vol: got && got.spray_volume_L === 500,
+        checks: got && got.checks && got.checks.kanri === true, stA1: Number(stA1),
+        u: !!(u && u.ok), stA2: Number(stA2), stB2: Number(stB2), pidAfter: got2 && got2.pesticide_id === pB,
+        d: !!(d && d.ok), stB3: Number(stB3) }
+    })
+    ok('C15: 日報の在庫RPC往復(農薬散布create=A20→15L・converter往復(crop_cycle_id/spray_volume_L/checks)・A→B編集で逆仕訳(A復元20/B減算15)・削除でB復元20)',
+      wrRes.c && wrRes.found && wrRes.cycle && wrRes.vol && wrRes.checks && wrRes.stA1 === 15 &&
+      wrRes.u && wrRes.stA2 === 20 && wrRes.stB2 === 15 && wrRes.pidAfter && wrRes.d && wrRes.stB3 === 20,
+      JSON.stringify(wrRes))
   } finally {
     // 途中で例外終了してもテスト行を残さない（成功時は各検査内で消えているので実質no-op）
     try {

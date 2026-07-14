@@ -4835,32 +4835,37 @@ function RecordForm({ fields, pesticides, records, onSave, inModal, lotSprayReco
   }
   const handleRemovePhoto = (idx) => setForm(f => ({ ...f, photos: (f.photos || []).filter((_, i) => i !== idx) }))
 
-  const handleSave = () => {
+  // 送信ID保持: 圃場ごとの記録に固定UUIDを割り当て、全件成功が確定するまで同じIDを使い回す。
+  // (応答喪失→再送でもRPC冪等で二重登録しない。数値ID(Date.now)はDBのuuid列に入らないためUUID化)
+  const submitIdsRef = React.useRef(null)
+  const handleSave = async () => {
     if (!form.field_id || !form.work_type) { showToast('圃場と作業内容を選んでください', 'warn'); return }
-    // 【多重送信ガード】保存ボタン連打（高齢者/もたつく端末で起きがち）で同じ日報が
-    // 複数登録されるのを防ぐ。1.2秒は再保存をブロックし、フォーム編集/続けて入力で解除。
-    if (savingRef.current) return
+    // 農薬散布は在庫連動RPCが原液使用量(amount)>0を要求する。画面側でも弾く(保存後の失敗を防ぐ)
+    if (form.work_type === '農薬散布' && !(form.pesticide_id && Number(form.amount) > 0)) {
+      showToast('農薬散布は農薬と使用量（原液L）を入力してください', 'warn'); return
+    }
+    if (savingRef.current) return // 連打による二重登録を防止
     savingRef.current = true
-    setTimeout(() => { savingRef.current = false }, 1200)
     // 【複数圃場同時記録】農薬散布は圃場ごとに使用回数・希釈が異なるため主圃場のみ。
     // それ以外の作業は選択圃場ぶんの単一field_id記録へ展開（読み取り側は既存のまま）。
     const isPesticide = form.work_type === '農薬散布'
     const selectedIds = (form.field_ids && form.field_ids.length) ? form.field_ids.slice() : [form.field_id]
     const targetIds   = isPesticide ? [form.field_id] : selectedIds
     const { field_ids, ...base } = form
-    targetIds.forEach((fid, i) => {
-      onSave({
-        ...base, id: Date.now() + i, dilution,
-        field_id: fid,
-        // 写真は容量肥大を避けるため、複数展開時は主圃場(先頭)の記録のみに添付
-        photos: i === 0 ? (form.photos || []) : [],
-        pesticide_id: form.pesticide_id ? String(form.pesticide_id) : null, // UUID対応: Number()はNaN化するため禁止
-      })
-    })
+    if (!submitIdsRef.current || submitIdsRef.current.length !== targetIds.length) submitIdsRef.current = targetIds.map(() => newUuid())
+    // 祝福・下書き破棄は「全件成功」確定後だけ。失敗が1件でもあれば入力と送信IDを保持し、再送は同じIDで冪等
+    const results = await Promise.all(targetIds.map((fid, i) => Promise.resolve(onSave({
+      ...base, id: submitIdsRef.current[i], dilution,
+      field_id: fid,
+      photos: i === 0 ? (form.photos || []) : [], // 複数展開時は主圃場(先頭)のみ添付
+      pesticide_id: form.pesticide_id ? String(form.pesticide_id) : null, // UUID対応: Number()はNaN化するため禁止
+    })).catch(() => null)))
+    if (!results.every(r => r && r.ok === true)) { savingRef.current = false; return } // 失敗: 保持して再送に備える
+    submitIdsRef.current = null // 全件成功: 次の記録は新しいIDで
+    setTimeout(() => { savingRef.current = false }, 1200)
     celebrateSave(targetIds.length > 1 ? targetIds.length + '圃場に記録！' : '記録しました！')
     clearDraft(); setDraftSaved(false)   // 保存できたので下書きは破棄（P2）
-    // UX-10: 保存完了後、「続けて入力」ボタンを3秒表示
-    setShowContinueButton(true)
+    setShowContinueButton(true)          // UX-10: 保存完了後、「続けて入力」ボタンを3秒表示
     setTimeout(() => setShowContinueButton(false), 3000)
   }
   

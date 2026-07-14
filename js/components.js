@@ -4124,7 +4124,7 @@ function RecordDetailModal({ record, fields, pesticides, onClose, onUpdate, onDe
         form.work_type === '農薬散布' && pesticides && React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px', marginBottom:'12px' } },
           React.createElement('div', null,
             React.createElement('label', { style:labelStyle }, '農薬'),
-            React.createElement('select', { value:String(form.pesticide_id||''), onChange:e=>uf('pesticide_id',Number(e.target.value)), className:'form-select' },
+            React.createElement('select', { value:String(form.pesticide_id||''), onChange:e=>uf('pesticide_id', e.target.value || null), className:'form-select' }, // UUID保持: Number()はNaN化するため禁止
               React.createElement('option', { value:'' }, '—'),
               ...pesticides.map(x => React.createElement('option', { key:x.id, value:String(x.id) }, x.name))
             )

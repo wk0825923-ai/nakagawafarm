@@ -358,9 +358,11 @@
           spray_method: String(rec.spray_method == null ? '' : rec.spray_method),
           spray_made_l: numOrNull(rec.spray_made_L),        // アプリ形は大文字L・DB列は小文字
           spray_discarded_l: numOrNull(rec.spray_discarded_L),
+          spray_volume_l: numOrNull(rec.spray_volume_L),    // 農薬散布の散布液量(L)
           waste: String(rec.waste == null ? '' : rec.waste),
           photos: Array.isArray(rec.photos) ? rec.photos : [],
           checks: (rec.checks && typeof rec.checks === 'object') ? rec.checks : {},
+          crop_cycle_id: (rec.crop_cycle_id == null || rec.crop_cycle_id === '') ? null : String(rec.crop_cycle_id), // 作付サイクル紐付け(crop_cyclesは未DB化=text)
           version: Number.isFinite(Number(rec.version)) ? Math.trunc(Number(rec.version)) : 1,
           legacy_id: (typeof rec.legacy_id === 'number') ? rec.legacy_id : null,
         }
@@ -378,9 +380,11 @@
           machine_no: r.machine_no || '', row_range: r.row_range || '', spray_method: r.spray_method || '',
           spray_made_L: r.spray_made_l != null ? Number(r.spray_made_l) : '',
           spray_discarded_L: r.spray_discarded_l != null ? Number(r.spray_discarded_l) : '',
+          spray_volume_L: r.spray_volume_l != null ? Number(r.spray_volume_l) : '',
           waste: r.waste || '', photos: Array.isArray(r.photos) ? r.photos : [],
           checks: r.checks || {}, version: r.version || 1,
         }
+        if (r.crop_cycle_id != null) out.crop_cycle_id = r.crop_cycle_id
         if (r.legacy_id != null) out.legacy_id = Number(r.legacy_id)
         return out
       },

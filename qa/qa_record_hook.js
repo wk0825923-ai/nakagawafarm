@@ -75,6 +75,13 @@ function makeRepo(opts) {
     resolveRead(r) { const f = readResolvers.shift(); if (f) f(r) },
     create(collection, farmId, rec) { calls.create.push(rec); return Promise.resolve(opts.createResult || { ok: true, record: rec }) },
     update(collection, farmId, id, patch, ev) { calls.update.push({ id, patch, ev }); return Promise.resolve(opts.updateResult || { ok: true }) },
+    // 在庫連動記録(RPC)の編集: 逆仕訳(旧movements戻し)+記録更新+新movements適用を1トランザクションで行う想定。
+    // hookはmovementsを計算せず渡すだけ。ここでは呼び出し内容の記録と結果の差し替えができればよい。
+    updateWithStock(collection, farmId, record, movements, ev) {
+      calls.updateWithStock = calls.updateWithStock || []
+      calls.updateWithStock.push({ record, movements, ev })
+      return Promise.resolve(opts.updateWithStockResult || { ok: true })
+    },
     remove(collection, farmId, id, ev) {
       calls.remove.push({ id, ev })
       if (opts.deferRemove) return new Promise(r => removeResolvers.push(r))
@@ -261,6 +268,46 @@ const build = (repo, farmBox) => {
       !r1.ok && afterFail === 0 && r2.ok === true && rt.result.list.length === 1 &&
       repo.calls.create.length === 2 && repo.calls.create.every(c => c.id === fixedId),
       JSON.stringify({ afterFail, n: rt.result.list.length, ids: repo.calls.create.map(c => c.id === fixedId) }))
+  }
+
+  // ── updateWithStock(在庫連動記録の編集・Codexレビュー24 Medium) ──
+  const STOCK_REC = { id: 's-1', date: '2026-07-14', work_type: '農薬散布', pesticide_id: 'A', amount: 5, version: 3 }
+  // H13: 農薬A5L→B2Lへ編集 → 楽観反映(新値がlistに)＋updateWithStockへ新movements(B -2)とexpectedVersion=3が渡る
+  {
+    const repo = makeRepo({ dbList: [STOCK_REC] })
+    const { rt } = build(repo); await tick()
+    const edited = { ...STOCK_REC, pesticide_id: 'B', amount: 2 }
+    const movements = [{ item_type: 'pesticide', item_id: 'B', delta_amount: -2, unit: 'L', reason: '農薬散布' }]
+    const res = await rt.result.updateWithStock(edited, movements)
+    await tick()
+    const got = rt.result.list.find(x => x.id === 's-1')
+    const call = repo.calls.updateWithStock && repo.calls.updateWithStock[0]
+    ok('H13 updateWithStock成功: 楽観反映(A5L→B2L)＋新movements(B-2)とexpectedVersion=3が渡りversion+1',
+      res.ok && got && got.pesticide_id === 'B' && got.amount === 2 && got.version === 4 &&
+      call && call.ev === 3 && call.movements[0].item_id === 'B' && call.movements[0].delta_amount === -2,
+      JSON.stringify({ got: got && { p: got.pesticide_id, a: got.amount, v: got.version }, ev: call && call.ev }))
+  }
+  // H14: version競合(別端末が先に更新) → conflictRecover=reload(readAsync再取得)。楽観値は最新DB状態へ戻る
+  {
+    const repo = makeRepo({ dbList: [STOCK_REC], updateWithStockResult: { ok: false, conflict: true } })
+    const { rt, toasts } = build(repo); await tick()
+    const readsBefore = repo.calls.readAsync
+    const res = await rt.result.updateWithStock({ ...STOCK_REC, pesticide_id: 'B', amount: 2 }, [])
+    await tick()
+    ok('H14 updateWithStock version競合: reloadで最新DB再取得(readAsync増)＋警告トースト・ok:false',
+      !res.ok && res.conflict === true && repo.calls.readAsync > readsBefore && toasts.length >= 1,
+      JSON.stringify({ reads: repo.calls.readAsync - readsBefore, toasts: toasts.length }))
+  }
+  // H15: RPC失敗(競合でない) → 楽観更新を旧値へロールバック＋エラートースト
+  {
+    const repo = makeRepo({ dbList: [STOCK_REC], updateWithStockResult: { ok: false, error: new Error('offline') } })
+    const { rt, toasts } = build(repo); await tick()
+    const res = await rt.result.updateWithStock({ ...STOCK_REC, pesticide_id: 'B', amount: 2 }, [])
+    await tick()
+    const got = rt.result.list.find(x => x.id === 's-1')
+    ok('H15 updateWithStock RPC失敗: 楽観更新を旧値(A5L/v3)へロールバック＋トースト・ok:false',
+      !res.ok && got && got.pesticide_id === 'A' && got.amount === 5 && got.version === 3 && toasts.length === 1,
+      JSON.stringify({ got: got && { p: got.pesticide_id, a: got.amount, v: got.version }, toasts: toasts.length }))
   }
 
   const pass = checks.filter(c => c.pass).length

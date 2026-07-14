@@ -113,6 +113,26 @@
   // 圃場ダッシュボードから手動で追加・編集・削除できる。
   const [farmLots, setFarmLots] = useFPS('farm_lots', {})
 
+  // 畝ロットの最大畝番号まで各圃場の row_count(畝総数)を同期する。定植ロットの自動生成(同時保存含む)や
+  // ロット手動追加/編集で畝が増えても、マップの畝総数がロットをカバーするようにする。
+  // ・row_countの副作用をstate updaterの外(このeffect)へ分離=updater内で外側変数を書き換えて直後参照する
+  //   遅延実行バグ(レビュー28)を避ける。・増やすだけ(ロット削除でrow_countは縮めない)・差分がある圃場だけ更新。
+  React.useEffect(() => {
+    setFields(prev => {
+      let changed = false
+      const next = prev.map(f => {
+        const lots = farmLots[f.id] || []
+        const maxRow = lots.reduce((m, l) => {
+          const set = parseRowRange(l.row_range)
+          return set.size > 0 ? Math.max(m, ...set) : m
+        }, 0)
+        if (maxRow > 0 && (!f.row_count || f.row_count < maxRow)) { changed = true; return { ...f, row_count: maxRow } }
+        return f
+      })
+      return changed ? next : prev
+    })
+  }, [farmLots])
+
   // ロット追加共通処理: 畝マップ表示のため、圃場のrow_count（畝の総本数）が
   // ロットの最大畝番号より小さい場合は自動で広げる
   const extendRowCount = (fieldId, rowRange) => {
@@ -140,43 +160,25 @@
   }
 
   // 定植日報の保存 → 畝ロットを自動生成する。
-  // 日報には「作業畝数」しか無く畝番号の範囲は分からないため、
-  // 既存ロットの最終畝番号の続きに仮置きする（圃場ダッシュボードから編集可能）。
+  // 日報には「作業畝数」しか無く畝番号の範囲は分からないため、既存ロットの最終畝番号の続きに仮置きする。
+  // usedMax計算・row_range・source_record_id重複確認・追加を appendTransplantLot(純粋関数)に集約し、
+  // setFarmLots の関数更新内で適用する=異なる日報の同時保存でもReactの直列化で畝番号が続く(重複しない)。
+  // 圃場の row_count(畝総数)は farmLots を監視する下の useEffect が同期する(updater内で外側変数を書き換えない)。
   const autoCreateLotFromTransplant = (r) => {
     if (r.work_type !== '定植') return
     const rows = Number(r.rows_worked) || 0
     if (rows <= 0) return
-    const existing = farmLots[r.field_id] || [] // 呼び出し時点(row_range計算・通常ケースの早期スキップ用)
-    // 早期スキップ: この定植日報から既にロット生成済みなら何もしない(再描画後の手動再送はここで弾く)
-    if (r.id != null && existing.some(l => l.source_record_id != null && String(l.source_record_id) === String(r.id))) return
-    const usedMax = existing.reduce((m, l) => {
-      const set = parseRowRange(l.row_range)
-      return set.size > 0 ? Math.max(m, ...set) : m
-    }, 0)
-    const start = usedMax + 1
-    const row_range = rows === 1 ? String(start) : start + '-' + (start + rows - 1) // updater外で純粋計算(遅延実行に依存しない)
     const seedlingDays = (r.seed_date && r.date)
       ? Math.round((new Date(r.date) - new Date(r.seed_date)) / 86400000)
       : null
-    const entry = {
-      id: newUuid(), // マスタUUID化: ロットIDもUUID(Date.now()は複数端末で衝突・DBのuuid列に入らない)
-      row_range,
+    const lotFields = {
       variety:              r.variety || '（品種未入力）',
       seed_date:            r.seed_date || '',
       transplant_date:      r.date,
       transplant_count:     Number(r.tray_count) || null,
       seedling_period_days: seedlingDays,
-      status:               'growing',
-      source_record_id:     r.id,  // 生成元の定植日報(DB側も (farm_id, source_record_id) 一意制約で二重生成を弾く)
     }
-    // 追加は関数更新内で source_record_id を再確認(同時再送の砦。Reactが直列化するので2つ目は1つ目反映後のprevを見てスキップ)
-    setFarmLots(prev => {
-      const cur = prev[r.field_id] || []
-      if (r.id != null && cur.some(l => l.source_record_id != null && String(l.source_record_id) === String(r.id))) return prev // 既に生成済み(並行再送)
-      return { ...prev, [r.field_id]: [...cur, entry] }
-    })
-    // row_rangeは純粋計算済み(updater外)なので確実に呼べる。extendRowCountは最大畝番号まで広げるだけで冪等
-    extendRowCount(r.field_id, row_range)
+    setFarmLots(prev => appendTransplantLot(prev, r.field_id, r.id, rows, lotFields, newUuid))
   }
 
   // ── 【フェーズE・E-4 Step5】収穫記録（出荷先別ケース数）state ──

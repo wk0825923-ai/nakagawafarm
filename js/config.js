@@ -38,6 +38,25 @@ function isValidStockAmount(v) {
   return Number.isFinite(n) && n >= 0
 }
 
+// 定植ロットの追記(純粋関数): 圃場の最大畝番号の続きに1ロット足した新しいfarmLots全体を返す。
+// 既に同じ source_record_id のロットがあれば追記しない(同一日報の二重生成防止)。
+// setFarmLots の関数更新内で使うことがキモ: usedMaxを関数更新の外で計算すると、異なる日報が
+// 再描画前に同時保存された時、両方が同じ古い farmLots から同じ畝範囲を割り当ててしまう(重複)。
+// 関数更新内なら React が直列化するので、2つ目は1つ目のロットを含む prev を見て畝番号が続く。
+function appendTransplantLot(farmLots, fieldId, sourceId, rows, lotFields, mkId) {
+  const map = farmLots || {}
+  const cur = map[fieldId] || []
+  if (sourceId != null && cur.some(l => l.source_record_id != null && String(l.source_record_id) === String(sourceId))) return map
+  const usedMax = cur.reduce((m, l) => {
+    const set = (typeof parseRowRange === 'function') ? parseRowRange(l.row_range) : new Set()
+    return set.size > 0 ? Math.max(m, ...set) : m
+  }, 0)
+  const start = usedMax + 1
+  const row_range = rows === 1 ? String(start) : start + '-' + (start + rows - 1)
+  const entry = Object.assign({}, lotFields, { id: mkId(), row_range, status: 'growing', source_record_id: sourceId })
+  return Object.assign({}, map, { [fieldId]: [...cur, entry] })
+}
+
 // PDF/印刷用HTMLに差し込むユーザー入力(圃場名/作業者名/品種/備考など)のエスケープ。
 // これらは el.innerHTML や window.open+document.write に渡すため、<img onerror=...> 等が
 // そのまま実行される。テンプレートリテラルに埋める前に必ず通す。

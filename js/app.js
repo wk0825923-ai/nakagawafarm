@@ -146,37 +146,37 @@
     if (r.work_type !== '定植') return
     const rows = Number(r.rows_worked) || 0
     if (rows <= 0) return
+    const existing = farmLots[r.field_id] || [] // 呼び出し時点(row_range計算・通常ケースの早期スキップ用)
+    // 早期スキップ: この定植日報から既にロット生成済みなら何もしない(再描画後の手動再送はここで弾く)
+    if (r.id != null && existing.some(l => l.source_record_id != null && String(l.source_record_id) === String(r.id))) return
+    const usedMax = existing.reduce((m, l) => {
+      const set = parseRowRange(l.row_range)
+      return set.size > 0 ? Math.max(m, ...set) : m
+    }, 0)
+    const start = usedMax + 1
+    const row_range = rows === 1 ? String(start) : start + '-' + (start + rows - 1) // updater外で純粋計算(遅延実行に依存しない)
     const seedlingDays = (r.seed_date && r.date)
       ? Math.round((new Date(r.date) - new Date(r.seed_date)) / 86400000)
       : null
-    // 二重防御は setFarmLots の関数更新内で source_record_id を再確認してから追加する。
-    // クロージャの farmLots(呼び出し時点)だけで判定すると、同時再送が再描画前に両方「まだ無い」と
-    // 判断して2ロット作る余地がある。関数更新はReactが直列化するので、2つ目は1つ目反映後のprevを見る。
-    let createdRange = null
+    const entry = {
+      id: newUuid(), // マスタUUID化: ロットIDもUUID(Date.now()は複数端末で衝突・DBのuuid列に入らない)
+      row_range,
+      variety:              r.variety || '（品種未入力）',
+      seed_date:            r.seed_date || '',
+      transplant_date:      r.date,
+      transplant_count:     Number(r.tray_count) || null,
+      seedling_period_days: seedlingDays,
+      status:               'growing',
+      source_record_id:     r.id,  // 生成元の定植日報(DB側も (farm_id, source_record_id) 一意制約で二重生成を弾く)
+    }
+    // 追加は関数更新内で source_record_id を再確認(同時再送の砦。Reactが直列化するので2つ目は1つ目反映後のprevを見てスキップ)
     setFarmLots(prev => {
-      const existing = prev[r.field_id] || []
-      if (r.id != null && existing.some(l => l.source_record_id != null && String(l.source_record_id) === String(r.id))) return prev // 既に生成済み
-      const usedMax = existing.reduce((m, l) => {
-        const set = parseRowRange(l.row_range)
-        return set.size > 0 ? Math.max(m, ...set) : m
-      }, 0)
-      const start = usedMax + 1
-      const row_range = rows === 1 ? String(start) : start + '-' + (start + rows - 1)
-      createdRange = row_range
-      const entry = {
-        id: newUuid(), // マスタUUID化: ロットIDもUUID(Date.now()は複数端末で衝突・DBのuuid列に入らない)
-        row_range,
-        variety:              r.variety || '（品種未入力）',
-        seed_date:            r.seed_date || '',
-        transplant_date:      r.date,
-        transplant_count:     Number(r.tray_count) || null,
-        seedling_period_days: seedlingDays,
-        status:               'growing',
-        source_record_id:     r.id,  // 生成元の定植日報(DB側も (farm_id, source_record_id) 一意制約で二重生成を弾く)
-      }
-      return { ...prev, [r.field_id]: [...existing, entry] }
+      const cur = prev[r.field_id] || []
+      if (r.id != null && cur.some(l => l.source_record_id != null && String(l.source_record_id) === String(r.id))) return prev // 既に生成済み(並行再送)
+      return { ...prev, [r.field_id]: [...cur, entry] }
     })
-    if (createdRange) extendRowCount(r.field_id, createdRange) // 生成した時だけ畝数を広げる
+    // row_rangeは純粋計算済み(updater外)なので確実に呼べる。extendRowCountは最大畝番号まで広げるだけで冪等
+    extendRowCount(r.field_id, row_range)
   }
 
   // ── 【フェーズE・E-4 Step5】収穫記録（出荷先別ケース数）state ──

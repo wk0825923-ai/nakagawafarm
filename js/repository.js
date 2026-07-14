@@ -328,6 +328,64 @@
         })
       },
     },
+    // 日報(farm_work_records・在庫連動記録の切替第3弾): 汎用の日次作業ログ。全作業種が入る混在コレクション。
+    // work_type='農薬散布'かつpesticide_id+amountのときだけ在庫連動(RPC v6が期待量=amountを検証)。
+    // それ以外の作業(除草/定植/灌水等)はmovements空でそのまま保存。編集(update)も逆仕訳RPCで対応。
+    farm_work_records: {
+      recordCrud: true,
+      stockRpc: true,
+      toRow(rec, ctx) {
+        const isUuid = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v))
+        const numOrNull = (v) => (v == null || v === '') ? null : (Number.isFinite(Number(v)) ? Number(v) : null)
+        return {
+          id: String(rec.id), org_id: ctx.orgId, farm_id: ctx.farmId,
+          field_id: isUuid(rec.field_id) ? String(rec.field_id) : null,
+          date: /^\d{4}-\d{2}-\d{2}/.test(String(rec.date)) ? String(rec.date).slice(0, 10) : null,
+          work_type: String(rec.work_type == null ? '' : rec.work_type),
+          pesticide_id: isUuid(rec.pesticide_id) ? String(rec.pesticide_id) : null,
+          dilution: numOrNull(rec.dilution),
+          amount: numOrNull(rec.amount),
+          weather: String(rec.weather == null ? '' : rec.weather),
+          worker: String(rec.worker == null ? '' : rec.worker),
+          note: String(rec.note == null ? '' : rec.note),
+          fertilizer_name: String(rec.fertilizer_name == null ? '' : rec.fertilizer_name),
+          field_ids: Array.isArray(rec.field_ids) ? rec.field_ids : [],
+          start_time: (rec.start_time == null || rec.start_time === '') ? null : String(rec.start_time),
+          end_time: (rec.end_time == null || rec.end_time === '') ? null : String(rec.end_time),
+          break_minutes: numOrNull(rec.break_minutes),
+          machine_no: String(rec.machine_no == null ? '' : rec.machine_no),
+          row_range: String(rec.row_range == null ? '' : rec.row_range),
+          spray_method: String(rec.spray_method == null ? '' : rec.spray_method),
+          spray_made_l: numOrNull(rec.spray_made_L),        // アプリ形は大文字L・DB列は小文字
+          spray_discarded_l: numOrNull(rec.spray_discarded_L),
+          waste: String(rec.waste == null ? '' : rec.waste),
+          photos: Array.isArray(rec.photos) ? rec.photos : [],
+          checks: (rec.checks && typeof rec.checks === 'object') ? rec.checks : {},
+          version: Number.isFinite(Number(rec.version)) ? Math.trunc(Number(rec.version)) : 1,
+          legacy_id: (typeof rec.legacy_id === 'number') ? rec.legacy_id : null,
+        }
+      },
+      fromRow(r) {
+        const out = {
+          id: r.id, field_id: r.field_id, date: r.date, work_type: r.work_type || '',
+          pesticide_id: r.pesticide_id, dilution: r.dilution != null ? Number(r.dilution) : '',
+          amount: r.amount != null ? Number(r.amount) : '',
+          weather: r.weather || '', worker: r.worker || '', note: r.note || '',
+          fertilizer_name: r.fertilizer_name || '',
+          field_ids: Array.isArray(r.field_ids) ? r.field_ids : [],
+          start_time: r.start_time || '', end_time: r.end_time || '',
+          break_minutes: r.break_minutes != null ? Number(r.break_minutes) : '',
+          machine_no: r.machine_no || '', row_range: r.row_range || '', spray_method: r.spray_method || '',
+          spray_made_L: r.spray_made_l != null ? Number(r.spray_made_l) : '',
+          spray_discarded_L: r.spray_discarded_l != null ? Number(r.spray_discarded_l) : '',
+          waste: r.waste || '', photos: Array.isArray(r.photos) ? r.photos : [],
+          checks: r.checks || {}, version: r.version || 1,
+        }
+        if (r.legacy_id != null) out.legacy_id = Number(r.legacy_id)
+        return out
+      },
+      fromRows(rows) { return (rows || []).map(r => this.fromRow(r)) },
+    },
     // 畝ロット散布(在庫連動記録・RPC専用): 保存/削除はcreateWithStock/removeWithStock経由。
     // toRowは実列名(小文字)のjsonbを完成させて渡す契約(RPCのjsonb_populate_record用・version必須)。
     farm_lot_spray_records: {

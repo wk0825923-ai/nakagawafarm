@@ -17176,6 +17176,25 @@ function useRecordCollection(collection, farmId, initial) {
     }
     return res || { ok: false }
   }, [collection, farmId])
-  return { list, add, updateById, removeById, reload, addWithStock, removeWithStock }
+  // 在庫連動記録の編集: 逆仕訳RPC(farm_update_record_with_stock)で旧movementsを戻し新movementsを適用。
+  // version楽観ロック(0件更新=競合→再読込促し)。失敗時は旧値へロールバック。
+  const updateWithStock = React.useCallback(async (record, movements) => {
+    if (!loadedRef.current) return notLoaded()
+    const gen = genRef.current
+    const old = listRef.current.find(x => String(x.id) === String(record.id))
+    const expectedVersion = (old && old.version) || record.version || 1
+    const next = Object.assign({}, record, { version: expectedVersion + 1 })
+    setList(prev => prev.map(x => String(x.id) === String(record.id) ? next : x)) // 楽観的更新
+    const res = await Promise.resolve(farmRepo.updateWithStock(collection, farmId, record, movements, expectedVersion)).catch(e => ({ ok: false, error: e }))
+    if (!res || !res.ok) {
+      if (res && res.conflict) { if (genRef.current === gen) conflictRecover() }
+      else {
+        if (genRef.current === gen && old) setList(prev => prev.map(x => String(x.id) === String(record.id) ? old : x)) // ロールバック
+        try { showToast('更新に失敗しました。通信状態を確認してもう一度お試しください。', 'error') } catch (_) {}
+      }
+    }
+    return res || { ok: false }
+  }, [collection, farmId])
+  return { list, add, updateById, removeById, reload, addWithStock, updateWithStock, removeWithStock }
 }
 
